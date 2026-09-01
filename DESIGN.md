@@ -197,6 +197,29 @@ served through the share only if the shared document references them; markdown n
 serves through the file route. Revoked/expired/nonexistent are indistinguishable 404s.
 Share URLs advertise the tailnet/funnel hostname automatically when tsnet is up.
 
+## OAuth 2.1 for remote MCP
+
+A built-in authorization server (internal/oauth) lets hosted clients (claude.ai
+connectors, Claude Desktop) connect by URL alone: RFC 8414 metadata, RFC 7591 dynamic
+client registration (capped unconsented registrations), PKCE-S256-only code flow,
+1h access tokens + 30d rotating refresh tokens with reuse detection, RFC 7009
+revocation. Public clients only. A 401 from /mcp carries the WWW-Authenticate
+resource-metadata challenge — that header is the whole discovery mechanism.
+
+Consent is the owner's: the consent page accepts a tailnet-verified identity (the
+gate injects X-Quire-Tailnet-Login after stripping inbound values), a passkey
+session, or the loopback auth-none listener. Funnel visitors asking to authorize get
+a "open this from your tailnet" page — MagicDNS means the same URL routes tailnet
+members directly. `ts_funnel_mcp: true` publishes /mcp + OAuth over funnel; /mcp
+still demands a credential per request.
+
+## Email
+
+The provider abstraction is SMTP itself (every transactional provider exposes it);
+internal/mail wraps wneessen/go-mail behind a Sender interface so an API transport
+can slot in later. One consumer today: the morning digest (meetings, birthdays,
+overdue, due, waiting) at QUIRE_DIGEST_TIME — quiet days send nothing.
+
 ## Auth modes
 
 ```yaml
@@ -309,8 +332,9 @@ name becomes the alias so prose reads unchanged); **task edit/snooze** (surgical
 marker rewrites); **CLI verbs** (`quire task add/search/today` over the HTTP API);
 **passkeys + recovery codes** (bootstrap-claimable, then session-gated).
 
-**Out (v0.2+):** email digest (needs SMTP decisions), OAuth for MCP, go-git history,
-import wizard, photo→task capture gesture, multi-user (indefinitely deferred).
+**Out (v0.2+):** import wizard (mostly moot — point the data dir at an existing
+vault and reindex), offline service worker, in-app vault history browser (the git
+history exists; browsing/restoring is UI work), multi-user (indefinitely deferred).
 
 ## Performance budgets (10k docs / 50k tasks)
 

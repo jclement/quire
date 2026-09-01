@@ -42,6 +42,10 @@ type Config struct {
 	// TSFunnel exposes ONLY the /s/* share pages to the public internet via
 	// Tailscale Funnel (the tailnet must allow funnel in its ACLs).
 	TSFunnel bool `yaml:"ts_funnel"`
+	// TSFunnelMCP additionally exposes /mcp plus the OAuth endpoints over
+	// funnel so hosted clients (claude.ai connectors) can reach quire; /mcp
+	// still demands a valid bearer/OAuth token on every request.
+	TSFunnelMCP bool `yaml:"ts_funnel_mcp"`
 	// TSOwner, when set, restricts tailnet access to this login (e.g.
 	// "jeff@example.com"); empty accepts any member of the tailnet.
 	TSOwner string `yaml:"ts_owner"`
@@ -132,6 +136,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("QUIRE_TS_FUNNEL"); v != "" {
 		cfg.TSFunnel = v == "true" || v == "1"
+	}
+	if v := os.Getenv("QUIRE_TS_FUNNEL_MCP"); v != "" {
+		cfg.TSFunnelMCP = v == "true" || v == "1"
 	}
 	if v := os.Getenv("QUIRE_TS_OWNER"); v != "" {
 		cfg.TSOwner = v

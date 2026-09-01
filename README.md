@@ -56,6 +56,11 @@ still work over the tailnet and keep their scopes (a read-only agent token stays
 read-only). With funnel on, the public internet sees exactly one surface: share pages.
 Everything else 404s.
 
+Add `QUIRE_TS_FUNNEL_MCP=true` to also expose `/mcp` and the OAuth endpoints over
+funnel — that is what lets **hosted Claude (claude.ai connectors)** reach your quire.
+`/mcp` still demands a valid token on every public request; unauthenticated calls get
+the standard OAuth discovery challenge, nothing more.
+
 ### Sharing
 
 Any document can get a revocable share link (`/s/<token>`): optional expiry, view
@@ -116,7 +121,10 @@ quire today
 | `QUIRE_TS_AUTHKEY` | | Tailscale auth key — needed on first boot only |
 | `QUIRE_TS_FUNNEL` | `false` | Publish `/s/*` share pages via Tailscale Funnel |
 | `QUIRE_TS_OWNER` | _(any member)_ | Restrict tailnet access to this login |
+| `QUIRE_TS_FUNNEL_MCP` | `false` | Also expose `/mcp` + OAuth over funnel (hosted Claude) |
 | `QUIRE_GIT` | `true` | Git-backed vault (auto-init + debounced auto-commit) |
+| `QUIRE_SMTP_HOST/PORT/USER/PASS/FROM` | | SMTP relay (any provider's SMTP endpoint) |
+| `QUIRE_DIGEST_TO` / `QUIRE_DIGEST_TIME` | | Daily digest recipient and local HH:MM |
 | `QUIRE_URL` / `QUIRE_TOKEN` | | CLI verbs: which quire to talk to, and as whom |
 
 ## Agents (MCP)
@@ -125,12 +133,23 @@ quire is agent-operable by design: a Streamable-HTTP MCP server at `/mcp` expose
 same service layer as the UI — `search`, `get_document`, `create_document`,
 `update_document` (hash-guarded), `append_to_document`, `list_tasks`, `create_task`,
 `complete_task`, `today`, and `person_context` (meeting prep in one call). There is
-deliberately no delete tool. Add to Claude Code:
+deliberately no delete tool.
 
-```sh
-claude mcp add quire --transport http http://localhost:8321/mcp   # dev, no auth
-claude mcp add quire --transport http https://<host>/mcp --header "Authorization: Bearer sk_…"
-```
+Two credential paths, per the house pattern:
+
+- **Named bearer tokens** (Claude Code, scripts):
+
+  ```sh
+  claude mcp add quire --transport http http://localhost:8321/mcp   # dev, no auth
+  claude mcp add quire --transport http https://<host>/mcp --header "Authorization: Bearer sk_…"
+  ```
+
+- **OAuth 2.1 + dynamic client registration** (claude.ai connectors, Claude Desktop):
+  paste `https://<host>/mcp` into Settings → Connectors and quire handles the rest —
+  RFC 8414 metadata, DCR, PKCE-only code flow, rotating refresh tokens. The consent
+  page must be approved by the vault owner: open it from a tailnet device (MagicDNS
+  makes it the same URL) or with a passkey session. With `QUIRE_TS_FUNNEL_MCP=true`
+  the whole flow works over funnel.
 
 ## Tasks
 
@@ -147,6 +166,14 @@ claude mcp add quire --transport http https://<host>/mcp --header "Authorization
 
 `quire backup [file]` writes a tar.gz of the vault + auth.db (snapshotted safely) +
 config; restore by extracting into an empty data dir and running `quire reindex`.
+
+### Email
+
+Mail goes out over SMTP — every provider (Mailgun, SES, Postmark, Resend) exposes an
+SMTP endpoint, so switching providers is four env vars. With `QUIRE_DIGEST_TO` and
+`QUIRE_DIGEST_TIME=06:30` set, the server emails a morning digest (meetings,
+birthdays, overdue, due today, waiting); quiet days send nothing. `quire digest`
+sends one on demand (cron-able).
 
 ## License
 

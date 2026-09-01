@@ -88,6 +88,38 @@ var migrations = []string{
 		expires_at   TEXT NOT NULL,
 		last_seen_at TEXT NOT NULL DEFAULT ''
 	);`,
+	// v4: OAuth 2.1 authorization server (dynamic client registration, PKCE
+	// codes, rotating refresh tokens) for remote MCP clients.
+	`CREATE TABLE IF NOT EXISTS oauth_clients (
+		id            TEXT PRIMARY KEY,
+		name          TEXT NOT NULL DEFAULT '',
+		redirect_uris TEXT NOT NULL,            -- JSON array
+		created_at    TEXT NOT NULL,
+		consented_at  TEXT NOT NULL DEFAULT ''  -- unconsented clients are capped
+	);
+	CREATE TABLE IF NOT EXISTS oauth_codes (
+		code_hash    TEXT PRIMARY KEY,
+		client_id    TEXT NOT NULL,
+		redirect_uri TEXT NOT NULL,
+		challenge    TEXT NOT NULL,             -- PKCE S256 code_challenge
+		scopes       TEXT NOT NULL,
+		expires_at   TEXT NOT NULL,
+		used_at      TEXT NOT NULL DEFAULT ''
+	);
+	CREATE TABLE IF NOT EXISTS oauth_tokens (
+		id                 INTEGER PRIMARY KEY,
+		client_id          TEXT NOT NULL,
+		access_hash        TEXT NOT NULL UNIQUE,
+		refresh_hash       TEXT NOT NULL UNIQUE,
+		prev_refresh_hash  TEXT NOT NULL DEFAULT '', -- rotation reuse-grace
+		rotated_at         TEXT NOT NULL DEFAULT '',
+		scopes             TEXT NOT NULL,
+		access_expires_at  TEXT NOT NULL,
+		refresh_expires_at TEXT NOT NULL,
+		revoked_at         TEXT NOT NULL DEFAULT '',
+		created_at         TEXT NOT NULL,
+		last_used_at       TEXT NOT NULL DEFAULT ''
+	);`,
 }
 
 // Open opens (creating if needed) auth.db at path.
@@ -112,6 +144,16 @@ func Open(path string) (*Store, error) {
 	}
 	return &Store{DB: db}, nil
 }
+
+// Identity headers owned by the serving gates: inbound values are always
+// stripped before any handler runs, then set from verified state, so the
+// OAuth consent page can trust them.
+const (
+	// HeaderTailnetLogin carries the WhoIs-verified tailnet login.
+	HeaderTailnetLogin = "X-Quire-Tailnet-Login"
+	// HeaderPublicRequest marks a request that arrived via funnel.
+	HeaderPublicRequest = "X-Quire-Public"
+)
 
 // OwnerPrincipal is the vault owner with every scope — auth mode "none" and
 // tailnet-identified requests act as this.
@@ -141,11 +183,24 @@ func Protected(path string) bool {
 // Middleware authenticates requests according to mode and enforces scopes.
 // Unauthenticated paths: /api/v1/health and the SPA (everything outside
 // /api and /mcp — the SPA itself holds no data; its API calls are checked).
-func (s *Store) Middleware(mode config.AuthMode, next http.Handler) http.Handler {
+// mcpChallenge, when non-empty, is set as WWW-Authenticate on /mcp 401s so
+// OAuth-capable clients can discover the authorization server.
+func (s *Store) Middleware(mode config.AuthMode, mcpChallenge string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The identity headers belong to the tailnet gate; this listener
+		// must never let a client smuggle them in.
+		r.Header.Del(HeaderTailnetLogin)
+		r.Header.Del(HeaderPublicRequest)
+
 		if !Protected(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
+		}
+		unauthorized := func(msg string) {
+			if r.URL.Path == "/mcp" && mcpChallenge != "" {
+				w.Header().Set("WWW-Authenticate", mcpChallenge)
+			}
+			http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"`+msg+`"}}`, http.StatusUnauthorized)
 		}
 
 		var principal Principal
@@ -155,8 +210,7 @@ func (s *Store) Middleware(mode config.AuthMode, next http.Handler) http.Handler
 		case config.AuthTokenOnly:
 			p, err := s.authenticateBearer(r)
 			if err != nil {
-				w.Header().Set("WWW-Authenticate", `Bearer realm="quire"`)
-				http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"valid bearer token required"}}`, http.StatusUnauthorized)
+				unauthorized("valid bearer token required")
 				return
 			}
 			principal = p
@@ -167,7 +221,7 @@ func (s *Store) Middleware(mode config.AuthMode, next http.Handler) http.Handler
 			if r.Header.Get("Authorization") != "" {
 				p, err := s.authenticateBearer(r)
 				if err != nil {
-					http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"invalid bearer token"}}`, http.StatusUnauthorized)
+					unauthorized("invalid bearer token")
 					return
 				}
 				principal = p
@@ -175,17 +229,17 @@ func (s *Store) Middleware(mode config.AuthMode, next http.Handler) http.Handler
 			}
 			cookie, err := r.Cookie(SessionCookie)
 			if err != nil {
-				http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"login required"}}`, http.StatusUnauthorized)
+				unauthorized("login required")
 				return
 			}
 			p, err := s.SessionPrincipal(cookie.Value)
 			if err != nil {
-				http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"session expired — log in again"}}`, http.StatusUnauthorized)
+				unauthorized("session expired — log in again")
 				return
 			}
 			principal = p
 		default:
-			http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"auth mode not supported"}}`, http.StatusUnauthorized)
+			unauthorized("auth mode not supported")
 			return
 		}
 

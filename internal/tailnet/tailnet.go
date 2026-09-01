@@ -71,43 +71,88 @@ func (n *Node) Listen(funnel bool) (net.Listener, error) {
 	return n.srv.ListenTLS("tcp", ":443")
 }
 
+// GateConfig configures the per-request tailnet/public gate.
+type GateConfig struct {
+	Full   http.Handler // the whole app, served to tailnet peers
+	Public http.Handler // the funnel-visible subset (shares; MCP/OAuth when enabled)
+	Store  *auth.Store
+	// OwnerLogin, when non-empty, restricts tailnet access to that login.
+	OwnerLogin string
+	// PublicMCP additionally exposes /mcp and the OAuth endpoints to funnel
+	// visitors (each still enforcing its own credentials).
+	PublicMCP bool
+	// MCPChallenge is the WWW-Authenticate value for /mcp 401s (OAuth
+	// discovery).
+	MCPChallenge string
+}
+
+// publicAllowed is the explicit funnel allowlist — defense in depth on top
+// of the public mux only registering these routes.
+func (g GateConfig) publicAllowed(path string) bool {
+	if strings.HasPrefix(path, "/s/") {
+		return true
+	}
+	if !g.PublicMCP {
+		return false
+	}
+	return path == "/mcp" || strings.HasPrefix(path, "/oauth/") || strings.HasPrefix(path, "/.well-known/")
+}
+
 // Handler wraps the app for the tailnet listener.
 //
 //   - Tailnet peers act as the vault owner (or, when an Authorization header
 //     is present, as that token — an agent holding a read-only token keeps
 //     its reduced blast radius even on-tailnet).
-//   - Non-tailnet (funnel) visitors see only /s/* — everything else 404s, so
-//     the public internet cannot even learn quire is here.
-//   - ownerLogin, when non-empty, restricts tailnet access to that login.
-func (n *Node) Handler(full http.Handler, public http.Handler, store *auth.Store, ownerLogin string) http.Handler {
+//   - Non-tailnet (funnel) visitors see only the public allowlist —
+//     everything else 404s, so the public internet cannot even learn quire
+//     is here.
+//   - The gate owns the X-Quire-* identity headers: inbound values are
+//     always stripped, then set from verified state, so downstream handlers
+//     (the OAuth consent page) can trust them.
+func (n *Node) Handler(cfg GateConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Del(auth.HeaderTailnetLogin)
+		r.Header.Del(auth.HeaderPublicRequest)
+
 		who, err := n.whois(r.Context(), r.RemoteAddr)
 		if err != nil || who == nil || who.Node == nil {
-			// Public internet via funnel: share pages only.
-			if strings.HasPrefix(r.URL.Path, "/s/") {
-				public.ServeHTTP(w, r)
+			if !cfg.publicAllowed(r.URL.Path) {
+				http.NotFound(w, r)
 				return
 			}
-			http.NotFound(w, r)
+			r.Header.Set(auth.HeaderPublicRequest, "1")
+			if r.URL.Path == "/mcp" {
+				// Public MCP demands a credential on every request; the 401
+				// challenge is how connectors discover the OAuth server.
+				principal, err := cfg.Store.BearerPrincipal(r)
+				if err != nil || !principal.Allows(auth.RequiredScope(r)) {
+					w.Header().Set("WWW-Authenticate", cfg.MCPChallenge)
+					http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"authorization required"}}`, http.StatusUnauthorized)
+					return
+				}
+			}
+			cfg.Public.ServeHTTP(w, r)
 			return
 		}
 
-		if ownerLogin != "" {
-			login := ""
-			if who.UserProfile != nil {
-				login = who.UserProfile.LoginName
-			}
-			if !strings.EqualFold(login, ownerLogin) {
-				http.Error(w, `{"error":{"code":"FORBIDDEN","message":"this quire belongs to someone else on the tailnet"}}`, http.StatusForbidden)
-				return
-			}
+		login := "member"
+		if who.UserProfile != nil && who.UserProfile.LoginName != "" {
+			login = who.UserProfile.LoginName
 		}
+		if cfg.OwnerLogin != "" && !strings.EqualFold(login, cfg.OwnerLogin) {
+			http.Error(w, `{"error":{"code":"FORBIDDEN","message":"this quire belongs to someone else on the tailnet"}}`, http.StatusForbidden)
+			return
+		}
+		r.Header.Set(auth.HeaderTailnetLogin, login)
 
 		if auth.Protected(r.URL.Path) {
 			principal := auth.OwnerPrincipal()
 			if r.Header.Get("Authorization") != "" {
-				principal, err = store.BearerPrincipal(r)
+				principal, err = cfg.Store.BearerPrincipal(r)
 				if err != nil {
+					if r.URL.Path == "/mcp" {
+						w.Header().Set("WWW-Authenticate", cfg.MCPChallenge)
+					}
 					http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"invalid bearer token"}}`, http.StatusUnauthorized)
 					return
 				}
@@ -117,6 +162,6 @@ func (n *Node) Handler(full http.Handler, public http.Handler, store *auth.Store
 				return
 			}
 		}
-		full.ServeHTTP(w, r)
+		cfg.Full.ServeHTTP(w, r)
 	})
 }

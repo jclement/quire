@@ -76,12 +76,12 @@ func TestMiddlewareModes(t *testing.T) {
 		return rec.Code
 	}
 
-	noneMode := s.Middleware(config.AuthNone, ok)
+	noneMode := s.Middleware(config.AuthNone, "", ok)
 	if got := get(noneMode, "/api/v1/documents", ""); got != 200 {
 		t.Errorf("none mode = %d", got)
 	}
 
-	tokenMode := s.Middleware(config.AuthTokenOnly, ok)
+	tokenMode := s.Middleware(config.AuthTokenOnly, "", ok)
 	if got := get(tokenMode, "/api/v1/documents", ""); got != 401 {
 		t.Errorf("token mode without token = %d", got)
 	}

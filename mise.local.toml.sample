@@ -22,8 +22,20 @@ QUIRE_TS_AUTHKEY = "tskey-auth-REPLACE-ME"
 # funnel node attribute in your tailnet policy):
 QUIRE_TS_FUNNEL = "true"
 
+# Also expose /mcp + OAuth over funnel so hosted Claude (claude.ai
+# connectors) can reach this quire:
+QUIRE_TS_FUNNEL_MCP = "true"
+
 # Optional: only this tailnet login may use the app (default: any member):
 # QUIRE_TS_OWNER = "you@example.com"
+
+# Optional: morning digest email (any provider's SMTP endpoint):
+# QUIRE_SMTP_HOST = "smtp.mailgun.org"
+# QUIRE_SMTP_USER = "postmaster@mg.example.com"
+# QUIRE_SMTP_PASS = "…"
+# QUIRE_SMTP_FROM = "quire@example.com"
+# QUIRE_DIGEST_TO = "you@example.com"
+# QUIRE_DIGEST_TIME = "06:30"
 
 # The vault is a local git repo with debounced auto-commits by default;
 # uncomment to opt out:

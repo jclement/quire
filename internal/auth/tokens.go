@@ -107,6 +107,9 @@ func (s *Store) RevokeToken(prefix string) error {
 // authenticateBearer resolves the Authorization header to a principal.
 func (s *Store) authenticateBearer(r *http.Request) (Principal, error) {
 	raw := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if strings.HasPrefix(raw, oauthAccessPrefix) {
+		return s.oauthAccessPrincipal(raw)
+	}
 	if raw == "" || !strings.HasPrefix(raw, "sk_") {
 		return Principal{}, fmt.Errorf("missing bearer token")
 	}

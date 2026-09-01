@@ -65,7 +65,7 @@ func TestRecoveryCodes(t *testing.T) {
 func TestPasskeyModeMiddleware(t *testing.T) {
 	s := newStore(t)
 	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
-	mw := s.Middleware(config.AuthPasskey, ok)
+	mw := s.Middleware(config.AuthPasskey, "", ok)
 
 	// No credentials → 401 on protected paths, but auth + SPA + health open.
 	get := func(path, cookie string) int {

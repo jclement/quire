@@ -24,6 +24,7 @@ import (
 	"github.com/jclement/quire/internal/gitback"
 	"github.com/jclement/quire/internal/index"
 	"github.com/jclement/quire/internal/mcp"
+	"github.com/jclement/quire/internal/oauth"
 	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/share"
 	"github.com/jclement/quire/internal/tailnet"
@@ -52,6 +53,8 @@ func main() {
 		err = runToken(os.Args[2:])
 	case "backup":
 		err = runBackup(os.Args[2:])
+	case "digest":
+		err = runDigest()
 	case "task":
 		// `quire task add ...` — the subcommand shape people type.
 		if len(os.Args) < 3 {
@@ -64,7 +67,7 @@ func main() {
 	case "version", "--version", "-v":
 		fmt.Println("quire", version)
 	default:
-		fmt.Fprintf(os.Stderr, "usage: quire [serve|reindex|doctor|backup|token|task add|search|today|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: quire [serve|reindex|doctor|backup|digest|token|task add|search|today|version]\n")
 		os.Exit(2)
 	}
 	if err != nil {
@@ -151,9 +154,28 @@ func runServe() error {
 	apiServer := &api.Server{Service: svc, Events: events, Shares: shares, Version: version}
 	mux := http.NewServeMux()
 	apiServer.Routes(mux)
-	mux.Handle("/mcp", mcp.Handler(svc, version))
+	mcpHandler := mcp.Handler(svc, version)
+	mux.Handle("/mcp", mcpHandler)
 	shares.Routes(mux)
 	mux.Handle("/", webui.Handler())
+
+	// OAuth 2.1 authorization server for remote MCP clients. Consent needs
+	// the vault owner: a tailnet-verified identity (header set by the gate),
+	// a passkey session, or the loopback-only auth-none listener (which is
+	// never reachable via funnel — the gate marks those requests public).
+	isOwner := func(r *http.Request) bool {
+		if r.Header.Get(auth.HeaderTailnetLogin) != "" {
+			return true
+		}
+		if cookie, err := r.Cookie(auth.SessionCookie); err == nil {
+			if _, err := authStore.SessionPrincipal(cookie.Value); err == nil {
+				return true
+			}
+		}
+		return cfg.AuthMode == config.AuthNone && r.Header.Get(auth.HeaderPublicRequest) == ""
+	}
+	oauthServer := oauth.New(authStore, cfg.BaseURL, isOwner)
+	oauthServer.Routes(mux)
 
 	if cfg.AuthMode == config.AuthNone {
 		slog.Warn("auth mode \"none\": every request is the vault owner (loopback only)")
@@ -182,10 +204,11 @@ func runServe() error {
 	}
 
 	if cfg.TailscaleEnabled() {
-		go serveTailnet(ctx, cfg, mux, shares, authStore)
+		go serveTailnet(ctx, cfg, mux, mcpHandler, shares, oauthServer, authStore)
 	}
+	scheduleDigest(ctx, cfg, svc)
 
-	server := &http.Server{Addr: cfg.Addr, Handler: securityHeaders(authStore.Middleware(cfg.AuthMode, mux))}
+	server := &http.Server{Addr: cfg.Addr, Handler: securityHeaders(authStore.Middleware(cfg.AuthMode, oauthServer.WWWAuthenticate(), mux))}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -208,7 +231,7 @@ func runServe() error {
 // takes public traffic, which the gate restricts to /s/* share pages.
 // Tailnet failures never take down the local listener — they log and retry
 // is a restart away.
-func serveTailnet(ctx context.Context, cfg config.Config, mux http.Handler, shares *share.Manager, authStore *auth.Store) {
+func serveTailnet(ctx context.Context, cfg config.Config, mux http.Handler, mcpHandler http.Handler, shares *share.Manager, oauthServer *oauth.Server, authStore *auth.Store) {
 	node, err := tailnet.Start(ctx, cfg)
 	if err != nil {
 		slog.Error("tailscale failed to start; continuing without it", "err", err)
@@ -222,16 +245,30 @@ func serveTailnet(ctx context.Context, cfg config.Config, mux http.Handler, shar
 		return
 	}
 
-	// Share links should advertise the tailnet HTTPS name (the funnel URL is
-	// the same name) unless the user pinned an explicit base URL.
+	// Share links and the OAuth issuer advertise the tailnet HTTPS name (the
+	// funnel URL is the same name) unless the user pinned an explicit base URL.
 	if node.DNSName != "" && os.Getenv("QUIRE_BASE_URL") == "" {
 		shares.SetBaseURL("https://" + node.DNSName)
+		oauthServer.SetIssuer("https://" + node.DNSName)
 	}
 
 	publicMux := http.NewServeMux()
 	shares.Routes(publicMux)
+	if cfg.TSFunnelMCP {
+		// Hosted clients (claude.ai connectors) reach MCP + OAuth via funnel;
+		// the gate enforces bearer credentials on /mcp before this mux runs.
+		publicMux.Handle("/mcp", mcpHandler)
+		oauthServer.Routes(publicMux)
+	}
 
-	server := &http.Server{Handler: securityHeaders(node.Handler(mux, publicMux, authStore, cfg.TSOwner))}
+	server := &http.Server{Handler: securityHeaders(node.Handler(tailnet.GateConfig{
+		Full:         mux,
+		Public:       publicMux,
+		Store:        authStore,
+		OwnerLogin:   cfg.TSOwner,
+		PublicMCP:    cfg.TSFunnelMCP,
+		MCPChallenge: oauthServer.WWWAuthenticate(),
+	}))}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
