@@ -19,17 +19,17 @@ import (
 )
 
 var md = goldmark.New(
-	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithExtensions(extension.GFM, callouts{}),
 )
 
 var (
 	wikilinkRe = regexp.MustCompile(`\[\[([^\[\]|]+)(?:\|([^\[\]]+))?\]\]`)
-	calloutRe  = regexp.MustCompile(`^(\s*>\s*)\[!(\w+)\]([+-]?)\s*(.*)$`)
 	fenceRe    = regexp.MustCompile("^\\s*(```|~~~)")
 )
 
 // preprocess adapts quire-flavored markdown for a public page, skipping
-// fenced code blocks so code samples stay verbatim.
+// fenced code blocks so code samples stay verbatim. Callouts are handled in
+// the AST (see callouts.go), not here.
 func preprocess(markdown string) string {
 	lines := strings.Split(markdown, "\n")
 	inFence := false
@@ -39,14 +39,6 @@ func preprocess(markdown string) string {
 			continue
 		}
 		if inFence {
-			continue
-		}
-		if m := calloutRe.FindStringSubmatch(line); m != nil {
-			title := m[4]
-			if title == "" {
-				title = strings.ToUpper(m[2][:1]) + strings.ToLower(m[2][1:])
-			}
-			lines[i] = m[1] + "**" + title + "**"
 			continue
 		}
 		lines[i] = wikilinkRe.ReplaceAllStringFunc(line, func(link string) string {
@@ -73,10 +65,12 @@ var pageTemplate = template.Must(template.New("share").Parse(`<!doctype html>
 <style>
 :root { color-scheme: light dark;
   --bg: #fdfdfc; --fg: #1f2328; --muted: #6a737d; --border: #e4e4e0;
-  --raised: #f4f4f1; --accent: #4662d7; }
+  --raised: #f4f4f1; --accent: #4662d7;
+  --ok: #1a7f37; --warn: #9a6700; --danger: #c0453e; }
 @media (prefers-color-scheme: dark) { :root {
   --bg: #16181d; --fg: #d6dae0; --muted: #8b939e; --border: #2c313a;
-  --raised: #1e2229; --accent: #7d95f2; } }
+  --raised: #1e2229; --accent: #7d95f2;
+  --ok: #4cae6a; --warn: #d9a53f; --danger: #e5695f; } }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg);
   font: 16px/1.65 ui-sans-serif, -apple-system, "Segoe UI", sans-serif; }
@@ -93,6 +87,38 @@ pre { background: var(--raised); border: 1px solid var(--border); border-radius:
   padding: .85rem 1rem; overflow-x: auto; }
 pre code { background: none; border: none; padding: 0; }
 blockquote { margin: 1em 0; padding: .1em 1em; border-left: 3px solid var(--border); color: var(--muted); }
+
+/* Callouts: the whole panel carries the type's colour, with a stronger
+   left edge and title. Tints are mixed against the page background so the
+   same rule works in light and dark. */
+.callout { margin: 1em 0; padding: .1em 1rem; border-radius: 6px;
+  border: 1px solid var(--cal); border-left-width: 3px;
+  background: color-mix(in oklab, var(--cal) 9%, var(--bg));
+  --cal: var(--accent); }
+.callout .callout-title { font-weight: 600; color: var(--cal); margin: .7em 0 .2em; }
+.callout > :last-child { margin-bottom: .7em; }
+.callout[data-callout="note"], .callout[data-callout="info"] { --cal: var(--accent); }
+.callout[data-callout="tip"], .callout[data-callout="success"] { --cal: var(--ok); }
+.callout[data-callout="warning"], .callout[data-callout="question"] { --cal: var(--warn); }
+.callout[data-callout="danger"] { --cal: var(--danger); }
+.callout[data-callout="example"] { --cal: var(--muted); }
+
+/* A shared note is something people print. Keep the ink sensible, keep
+   blocks whole, and spell out link targets that a page can't click. */
+@media print {
+  :root { --bg: #ffffff; --fg: #1f2328; --muted: #5b6169; --border: #d7d7d2;
+    --raised: #f6f6f4; --accent: #3b4ea8; --ok: #1a7f37; --warn: #8a5a00;
+    --danger: #b3322b; }
+  body { background: #fff; }
+  main { max-width: none; padding: 0; }
+  footer { border-top: 1px solid var(--border); }
+  @page { margin: 18mm 16mm; }
+  pre, .callout, blockquote, table, img { break-inside: avoid; }
+  h1, h2, h3, h4 { break-after: avoid; }
+  p { orphans: 3; widows: 3; }
+  pre { white-space: pre-wrap; word-break: break-word; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .8em; color: var(--muted); }
+}
 table { border-collapse: collapse; display: block; overflow-x: auto; }
 th, td { border: 1px solid var(--border); padding: .35rem .7rem; text-align: left; }
 th { background: var(--raised); }

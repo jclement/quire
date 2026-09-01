@@ -160,16 +160,67 @@ func TestExpiredShare(t *testing.T) {
 	}
 }
 
+// preprocess only flattens wikilinks now; callouts are handled in the AST so
+// the marker must survive it untouched, and fenced code must be verbatim.
 func TestPreprocess(t *testing.T) {
 	in := "> [!warning] Hot stove\n> Careful.\n\n```\n[[NotALink]]\n> [!note]\n```\n\nSee [[Sarah Chen|Sarah]].\n"
 	out := preprocess(in)
-	for _, want := range []string{"> **Hot stove**", "*Sarah*", "[[NotALink]]"} {
+	for _, want := range []string{"[!warning] Hot stove", "*Sarah*", "[[NotALink]]"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("preprocess missing %q in:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "[!warning]") {
-		t.Errorf("callout marker leaked:\n%s", out)
+}
+
+// Callouts render as titled panels carrying their type, and the body text
+// still goes through goldmark's escaping (these pages are public).
+func TestCalloutRendering(t *testing.T) {
+	page, err := renderPage("Doc", "tok", `# Doc
+
+> [!warning] Hot stove
+> Careful, it is <hot>.
+
+> [!nonsense] Unknown type
+
+> [!note]
+> Titleless.
+
+> Just an ordinary quote.
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(page)
+
+	if !strings.Contains(html, `<div class="callout" data-callout="warning">`) {
+		t.Errorf("warning callout panel missing:\n%s", html)
+	}
+	if !strings.Contains(html, `<p class="callout-title">Hot stove</p>`) {
+		t.Errorf("callout title missing")
+	}
+	// The marker line must not survive into the body.
+	if strings.Contains(html, "[!warning]") {
+		t.Errorf("callout marker leaked into output")
+	}
+	// Unknown types fall back to note, like Obsidian.
+	if !strings.Contains(html, `data-callout="note"`) {
+		t.Errorf("unknown callout type did not fall back to note")
+	}
+	// A title-only callout still gets a default title from its type.
+	if !strings.Contains(html, ">Note</p>") {
+		t.Errorf("default title missing")
+	}
+	// Ordinary blockquotes are untouched.
+	if !strings.Contains(html, "<blockquote>") {
+		t.Errorf("plain blockquote lost")
+	}
+	// The callout body renders, and raw HTML in it never reaches the page
+	// (goldmark drops it with unsafe rendering off).
+	if !strings.Contains(html, "Careful, it is") {
+		t.Errorf("callout body missing:\n%s", html)
+	}
+	if strings.Contains(html, "<hot>") {
+		t.Errorf("raw HTML leaked out of a callout body")
 	}
 }
 
