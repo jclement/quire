@@ -20,6 +20,14 @@
   --warn: #9a6700;
   --ok: #1a7f37;
   --code-bg: #f3f1ec;
+  /* Editor syntax colors (markdown source). Distinct enough to scan
+     structure at a glance, muted enough to read prose through. */
+  --syn-heading: #1a4fb4;
+  --syn-marker: #a8a49a;
+  --syn-link: #5b5bd6;
+  --syn-code: #9a3d7a;
+  --syn-quote: #6d7a5e;
+  --syn-keyword: #9a6700;
 }
 
 .dark {
@@ -37,6 +45,12 @@
   --warn: #d9a53f;
   --ok: #4cae6a;
   --code-bg: #212228;
+  --syn-heading: #79a6ff;
+  --syn-marker: #6b6a65;
+  --syn-link: #8688ee;
+  --syn-code: #e08bc0;
+  --syn-quote: #9dbb85;
+  --syn-keyword: #d9a53f;
 }
 
 @theme inline {
@@ -77,6 +91,22 @@ body {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
+}
+
+/* …except text fields. Most of ours are bare inputs sitting inside a bordered
+   row (search bar, palette, capture sheet), where a hard 2px box reads as a
+   stray border rather than a focus ring. The caret already says "focused";
+   a soft ring confirms it, and bordered rows light up via :focus-within. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 28%, transparent);
+  border-radius: 4px;
+}
+/* Fields that fill a bordered container hand the affordance to the container. */
+.field-bare:focus-visible {
+  box-shadow: none;
 }
 
 ::selection {

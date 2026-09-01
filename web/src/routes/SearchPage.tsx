@@ -33,7 +33,7 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 border-b border-border pb-2">
+      <div className="flex items-center gap-2 border-b border-border pb-2 focus-within:border-accent">
         <SearchIcon className="size-4 shrink-0 text-muted" aria-hidden="true" />
         <input
           id="global-search-input"
@@ -48,7 +48,7 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
           }}
           placeholder="Search… (type:meeting sarah tag:x is:task)"
           aria-label="Search query"
-          className="h-9 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
+          className="field-bare h-9 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
       </div>
       {results.isLoading ? (

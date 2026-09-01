@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage } from "../api/client.ts";
+import { useHealth } from "../api/queries.ts";
 import { AUTH_STATUS_KEY } from "../components/auth/AuthGate.tsx";
 import { RegisterPanel } from "../components/auth/AuthScreens.tsx";
 import { formatRelativeTime } from "../lib/dates.ts";
@@ -27,6 +28,9 @@ export function SettingsPage() {
     queryFn: api.authStatus,
     staleTime: Infinity,
     retry: false,
+    // AuthGate already fetched this; mounting a second observer must not
+    // re-run a query that legitimately failed (auth disabled → 404).
+    retryOnMount: false,
   });
 
   return (
@@ -44,7 +48,27 @@ export function SettingsPage() {
       ) : (
         <PasskeySettings />
       )}
+      <AboutSection />
     </div>
+  );
+}
+
+// Version and update status used to sit in a page footer; it belongs here,
+// where it costs no screen space on a phone.
+function AboutSection() {
+  const health = useHealth();
+  return (
+    <section className="border-t border-border pt-3 text-xs text-muted">
+      <div className="flex items-center justify-between">
+        <span>quire</span>
+        <span className="font-mono">
+          {health.data?.version ? `v${health.data.version}` : "…"}
+        </span>
+      </div>
+      {health.data?.update_available ? (
+        <p className="mt-1 text-warn">An update is available.</p>
+      ) : null}
+    </section>
   );
 }
 

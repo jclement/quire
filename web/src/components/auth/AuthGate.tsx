@@ -39,7 +39,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
     void queryClient.invalidateQueries();
   };
 
-  if (status.isPending) {
+  // Only the very first check may blank the app. A later refetch — another
+  // component mounting an observer on this key, or the 401 re-check — must
+  // keep rendering children: hiding them unmounts whatever triggered the
+  // refetch, which settles the query, which remounts it… an infinite loop
+  // (this is exactly what made /settings never load).
+  if (status.isPending && !status.isFetched) {
     return (
       <div className="flex h-dvh items-center justify-center">
         <span className="font-serif text-xl font-semibold italic text-muted">
@@ -48,8 +53,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  // Errors (404 = auth disabled, UNREACHABLE = server down) → plain app.
-  if (status.isError || status.data.authenticated) return <>{children}</>;
+  // Errors (404 = auth disabled, UNREACHABLE = server down) → plain app, as
+  // does a refetch in flight (error cleared, data not back yet).
+  if (status.isError || !status.data || status.data.authenticated) {
+    return <>{children}</>;
+  }
   return status.data.registered ? (
     <LoginScreen onAuthed={onAuthed} />
   ) : (

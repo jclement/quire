@@ -48,23 +48,61 @@ export const editorTheme = EditorView.theme({
   },
 });
 
+// Markdown source colors. Everything used to resolve to heading/muted, which
+// rendered as near-monochrome text; these use dedicated --syn-* tokens so the
+// document's structure is scannable while prose stays comfortable to read.
+// Headings step down in size so an outline is visible at a glance.
 const markdownHighlight = HighlightStyle.define([
-  { tag: tags.heading, color: "var(--heading)", fontWeight: "600" },
-  { tag: tags.strong, color: "var(--heading)", fontWeight: "600" },
-  { tag: tags.emphasis, fontStyle: "italic" },
+  {
+    tag: tags.heading1,
+    color: "var(--syn-heading)",
+    fontWeight: "700",
+    fontSize: "1.35em",
+  },
+  {
+    tag: tags.heading2,
+    color: "var(--syn-heading)",
+    fontWeight: "700",
+    fontSize: "1.2em",
+  },
+  {
+    tag: tags.heading3,
+    color: "var(--syn-heading)",
+    fontWeight: "600",
+    fontSize: "1.08em",
+  },
+  { tag: tags.heading, color: "var(--syn-heading)", fontWeight: "600" },
+  { tag: tags.strong, color: "var(--heading)", fontWeight: "700" },
+  { tag: tags.emphasis, color: "var(--heading)", fontStyle: "italic" },
   {
     tag: tags.strikethrough,
     textDecoration: "line-through",
     color: "var(--muted)",
   },
-  { tag: tags.link, color: "var(--accent)" },
-  { tag: tags.url, color: "var(--accent)" },
-  { tag: tags.monospace, color: "var(--heading)" },
-  { tag: tags.quote, color: "var(--muted)", fontStyle: "italic" },
-  { tag: tags.meta, color: "var(--muted)" },
-  { tag: tags.processingInstruction, color: "var(--muted)" },
-  { tag: tags.labelName, color: "var(--accent)" },
-  { tag: tags.comment, color: "var(--muted)" },
+  { tag: tags.link, color: "var(--syn-link)", textDecoration: "underline" },
+  { tag: tags.url, color: "var(--syn-link)" },
+  // Inline code and fenced content.
+  { tag: tags.monospace, color: "var(--syn-code)" },
+  { tag: tags.quote, color: "var(--syn-quote)", fontStyle: "italic" },
+  // Frontmatter fences and the like.
+  { tag: tags.meta, color: "var(--syn-marker)" },
+  // The syntax characters themselves: #, *, -, >, ``` — deliberately faint so
+  // the words carry the page and the markers recede.
+  { tag: tags.processingInstruction, color: "var(--syn-marker)" },
+  { tag: tags.labelName, color: "var(--syn-link)" },
+  { tag: tags.comment, color: "var(--muted)", fontStyle: "italic" },
+  // Tokens from languages embedded in fenced code blocks.
+  { tag: tags.keyword, color: "var(--syn-keyword)" },
+  { tag: tags.string, color: "var(--ok)" },
+  { tag: tags.number, color: "var(--warn)" },
+  { tag: tags.bool, color: "var(--warn)" },
+  { tag: tags.typeName, color: "var(--syn-heading)" },
+  { tag: tags.propertyName, color: "var(--syn-code)" },
+  { tag: tags.variableName, color: "var(--body)" },
+  { tag: tags.function(tags.variableName), color: "var(--syn-link)" },
+  { tag: tags.operator, color: "var(--syn-marker)" },
+  { tag: tags.punctuation, color: "var(--syn-marker)" },
+  { tag: tags.list, color: "var(--body)" },
 ]);
 
 export const editorHighlighting = syntaxHighlighting(markdownHighlight);

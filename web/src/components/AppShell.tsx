@@ -1,6 +1,7 @@
 // Application chrome: fixed header (brand, breadcrumb, theme toggle), desktop
-// sidebar, mobile bottom nav + capture FAB + slide-over drawer, and the footer
-// with the server version. Routed pages render into <main> via children.
+// sidebar, mobile bottom nav with a center capture button, and the slide-over
+// drawer. Routed pages render into <main> via children. Version and update
+// status live in Settings, not in page furniture.
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   CheckSquare,
@@ -14,7 +15,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { useHealth } from "../api/queries.ts";
 import { todayISO } from "../lib/dates.ts";
 import { DOC_TYPE_INFO } from "../lib/docs.ts";
 import { useUi } from "../keys/UiContext.tsx";
@@ -150,17 +150,6 @@ function Header({ onMenu }: { onMenu: () => void }) {
   );
 }
 
-function Footer() {
-  const health = useHealth();
-  const version = health.data?.version;
-  return (
-    <footer className="mt-12 border-t border-border pt-3 pb-4 text-xs text-muted">
-      © 2026 Jeff Clement{version ? ` · v${version}` : ""}
-      {health.data?.update_available ? " · update available" : ""}
-    </footer>
-  );
-}
-
 function MobileDrawer({
   open,
   onClose,
@@ -196,36 +185,41 @@ function MobileDrawer({
   );
 }
 
+// Capture sits in the middle of the bar rather than floating above it: it is
+// the most-used action on a phone, the center is the easiest thumb reach, and
+// nothing ends up covering page content.
 function MobileBottomBar() {
   const { setOverlay } = useUi();
+  const half = Math.ceil(MOBILE_NAV.length / 2);
+  const navItem = (entry: NavEntry) => (
+    <Link
+      key={entry.to}
+      to={entry.to}
+      className="flex h-14 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 text-[10px] text-muted hover:text-heading"
+      activeProps={{ className: "text-accent" }}
+    >
+      <entry.icon className="size-5" aria-hidden="true" />
+      {entry.label}
+    </Link>
+  );
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOverlay("capture", true)}
-        aria-label="Quick capture"
-        className="fixed right-4 z-30 flex size-11 items-center justify-center rounded-full bg-accent text-white shadow-lg hover:opacity-90 md:hidden"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 4.25rem)" }}
-      >
-        <Plus className="size-5" aria-hidden="true" />
-      </button>
-      <nav
-        aria-label="Primary"
-        className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-raised pb-[env(safe-area-inset-bottom)] md:hidden"
-      >
-        {MOBILE_NAV.map((entry) => (
-          <Link
-            key={entry.to}
-            to={entry.to}
-            className="flex h-14 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 text-[10px] text-muted hover:text-heading"
-            activeProps={{ className: "text-accent" }}
-          >
-            <entry.icon className="size-5" aria-hidden="true" />
-            {entry.label}
-          </Link>
-        ))}
-      </nav>
-    </>
+    <nav
+      aria-label="Primary"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-border bg-raised pb-[env(safe-area-inset-bottom)] md:hidden"
+    >
+      {MOBILE_NAV.slice(0, half).map(navItem)}
+      <div className="flex h-14 flex-1 items-center justify-center">
+        <button
+          type="button"
+          onClick={() => setOverlay("capture", true)}
+          aria-label="Quick capture"
+          className="flex size-11 items-center justify-center rounded-full bg-accent text-white shadow-sm hover:opacity-90"
+        >
+          <Plus className="size-5" aria-hidden="true" />
+        </button>
+      </div>
+      {MOBILE_NAV.slice(half).map(navItem)}
+    </nav>
   );
 }
 
@@ -241,7 +235,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto flex min-h-full max-w-4xl flex-col px-4 pt-4 pb-20 md:px-6 md:pb-4">
             <div className="flex-1">{children}</div>
-            <Footer />
           </div>
         </main>
       </div>

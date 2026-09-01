@@ -5,6 +5,7 @@
 import { autocompletion } from "@codemirror/autocomplete";
 import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { languages } from "@codemirror/language-data";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
 import {
@@ -112,7 +113,10 @@ function buildExtensions(callbacks: CallbacksRef) {
     history(),
     // GFM base so `- [ ]` task lists parse and Enter continues them; the
     // bundled markdown keymap provides continuation / empty-item exit.
-    markdown({ base: markdownLanguage }),
+    // codeLanguages gives fenced blocks real per-language highlighting;
+    // each grammar is a lazily-imported chunk, so it costs nothing until a
+    // note actually contains that language.
+    markdown({ base: markdownLanguage, codeLanguages: languages }),
     editorTheme,
     editorHighlighting,
     EditorView.lineWrapping,

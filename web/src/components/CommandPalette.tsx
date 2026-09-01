@@ -193,7 +193,7 @@ function PaletteContent({ close }: { close: () => void }) {
 
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-border px-3">
+      <div className="flex items-center gap-2 border-b border-border px-3 focus-within:border-accent">
         <Search className="size-4 shrink-0 text-muted" aria-hidden="true" />
         <input
           autoFocus
@@ -202,7 +202,7 @@ function PaletteContent({ close }: { close: () => void }) {
           onKeyDown={onKeyDown}
           placeholder="Search documents, > for commands…"
           aria-label="Command palette input"
-          className="h-11 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
+          className="field-bare h-11 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
       </div>
       <ul className="flex-1 overflow-y-auto py-1 md:max-h-80" role="listbox">

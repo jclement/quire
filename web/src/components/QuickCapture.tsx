@@ -87,7 +87,7 @@ function CaptureContent({ close }: { close: () => void }) {
 
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-border px-3">
+      <div className="flex items-center gap-2 border-b border-border px-3 focus-within:border-accent">
         <Zap className="size-4 shrink-0 text-accent" aria-hidden="true" />
         <input
           ref={inputRef}
@@ -102,7 +102,7 @@ function CaptureContent({ close }: { close: () => void }) {
           }}
           placeholder={file ? "Add a note (optional)…" : "Capture a task…"}
           aria-label="New task text"
-          className="h-12 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
+          className="field-bare h-12 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
         {justSaved ? (
           <Check className="size-4 shrink-0 text-ok" aria-hidden="true" />
