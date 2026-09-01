@@ -220,6 +220,26 @@ internal/mail wraps wneessen/go-mail behind a Sender interface so an API transpo
 can slot in later. One consumer today: the morning digest (meetings, birthdays,
 overdue, due, waiting) at QUIRE_DIGEST_TIME — quiet days send nothing.
 
+## Agent guidance
+
+The MCP server's `instructions` are composed at session start from built-in
+working rules plus the owner's own guidance, stored as `AGENTS.md` in the
+vault. Vault-as-storage (rather than a settings row) is deliberate and follows
+the product's premise: it is editable in the app *and* in vim, greppable, and
+versioned by the vault's git repo. The server is constructed per MCP session,
+so edited guidance reaches the next client without a restart.
+
+## Frontend types are generated
+
+`internal/service/apitypes.go` holds every wire shape, and `mise run gen`
+(tygo) derives `web/src/api/generated.ts` from that file alone; `types.ts`
+re-exports it. `mise run lint` fails when the checked-in output is stale, so a
+renamed Go field breaks the build instead of surfacing as a runtime bug.
+Pointers generate as `T | null` because Go marshals nil as `null`, not as an
+absent key — getting that backwards is exactly the drift this prevents. Request
+bodies (TaskEdit) stay hand-written: "key omitted = leave unchanged" is not a
+shape generation can express.
+
 ## Auth modes
 
 ```yaml

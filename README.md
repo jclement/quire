@@ -92,6 +92,18 @@ instead. Person pages with a `birthday:` field feed a birthdays section on Today
 Mobile capture is one gesture: photo → dated task with the image attached
 (`POST /api/v1/capture`).
 
+### Relationships
+
+Entities relate through wikilinks, either in prose (`met [[Sarah Chen]] about
+[[Project Apollo]]`) or in frontmatter (`company: "[[Acme]]"`,
+`people: ["[[Sarah Chen]]"]`). Both are indexed, so either produces a backlink
+on the target, and person/company/project pages assemble themselves from them.
+
+### Calendar
+
+`/calendar` shows the month at a glance: which days have a daily note, what
+documents you touched, meetings held, tasks completed.
+
 ### Search
 
 One grammar everywhere (UI, API, MCP, CLI): full-text terms, `type:meeting`,
@@ -128,6 +140,12 @@ quire today
 | `QUIRE_URL` / `QUIRE_TOKEN` | | CLI verbs: which quire to talk to, and as whom |
 
 ## Agents (MCP)
+
+quire tells every connecting agent how to behave: built-in working rules
+(prefer appends over whole-file writes, how relationships and the task grammar
+work, which composed tools to reach for) plus **your own guidance**, written in
+Settings and stored as an ordinary vault document (`AGENTS.md`). Edit it in the
+app or in vim; the next agent session gets it, no restart.
 
 quire is agent-operable by design: a Streamable-HTTP MCP server at `/mcp` exposes the
 same service layer as the UI — `search`, `get_document`, `create_document`,
