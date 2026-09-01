@@ -180,6 +180,16 @@ func runServe() error {
 	if cfg.AuthMode == config.AuthNone {
 		slog.Warn("auth mode \"none\": every request is the vault owner (loopback only)")
 	}
+	// Every URL quire hands out — the OAuth discovery challenge on /mcp,
+	// share links — comes from base_url. Left at its default while listening
+	// elsewhere, it silently points clients at a host that isn't there.
+	// (Tailscale mode overwrites it with the node's own name, so it is fine.)
+	if cfg.BaseURL == config.DefaultBaseURL && cfg.Addr != "127.0.0.1:8321" &&
+		cfg.Addr != "localhost:8321" && !cfg.TailscaleEnabled() {
+		slog.Warn("QUIRE_BASE_URL is unset, so share links and MCP OAuth discovery will advertise "+
+			config.DefaultBaseURL+" — set it to the URL clients actually reach this instance at",
+			"listening_on", cfg.Addr)
+	}
 	if cfg.AuthMode == config.AuthPasskey {
 		baseURL, err := url.Parse(cfg.BaseURL)
 		if err != nil || baseURL.Hostname() == "" {

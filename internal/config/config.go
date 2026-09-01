@@ -25,6 +25,12 @@ const (
 	AuthTokenOnly AuthMode = "token-only"
 )
 
+// DefaultBaseURL is what BaseURL falls back to. It is exported so serve can
+// warn when a deployment listens somewhere else but never set it — every URL
+// quire hands out (OAuth discovery, share links) would then point at a host
+// nobody can reach.
+const DefaultBaseURL = "http://localhost:8321"
+
 // Config is the resolved runtime configuration.
 type Config struct {
 	DataDir  string   `yaml:"data_dir"`
@@ -74,7 +80,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		DataDir:  "./data",
 		Addr:     "127.0.0.1:8321",
-		BaseURL:  "http://localhost:8321",
+		BaseURL:  DefaultBaseURL,
 		AuthMode: AuthNone,
 		LogLevel: "info",
 		Git:      true,
