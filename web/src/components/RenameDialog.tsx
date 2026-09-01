@@ -9,6 +9,7 @@ import { useState } from "react";
 import { api, isConflictError } from "../api/client.ts";
 import { queryKeys, useDocument } from "../api/queries.ts";
 import { docHref } from "../lib/docs.ts";
+import { noAutofill } from "../lib/noAutofill.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import { Modal } from "./Modal.tsx";
 
@@ -83,7 +84,7 @@ function RenameForm({ path, close }: { path: string; close: () => void }) {
             }
           }}
           aria-label="New path"
-          spellCheck={false}
+          {...noAutofill("rename-path")}
           className="h-11 w-full bg-transparent font-mono text-xs text-heading outline-none placeholder:text-muted"
         />
       </div>

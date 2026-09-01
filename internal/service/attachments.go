@@ -19,14 +19,6 @@ import (
 // screen recordings without letting a runaway request eat the disk.
 const maxAttachmentSize = 50 << 20
 
-// Attachment is the upload response: the vault path and the markdown to
-// insert. References are vault-relative so they stay meaningful to external
-// editors; the SPA rewrites them to /api/v1/files/ URLs when rendering.
-type Attachment struct {
-	Path     string `json:"path"`
-	Markdown string `json:"markdown"`
-}
-
 // SaveAttachment stores an uploaded file and returns its reference.
 func (s *Service) SaveAttachment(originalName string, r io.Reader) (Attachment, error) {
 	data, err := io.ReadAll(io.LimitReader(r, maxAttachmentSize+1))

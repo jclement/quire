@@ -6,6 +6,7 @@ import { Check, Copy, Fingerprint, KeyRound, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { api, errorMessage } from "../../api/client.ts";
 import { loginWithPasskey, registerPasskey } from "../../api/auth.ts";
+import { noAutofill } from "../../lib/noAutofill.ts";
 
 interface ScreenProps {
   onAuthed: () => void;
@@ -238,6 +239,7 @@ export function RegisterPanel({
         id="passkey-name"
         value={name}
         onChange={(event) => setName(event.target.value)}
+        {...noAutofill("passkey-name")}
         className="mb-3 h-10 w-full rounded border border-border bg-raised px-2.5 text-sm text-heading outline-none focus:border-accent"
       />
       <button

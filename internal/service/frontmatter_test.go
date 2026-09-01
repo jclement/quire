@@ -38,6 +38,29 @@ func TestSetFrontmatterIsSurgical(t *testing.T) {
 	}
 }
 
+// Scalar-valued keys stay scalar: `company: "[[Acme]]"`, never a one-item list.
+func TestLinkSingularKeyStaysScalar(t *testing.T) {
+	s := newTestService(t)
+	if _, err := s.UpdateDocument("people/sarah-chen.md", "---\ntype: person\n---\n# Sarah Chen\n", ""); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := s.LinkEntity("people/sarah-chen.md", "company", "Acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(doc.Markdown, `company: "[[Acme]]"`) {
+		t.Errorf("singular link:\n%s", doc.Markdown)
+	}
+	// Re-linking to a different company replaces rather than appends.
+	doc, err = s.LinkEntity("people/sarah-chen.md", "company", "Globex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(doc.Markdown, `company: "[[Globex]]"`) || strings.Contains(doc.Markdown, "Acme") {
+		t.Errorf("singular relink:\n%s", doc.Markdown)
+	}
+}
+
 func TestLinkAndUnlinkEntity(t *testing.T) {
 	s := newTestService(t)
 	if _, err := s.UpdateDocument("meetings/sync.md", "---\ntype: meeting\ndate: 2026-09-01T14:00\n---\n# Sync\n", ""); err != nil {

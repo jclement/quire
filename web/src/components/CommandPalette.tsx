@@ -8,10 +8,12 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   ChevronsRight,
   FolderPen,
+  HelpCircle,
   Plus,
   Search,
   Share2,
   Sunrise,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -26,6 +28,7 @@ import { todayISO } from "../lib/dates.ts";
 import { DOC_TYPE_INFO, docHref, vaultPathFromRoute } from "../lib/docs.ts";
 import { fuzzyRank } from "../lib/fuzzy.ts";
 import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
+import { noAutofill } from "../lib/noAutofill.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import { Modal } from "./Modal.tsx";
 
@@ -71,6 +74,12 @@ const COMMANDS: Command[] = [
     label: "Search",
     icon: Search,
     run: (_ui, go) => go("/search"),
+  },
+  {
+    id: "markdown-help",
+    label: "Markdown help",
+    icon: HelpCircle,
+    run: (ui) => ui.setOverlay("markdownHelp", true),
   },
 ];
 
@@ -158,6 +167,12 @@ function PaletteContent({ close }: { close: () => void }) {
               icon: FolderPen,
               run: (paletteUi) => paletteUi.setRenameDocPath(docPath),
             },
+            {
+              id: "delete-doc",
+              label: "Delete this document",
+              icon: Trash2,
+              run: (paletteUi) => paletteUi.setDeleteDocPath(docPath),
+            },
           ]
         : [],
     [docPath],
@@ -202,6 +217,7 @@ function PaletteContent({ close }: { close: () => void }) {
           onKeyDown={onKeyDown}
           placeholder="Search documents, > for commands…"
           aria-label="Command palette input"
+          {...noAutofill("palette")}
           className="field-bare h-11 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
       </div>

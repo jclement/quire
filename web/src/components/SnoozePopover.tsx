@@ -5,6 +5,7 @@
 import { useRef } from "react";
 import { useEditTask } from "../api/queries.ts";
 import type { Task } from "../api/types.ts";
+import { noAutofill } from "../lib/noAutofill.ts";
 import {
   addDaysISO,
   nextMondayISO,
@@ -95,6 +96,7 @@ export function SnoozePopover({ task, onClose }: SnoozePopoverProps) {
               }
             }}
             aria-label="Snooze to date"
+            {...noAutofill("snooze-date")}
             className="h-7 w-full rounded border border-border bg-transparent px-1.5 font-mono text-[11px] text-heading outline-none placeholder:text-muted focus:border-accent"
           />
         </div>

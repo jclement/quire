@@ -38,6 +38,7 @@ import remarkGfm from "remark-gfm";
 import type { Link, Task } from "../api/types.ts";
 import type { CalloutType } from "../lib/callouts.ts";
 import { docHref } from "../lib/docs.ts";
+import { extractHeadings } from "../lib/headings.ts";
 import { remarkQuire, WIKILINK_HREF_PREFIX } from "../lib/remarkQuire.ts";
 
 // Both are heavy and rare per-page; each stays in its own chunk and loads only
@@ -58,11 +59,14 @@ interface MarkdownContextValue {
   links: Link[];
   tasks: Task[];
   onToggleTask?: (task: Task) => void;
+  /** Source line → anchor id, shared with the outline (see lib/headings.ts). */
+  headingIdsByLine: Map<number, string>;
 }
 
 const MarkdownContext = createContext<MarkdownContextValue>({
   links: [],
   tasks: [],
+  headingIdsByLine: new Map(),
 });
 
 /** Source line of the enclosing list item, for checkbox → task matching. */
@@ -75,8 +79,15 @@ export function Markdown({
   onToggleTask,
 }: MarkdownProps) {
   const context = useMemo(
-    () => ({ links, tasks, onToggleTask }),
-    [links, tasks, onToggleTask],
+    () => ({
+      links,
+      tasks,
+      onToggleTask,
+      headingIdsByLine: new Map(
+        extractHeadings(markdown).map((heading) => [heading.line, heading.id]),
+      ),
+    }),
+    [links, tasks, onToggleTask, markdown],
   );
   return (
     <MarkdownContext.Provider value={context}>
@@ -90,6 +101,27 @@ export function Markdown({
       </div>
     </MarkdownContext.Provider>
   );
+}
+
+// ---- Headings ----
+
+/**
+ * Anchor ids for the outline to scroll to. Ids are looked up by the heading's
+ * source line rather than recomputed here: extractHeadings already resolved
+ * duplicate-title collisions, and a line lookup is deterministic (a render-time
+ * counter would drift under StrictMode's double render).
+ */
+function makeHeadingComponent(level: 1 | 2 | 3 | 4 | 5 | 6) {
+  const Tag = `h${level}` as const;
+  return function HeadingWithAnchor(props: ComponentProps<"h1"> & ExtraProps) {
+    const { headingIdsByLine } = useContext(MarkdownContext);
+    const line = props.node?.position?.start.line;
+    return (
+      <Tag id={line === undefined ? undefined : headingIdsByLine.get(line)}>
+        {props.children}
+      </Tag>
+    );
+  };
 }
 
 // ---- Wikilinks ----
@@ -308,4 +340,10 @@ const COMPONENTS: Components = {
   pre: Pre,
   blockquote: Blockquote,
   img: Img,
+  h1: makeHeadingComponent(1),
+  h2: makeHeadingComponent(2),
+  h3: makeHeadingComponent(3),
+  h4: makeHeadingComponent(4),
+  h5: makeHeadingComponent(5),
+  h6: makeHeadingComponent(6),
 };

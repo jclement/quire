@@ -9,14 +9,17 @@ import {
   AlertTriangle,
   FileQuestion,
   FolderPen,
+  HelpCircle,
   MoreHorizontal,
   Pencil,
   Share2,
+  Trash2,
 } from "lucide-react";
 import {
   lazy,
   Suspense,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -29,6 +32,8 @@ import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import type { MarkdownEditorHandle } from "../editor/MarkdownEditor.tsx";
+import { extractHeadings } from "../lib/headings.ts";
+import { DocumentOutline } from "./DocumentOutline.tsx";
 import { EmptyState, ErrorState } from "./EmptyState.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { SkeletonRows } from "./Skeleton.tsx";
@@ -95,15 +100,29 @@ function DocumentView({
   initialEdit: boolean;
 }) {
   const [mode, setMode] = useState<ViewMode>(initialEdit ? "edit" : "read");
-  const { registerKey, pushEscape, setShareDocPath, setRenameDocPath } =
-    useUi();
+  const {
+    registerKey,
+    pushEscape,
+    setOverlay,
+    setShareDocPath,
+    setRenameDocPath,
+    setDeleteDocPath,
+  } = useUi();
   const save = useDocumentSave(path, doc);
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const toggleTask = useToggleTask();
-  // Editor buffer mirrored into state for the split preview (debounced so the
-  // markdown re-render doesn't run per keystroke).
+  // Editor buffer mirrored into state for the split preview and the outline
+  // (debounced so neither re-renders per keystroke).
   const [liveText, setLiveText] = useState(save.currentText);
   const previewText = useDebouncedValue(liveText, PREVIEW_DEBOUNCE_MS);
+  const [editorTopLine, setEditorTopLine] = useState(1);
+
+  // Read mode outlines the saved buffer; edit/split outlines what's being typed.
+  const outlineSource = mode === "read" ? save.text : previewText;
+  const headings = useMemo(
+    () => extractHeadings(outlineSource),
+    [outlineSource],
+  );
 
   const exitEdit = () => {
     void save.save();
@@ -172,6 +191,16 @@ function DocumentView({
             {STATUS_LABEL[save.status].text}
           </span>
         ) : null}
+        <ModeSwitch mode={mode} onChange={setMode} onLeaveEdit={exitEdit} />
+        <button
+          type="button"
+          onClick={() => setOverlay("markdownHelp", true)}
+          aria-label="Markdown help"
+          title="Markdown reference"
+          className="flex size-7 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-heading"
+        >
+          <HelpCircle className="size-3.5" aria-hidden="true" />
+        </button>
         <button
           type="button"
           onClick={() => setShareDocPath(path)}
@@ -180,11 +209,14 @@ function DocumentView({
         >
           <Share2 className="size-3.5" aria-hidden="true" />
         </button>
-        <DocMenu onRename={() => setRenameDocPath(path)} />
+        <DocMenu
+          onRename={() => setRenameDocPath(path)}
+          onDelete={() => setDeleteDocPath(path)}
+        />
         <button
           type="button"
           onClick={mode === "read" ? () => setMode("edit") : exitEdit}
-          className="flex h-7 items-center gap-1.5 rounded border border-border px-2 text-xs text-body hover:bg-hover hover:text-heading"
+          className="flex h-7 items-center gap-1.5 rounded border border-border px-2 text-xs text-body hover:bg-hover hover:text-heading md:hidden"
         >
           <Pencil className="size-3" aria-hidden="true" />
           {mode === "read" ? "Edit" : "Done"}
@@ -206,58 +238,124 @@ function DocumentView({
         </p>
       ) : null}
 
-      {mode === "read" ? (
-        <>
-          <FrontmatterStrip frontmatter={doc.frontmatter} />
-          <Markdown
-            markdown={save.currentText()}
-            links={doc.links}
-            tasks={doc.tasks}
-            onToggleTask={(task) => toggleTask.mutate(task)}
-          />
-          <Backlinks doc={doc} />
-        </>
-      ) : (
-        <div
-          className={
-            mode === "split"
-              ? "grid flex-1 md:grid-cols-2"
-              : "flex flex-1 flex-col"
-          }
-        >
-          <Suspense fallback={<SkeletonRows count={6} />}>
-            <MarkdownEditor
-              ref={editorRef}
-              initialValue={save.currentText()}
-              onChange={(text) => {
-                save.onEditorChange(text);
-                setLiveText(text);
-              }}
-              onSave={() => void save.save()}
-              onSaveAndExit={exitEdit}
-              onBlur={() => void save.save()}
-              getTags={getTags}
-            />
-          </Suspense>
-          {mode === "split" ? (
-            <div className="hidden border-l border-border pt-3 pl-4 md:block">
-              {/* Preview follows the buffer, debounced; task toggling is off
-                  here because line numbers shift while typing. */}
+      {/* The outline is a sibling column, never an overlay: it shortens the
+          content rather than floating over it, so nothing can overlap and the
+          page can never scroll sideways. */}
+      <div className="flex min-h-0 flex-1 gap-6">
+        <div className="flex min-w-0 flex-1 flex-col">
+          {mode === "read" ? (
+            <>
+              <FrontmatterStrip frontmatter={doc.frontmatter} />
               <Markdown
-                markdown={previewText}
+                markdown={save.text}
                 links={doc.links}
                 tasks={doc.tasks}
+                onToggleTask={(task) => toggleTask.mutate(task)}
               />
+              <Backlinks doc={doc} />
+            </>
+          ) : (
+            <div
+              className={
+                mode === "split"
+                  ? "grid flex-1 md:grid-cols-2"
+                  : "flex flex-1 flex-col"
+              }
+            >
+              <Suspense fallback={<SkeletonRows count={6} />}>
+                <MarkdownEditor
+                  ref={editorRef}
+                  initialValue={save.currentText()}
+                  onChange={(text) => {
+                    save.onEditorChange(text);
+                    setLiveText(text);
+                  }}
+                  onSave={() => void save.save()}
+                  onSaveAndExit={exitEdit}
+                  onBlur={() => void save.save()}
+                  getTags={getTags}
+                  onTopLineChange={setEditorTopLine}
+                />
+              </Suspense>
+              {mode === "split" ? (
+                <div className="hidden min-w-0 border-l border-border pt-3 pl-4 md:block">
+                  {/* Preview follows the buffer, debounced; task toggling is
+                      off here because line numbers shift while typing. */}
+                  <Markdown
+                    markdown={previewText}
+                    links={doc.links}
+                    tasks={doc.tasks}
+                  />
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          )}
         </div>
-      )}
+        <DocumentOutline
+          headings={headings}
+          mode={mode === "read" ? "rendered" : "source"}
+          activeLine={editorTopLine}
+          onScrollToLine={(line) => editorRef.current?.scrollToLine(line)}
+        />
+      </div>
     </article>
   );
 }
 
-/** The "…" menu on the doc header — non-primary actions (Rename). */
-function DocMenu({ onRename }: { onRename: () => void }) {
+/** Read / Edit / Split segmented control — Cmd+E does the same cycling, and
+ * Split needs the width, so it only appears on md+. */
+function ModeSwitch({
+  mode,
+  onChange,
+  onLeaveEdit,
+}: {
+  mode: ViewMode;
+  onChange: (mode: ViewMode) => void;
+  onLeaveEdit: () => void;
+}) {
+  const options: { value: ViewMode; label: string }[] = [
+    { value: "read", label: "Read" },
+    { value: "edit", label: "Edit" },
+    { value: "split", label: "Split" },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="View mode"
+      title="Switch view — ⌘E cycles read / edit / split"
+      className="hidden h-7 items-center rounded border border-border md:flex"
+    >
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={mode === option.value}
+          onClick={() => {
+            // Leaving edit/split flushes pending edits, same as the Done button.
+            if (option.value === "read") onLeaveEdit();
+            else onChange(option.value);
+          }}
+          className={`h-full px-2 text-xs first:rounded-l last:rounded-r ${
+            mode === option.value
+              ? "bg-selected text-heading"
+              : "text-muted hover:bg-hover hover:text-body"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The "…" menu on the doc header — non-primary actions (Rename, Delete). */
+function DocMenu({
+  onRename,
+  onDelete,
+}: {
+  onRename: () => void;
+  onDelete: () => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
@@ -288,6 +386,17 @@ function DocMenu({ onRename }: { onRename: () => void }) {
             >
               <FolderPen className="size-3.5 text-muted" aria-hidden="true" />
               Rename…
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+              className="flex h-8 w-full items-center gap-2 px-3 text-left text-xs text-body hover:bg-hover hover:text-danger"
+            >
+              <Trash2 className="size-3.5 text-muted" aria-hidden="true" />
+              Delete…
             </button>
           </div>
         </>

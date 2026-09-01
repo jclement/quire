@@ -15,6 +15,17 @@ import (
 	"github.com/jclement/quire/internal/vault"
 )
 
+// TaskEdit lives here rather than in apitypes.go because it is a REQUEST
+// body, not a response: "field omitted = leave unchanged" is a shape tygo
+// cannot express, so the client declares it by hand.
+// TaskEdit is a partial task update; nil fields are untouched, empty strings
+// clear (a snooze is due:"2026-09-05"; un-scheduling is due:"").
+type TaskEdit struct {
+	Due      *string `json:"due"`
+	Defer    *string `json:"defer"`
+	Priority *int    `json:"priority"` // 0 none, 1 high, 2 medium, 3 low
+}
+
 // TaskView re-exports the index views for transports.
 func (s *Service) Tasks(view string) ([]Task, error) {
 	rows, err := s.Index.Tasks(index.TaskView(view), s.today())
@@ -136,14 +147,6 @@ func (s *Service) ToggleTask(id string) (Task, error) {
 		}
 	}
 	return Task{}, fmt.Errorf("task vanished after toggle")
-}
-
-// TaskEdit is a partial task update; nil fields are untouched, empty strings
-// clear (a snooze is due:"2026-09-05"; un-scheduling is due:"").
-type TaskEdit struct {
-	Due      *string `json:"due"`
-	Defer    *string `json:"defer"`
-	Priority *int    `json:"priority"` // 0 none, 1 high, 2 medium, 3 low
 }
 
 // EditTask rewrites a task's metadata markers on its source line — the

@@ -17,6 +17,8 @@ import { CommandPalette } from "../components/CommandPalette.tsx";
 import { KeymapOverlay } from "../components/KeymapOverlay.tsx";
 import { NewDocDialog } from "../components/NewDocDialog.tsx";
 import { QuickCapture } from "../components/QuickCapture.tsx";
+import { DeleteDocDialog } from "../components/DeleteDocDialog.tsx";
+import { MarkdownHelp } from "../components/MarkdownHelp.tsx";
 import { RenameDialog } from "../components/RenameDialog.tsx";
 import { ShareDialog } from "../components/ShareDialog.tsx";
 import { Toasts } from "../components/Toasts.tsx";
@@ -47,6 +49,8 @@ function RootLayout() {
       <NewDocDialog />
       <ShareDialog />
       <RenameDialog />
+      <DeleteDocDialog />
+      <MarkdownHelp />
       <Toasts />
     </>
   );

@@ -1,7 +1,8 @@
 // Package service is the one business-logic layer under every transport:
 // REST handlers and MCP tools both call these methods and nothing else, so
 // permissions and behavior cannot drift between them (DESIGN.md decision 5).
-// API-shaped types (JSON tags) live here; transports only translate.
+// The wire shapes those methods return live in apitypes.go, which
+// generates the frontend's TypeScript types.
 package service
 
 import (
@@ -30,84 +31,6 @@ func New(v *vault.Vault, ix *index.Index) *Service {
 }
 
 func (s *Service) today() string { return s.Now().Format("2006-01-02") }
-
-// ---- API-shaped types ----
-
-// DocMeta is a document's listing metadata.
-type DocMeta struct {
-	Path   string   `json:"path"`
-	Type   string   `json:"type"`
-	Title  string   `json:"title"`
-	Mtime  string   `json:"mtime"`
-	SHA256 string   `json:"sha256"`
-	Tags   []string `json:"tags"`
-}
-
-// Link is a wikilink with its resolution ("" target = dangling → null).
-type Link struct {
-	Target  *string `json:"target"`
-	Raw     string  `json:"raw"`
-	Display string  `json:"display"`
-}
-
-// Document is the full read payload.
-type Document struct {
-	DocMeta
-	Markdown    string         `json:"markdown"`
-	Frontmatter map[string]any `json:"frontmatter"`
-	Links       []Link         `json:"links"`
-	Backlinks   []DocMeta      `json:"backlinks"`
-	Tasks       []Task         `json:"tasks"`
-}
-
-// Task is the API task shape.
-type Task struct {
-	ID          string   `json:"id"`
-	DocPath     string   `json:"doc_path"`
-	DocTitle    string   `json:"doc_title"`
-	Line        int      `json:"line"`
-	Text        string   `json:"text"`
-	Done        bool     `json:"done"`
-	Due         *string  `json:"due"`
-	Defer       *string  `json:"defer"`
-	Priority    int      `json:"priority"`
-	Waiting     bool     `json:"waiting"`
-	Recur       *string  `json:"recur"`
-	Project     *string  `json:"project"`
-	Tags        []string `json:"tags"`
-	CompletedOn *string  `json:"completed_on"`
-}
-
-// SearchResult is one search hit.
-type SearchResult struct {
-	Path    string `json:"path"`
-	Type    string `json:"type"`
-	Title   string `json:"title"`
-	Snippet string `json:"snippet"`
-}
-
-// Birthday is an upcoming birthday surfaced on Today (within the next week
-// — the single-dad review's "1-week and day-of" requirement).
-type Birthday struct {
-	Path      string `json:"path"`
-	Title     string `json:"title"`
-	Date      string `json:"date"` // this year's occurrence, YYYY-MM-DD
-	DaysUntil int    `json:"days_until"`
-	Age       *int   `json:"age"` // when the birthday year is known
-}
-
-// TodayPayload is the composed home-screen (and MCP `today` tool) response.
-type TodayPayload struct {
-	Date      string     `json:"date"`
-	Daily     *Document  `json:"daily"`
-	Meetings  []DocMeta  `json:"meetings"`
-	Overdue   []Task     `json:"overdue"`
-	DueToday  []Task     `json:"due_today"`
-	Available []Task     `json:"available"`
-	Waiting   []Task     `json:"waiting"`
-	Birthdays []Birthday `json:"birthdays"`
-	Recent    []DocMeta  `json:"recent"`
-}
 
 // ---- conversions ----
 

@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorMessage } from "../api/client.ts";
 import { invalidateTaskCaches } from "../api/queries.ts";
 import { addDaysISO, nextSaturdayISO, todayISO } from "../lib/dates.ts";
+import { noAutofill } from "../lib/noAutofill.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import { Modal } from "./Modal.tsx";
 
@@ -102,6 +103,7 @@ function CaptureContent({ close }: { close: () => void }) {
           }}
           placeholder={file ? "Add a note (optional)…" : "Capture a task…"}
           aria-label="New task text"
+          {...noAutofill("capture")}
           className="field-bare h-12 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
         {justSaved ? (

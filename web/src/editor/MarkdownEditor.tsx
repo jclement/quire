@@ -29,6 +29,8 @@ export interface MarkdownEditorHandle {
   setValue: (text: string) => void;
   getValue: () => string;
   focus: () => void;
+  /** Scrolls a 1-based source line into view — the outline's click target. */
+  scrollToLine: (line: number) => void;
 }
 
 interface MarkdownEditorProps {
@@ -42,6 +44,8 @@ interface MarkdownEditorProps {
   onBlur: () => void;
   /** Tag pool for `#` autocomplete (recent/loaded docs; a stub is fine). */
   getTags: () => string[];
+  /** 1-based top visible line, on scroll — drives the outline's highlight. */
+  onTopLineChange?: (line: number) => void;
 }
 
 export function MarkdownEditor({
@@ -52,6 +56,7 @@ export function MarkdownEditor({
   onSaveAndExit,
   onBlur,
   getTags,
+  onTopLineChange,
 }: MarkdownEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -62,8 +67,16 @@ export function MarkdownEditor({
     onSaveAndExit,
     onBlur,
     getTags,
+    onTopLineChange,
   });
-  callbacksRef.current = { onChange, onSave, onSaveAndExit, onBlur, getTags };
+  callbacksRef.current = {
+    onChange,
+    onSave,
+    onSaveAndExit,
+    onBlur,
+    getTags,
+    onTopLineChange,
+  };
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -95,6 +108,15 @@ export function MarkdownEditor({
     },
     getValue: () => viewRef.current?.state.doc.toString() ?? "",
     focus: () => viewRef.current?.focus(),
+    scrollToLine: (line: number) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const clamped = Math.min(Math.max(line, 1), view.state.doc.lines);
+      const position = view.state.doc.line(clamped).from;
+      view.dispatch({
+        effects: EditorView.scrollIntoView(position, { y: "start" }),
+      });
+    },
   }));
 
   return <div ref={hostRef} className="min-h-64 flex-1 overflow-y-auto" />;
@@ -106,6 +128,7 @@ type CallbacksRef = RefObject<{
   onSaveAndExit: () => void;
   onBlur: () => void;
   getTags: () => string[];
+  onTopLineChange?: (line: number) => void;
 }>;
 
 function buildExtensions(callbacks: CallbacksRef) {
@@ -136,6 +159,15 @@ function buildExtensions(callbacks: CallbacksRef) {
     EditorView.domEventHandlers({
       blur: () => {
         callbacks.current.onBlur();
+        return false;
+      },
+      // Report the top visible line so the outline can highlight the section
+      // being edited (lineBlockAtHeight takes scroller-relative coordinates).
+      scroll: (_event, view) => {
+        const report = callbacks.current.onTopLineChange;
+        if (!report) return false;
+        const block = view.lineBlockAtHeight(view.scrollDOM.scrollTop);
+        report(view.state.doc.lineAt(block.from).number);
         return false;
       },
     }),

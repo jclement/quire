@@ -41,6 +41,8 @@ export function GlobalKeys() {
     setShareDocPath,
     renameDocPath,
     setRenameDocPath,
+    deleteDocPath,
+    setDeleteDocPath,
     listNavRef,
     escapeStackRef,
     keyActionsRef,
@@ -153,17 +155,21 @@ export function GlobalKeys() {
         overlays.palette ||
         overlays.capture ||
         overlays.keymap ||
+        overlays.markdownHelp ||
         newDocType !== null ||
         shareDocPath !== null ||
-        renameDocPath !== null;
+        renameDocPath !== null ||
+        deleteDocPath !== null;
       if (overlayOpen) {
         if (event.key === "Escape") {
           setOverlay("palette", false);
           setOverlay("capture", false);
           setOverlay("keymap", false);
+          setOverlay("markdownHelp", false);
           setNewDocType(null);
           setShareDocPath(null);
           setRenameDocPath(null);
+          setDeleteDocPath(null);
         }
         return;
       }
@@ -200,6 +206,8 @@ export function GlobalKeys() {
     setShareDocPath,
     renameDocPath,
     setRenameDocPath,
+    deleteDocPath,
+    setDeleteDocPath,
     listNavRef,
     escapeStackRef,
     keyActionsRef,

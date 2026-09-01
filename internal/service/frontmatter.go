@@ -47,9 +47,13 @@ func (s *Service) SetFrontmatter(path string, values map[string]any, baseSHA str
 	return s.UpdateDocument(path, string(content), f.SHA256)
 }
 
+// singularLinkKeys hold one wikilink, not a list — writing `company: [...]`
+// would work but reads wrong to a human editing the file in vim, and
+// DESIGN.md's schemas define these as scalars.
+var singularLinkKeys = map[string]bool{"company": true, "project": true, "owner": true}
+
 // LinkEntity is the convenience behind "add this person to that company":
-// it appends a wikilink to a list-valued key (people, projects…) without
-// duplicating an entry that is already there.
+// it sets or appends a wikilink without duplicating one already there.
 func (s *Service) LinkEntity(path, key, target string) (Document, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
@@ -60,6 +64,9 @@ func (s *Service) LinkEntity(path, key, target string) (Document, error) {
 		return Document{}, err
 	}
 	existing := stringsFromFrontmatter(vault.ParseFrontmatter(f.Raw), key)
+	if singularLinkKeys[key] {
+		return s.SetFrontmatter(path, map[string]any{key: wrapWikilink(target)}, "")
+	}
 	for _, item := range existing {
 		if strings.EqualFold(unwrapWikilink(item), unwrapWikilink(target)) {
 			// Already linked — succeed without rewriting the file.

@@ -10,10 +10,11 @@ import (
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeData(w, http.StatusOK, map[string]any{
-		"status":           "ok",
-		"version":          s.Version,
-		"update_available": false,
+	writeData(w, http.StatusOK, service.Health{
+		Status:  "ok",
+		Version: s.Version,
+		// Wired to a real check when self-update lands; false is honest today.
+		UpdateAvailable: false,
 	})
 }
 

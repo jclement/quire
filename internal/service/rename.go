@@ -13,12 +13,6 @@ import (
 	"github.com/jclement/quire/internal/vault"
 )
 
-// RenameResult reports what a rename touched.
-type RenameResult struct {
-	Document  Document `json:"document"`
-	Rewritten []string `json:"rewritten"` // docs whose links were updated
-}
-
 // RenameDocument moves oldPath to newPath. With rewriteLinks, inbound
 // wikilinks that referenced the old filename or path are re-pointed at the
 // new filename. The set of affected documents is the old path's backlinks —

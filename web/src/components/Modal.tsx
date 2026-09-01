@@ -4,7 +4,7 @@
 // top-anchored) panel on desktop.
 import { useEffect, type ReactNode } from "react";
 
-export type ModalVariant = "center" | "sheet" | "palette";
+export type ModalVariant = "center" | "sheet" | "palette" | "help";
 
 interface ModalProps {
   open: boolean;
@@ -28,6 +28,11 @@ const PANEL_CLASSES: Record<ModalVariant, string> = {
   palette:
     "absolute inset-0 flex flex-col " +
     "md:relative md:inset-auto md:mx-auto md:mt-[12vh] md:h-auto md:max-h-[60vh] md:w-full md:max-w-xl md:rounded-lg",
+  // Reference content: a tall sheet on mobile, a wide two-column panel on
+  // desktop where the syntax/meaning pairs can sit side by side.
+  help:
+    "absolute inset-x-0 bottom-0 max-h-[90vh] rounded-t-lg pb-[env(safe-area-inset-bottom)] " +
+    "md:relative md:inset-auto md:mx-auto md:mt-[8vh] md:w-full md:max-w-3xl md:rounded-lg md:pb-0",
 };
 
 export function Modal({ open, onClose, variant, label, children }: ModalProps) {

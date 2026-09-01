@@ -9,6 +9,7 @@ import { useState } from "react";
 import { api } from "../api/client.ts";
 import type { DocType } from "../api/types.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
+import { noAutofill } from "../lib/noAutofill.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import { Modal } from "./Modal.tsx";
 
@@ -61,6 +62,7 @@ function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
           }}
           placeholder={`${info.label} title…`}
           aria-label={`New ${info.label} title`}
+          {...noAutofill("new-doc-title")}
           className="h-11 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
       </div>

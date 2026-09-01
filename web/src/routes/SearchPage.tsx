@@ -3,13 +3,14 @@
 // passes through to the server verbatim. Snippets arrive with literal <mark>
 // tags that we parse ourselves — no HTML injection.
 import { useNavigate } from "@tanstack/react-router";
-import { SearchX, Search as SearchIcon } from "lucide-react";
+import { CheckSquare, SearchX, Search as SearchIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearch as useSearchQuery } from "../api/queries.ts";
 import type { SearchResult } from "../api/types.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import { parseSnippet } from "../lib/snippet.ts";
 import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
+import { noAutofill } from "../lib/noAutofill.ts";
 import { useListNav } from "../keys/useListNav.ts";
 import { ErrorState, EmptyState } from "../components/EmptyState.tsx";
 import { SkeletonRows } from "../components/Skeleton.tsx";
@@ -48,6 +49,7 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
           }}
           placeholder="Search… (type:meeting sarah tag:x is:task)"
           aria-label="Search query"
+          {...noAutofill("search")}
           className="field-bare h-9 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
       </div>
@@ -81,7 +83,13 @@ function ResultList({ results }: { results: SearchResult[] }) {
   return (
     <ul className="divide-y divide-border border-y border-border">
       {results.map((result, at) => {
-        const Icon = DOC_TYPE_INFO[result.type].icon;
+        // `is:task` hits come back as type "task", which is not a document
+        // type — before the generated types this indexed to undefined and
+        // crashed the results list.
+        const Icon =
+          result.type === "task"
+            ? CheckSquare
+            : DOC_TYPE_INFO[result.type].icon;
         return (
           <li
             key={result.path}

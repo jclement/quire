@@ -1,0 +1,42 @@
+# Go → TypeScript type generation (`mise run gen`).
+#
+# The Go structs in internal/service/apitypes.go ARE the API contract; this
+# derives the frontend's types from them so the two can't drift. Only that
+# file is read — service.go et al. hold implementation types the browser
+# never sees.
+#
+# CI fails if the generated file is out of date (see `mise run lint`), so a
+# renamed field breaks the build instead of breaking at runtime.
+packages:
+  - path: "github.com/jclement/quire/internal/service"
+    output_path: "web/src/api/generated.ts"
+    include_files:
+      - "apitypes.go"
+    indent: "  "
+    # Go marshals a nil *string as `null`, not as an absent key, so pointers
+    # must become `string | null` rather than an optional property. Getting
+    # this wrong is exactly the drift this generation exists to prevent.
+    optional_type: "null"
+    preserve_comments: "default"
+    frontmatter: |
+      /**
+       * GENERATED FILE — do not edit.
+       *
+       * Produced by `mise run gen` from internal/service/apitypes.go, which is
+       * the source of truth for every shape the API returns. Edit the Go
+       * structs, then re-run generation; CI checks this file is current.
+       */
+      /* eslint-disable */
+
+      /**
+       * The six first-class document types. The server only ever emits these:
+       * a frontmatter `type:` outside the set is ignored in favour of the
+       * directory the file lives in.
+       */
+      export type DocType =
+        | "note"
+        | "person"
+        | "company"
+        | "project"
+        | "meeting"
+        | "daily";

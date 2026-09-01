@@ -12,32 +12,6 @@ import (
 	"github.com/jclement/quire/internal/index"
 )
 
-// CalendarDoc is a document touched on a day.
-type CalendarDoc struct {
-	Path  string `json:"path"`
-	Title string `json:"title"`
-	Type  string `json:"type"`
-}
-
-// CalendarDay is one cell of the month grid.
-type CalendarDay struct {
-	Date string `json:"date"` // YYYY-MM-DD
-	// HasDaily reports whether a daily note exists for this date (whether or
-	// not it was touched today — it is the day's anchor).
-	HasDaily  bool          `json:"has_daily"`
-	Touched   []CalendarDoc `json:"touched"`  // documents modified that day
-	Meetings  []CalendarDoc `json:"meetings"` // meetings scheduled that day
-	Completed int           `json:"completed_tasks"`
-}
-
-// CalendarMonth is the month payload.
-type CalendarMonth struct {
-	Month string        `json:"month"` // YYYY-MM
-	Prev  string        `json:"prev"`
-	Next  string        `json:"next"`
-	Days  []CalendarDay `json:"days"` // every day of the month, in order
-}
-
 // maxTouchedPerDay keeps a busy day's cell (and the payload) bounded; the UI
 // shows "+N more" and the day view has the rest.
 const maxTouchedPerDay = 12

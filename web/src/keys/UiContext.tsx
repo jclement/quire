@@ -23,7 +23,7 @@ export interface ListNavHandlers {
   snooze?: () => void;
 }
 
-export type OverlayName = "palette" | "capture" | "keymap";
+export type OverlayName = "palette" | "capture" | "keymap" | "markdownHelp";
 
 export interface Toast {
   id: number;
@@ -42,6 +42,9 @@ interface UiContextValue {
   /** Non-null while the rename dialog is open, holding the doc's vault path. */
   renameDocPath: string | null;
   setRenameDocPath: (path: string | null) => void;
+  /** Non-null while the delete confirmation is open. */
+  deleteDocPath: string | null;
+  setDeleteDocPath: (path: string | null) => void;
   /** Transient confirmations ("Link copied"); auto-dismissed. */
   toasts: Toast[];
   toast: (message: string) => void;
@@ -65,10 +68,12 @@ export function UiProvider({ children }: { children: ReactNode }) {
     palette: false,
     capture: false,
     keymap: false,
+    markdownHelp: false,
   });
   const [newDocType, setNewDocType] = useState<DocType | null>(null);
   const [shareDocPath, setShareDocPath] = useState<string | null>(null);
   const [renameDocPath, setRenameDocPath] = useState<string | null>(null);
+  const [deleteDocPath, setDeleteDocPath] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextToastId = useRef(0);
   const listNavRef = useRef<ListNavHandlers | null>(null);
@@ -118,6 +123,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
       setShareDocPath,
       renameDocPath,
       setRenameDocPath,
+      deleteDocPath,
+      setDeleteDocPath,
       toasts,
       toast,
       listNavRef,
@@ -132,6 +139,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
       newDocType,
       shareDocPath,
       renameDocPath,
+      deleteDocPath,
       toasts,
       toast,
       pushEscape,

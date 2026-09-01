@@ -5,7 +5,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/jclement/quire/internal/share"
+	"github.com/jclement/quire/internal/service"
 )
 
 func (s *Server) handleListShares(w http.ResponseWriter, r *http.Request) {
@@ -15,7 +15,7 @@ func (s *Server) handleListShares(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if shares == nil {
-		shares = []share.ShareInfo{}
+		shares = []service.ShareInfo{}
 	}
 	writeData(w, http.StatusOK, shares)
 }

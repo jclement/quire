@@ -34,14 +34,21 @@ func NewManager(authStore *auth.Store, svc *service.Service, baseURL string) *Ma
 // name once tsnet is up).
 func (m *Manager) SetBaseURL(u string) { m.baseURL.Store(strings.TrimRight(u, "/")) }
 
-// ShareInfo is a share plus its public URL.
-type ShareInfo struct {
-	auth.Share
-	URL string `json:"url"`
-}
+// ShareInfo is re-exported from the service package, which owns every
+// API-visible shape (and generates the frontend's types from them).
+type ShareInfo = service.ShareInfo
 
 func (m *Manager) info(sh auth.Share) ShareInfo {
-	return ShareInfo{Share: sh, URL: m.baseURL.Load().(string) + "/s/" + sh.Token}
+	return ShareInfo{
+		Token:        sh.Token,
+		DocPath:      sh.DocPath,
+		URL:          m.baseURL.Load().(string) + "/s/" + sh.Token,
+		CreatedAt:    sh.CreatedAt,
+		ExpiresAt:    sh.ExpiresAt,
+		RevokedAt:    sh.RevokedAt,
+		ViewCount:    sh.ViewCount,
+		LastViewedAt: sh.LastViewedAt,
+	}
 }
 
 // Create shares the document at path. expiresDays <= 0 means no expiry.
