@@ -1,0 +1,68 @@
+# quire — toolchain + task contract (see README.md for what each task does)
+
+[tools]
+go = "1.27.0"
+bun = "1.4.0"
+
+[env]
+# Dev instance: single-user, no auth, localhost only. Real deployments set
+# QUIRE_AUTH_MODE=passkey and a proper base URL via environment/config.
+QUIRE_DATA_DIR = "{{config_root}}/tmp/vault"
+QUIRE_AUTH_MODE = "none"
+QUIRE_ADDR = "127.0.0.1:8321"
+
+[tasks.setup]
+description = "Zero → runnable: Go modules, frontend deps, dev vault dir"
+run = [
+  "go mod download",
+  "bun install --cwd web",
+  "mkdir -p tmp/vault",
+]
+
+[tasks.dev]
+description = "Run dev instance (single user, no auth, localhost) — Go API + Vite with HMR"
+run = "./scripts/dev.sh"
+
+[tasks.test]
+description = "Full test suite: Go (-race) + frontend"
+run = [
+  "go test -race ./...",
+  "bun test --cwd web",
+]
+
+[tasks."test:go"]
+description = "Go tests only"
+run = "go test -race ./..."
+
+[tasks.lint]
+description = "Lint + typecheck + format-check (never mutates)"
+run = [
+  "gofmt -l . | (! grep .)",
+  "go vet ./...",
+  "bun run --cwd web typecheck",
+  "bun run --cwd web lint",
+]
+
+[tasks.fmt]
+description = "Format Go + frontend (mutating counterpart of lint)"
+run = [
+  "gofmt -w .",
+  "bun run --cwd web fmt",
+]
+
+[tasks.check]
+description = "lint + test — the gate before claiming work is done"
+depends = ["lint", "test"]
+
+[tasks.build]
+description = "Production build: frontend → embedded assets → single binary"
+run = [
+  "bun run --cwd web build",
+  "go build -o bin/quire .",
+]
+
+[tasks."dev:reset"]
+description = "Blow away local state (dev vault, index db, frontend caches)"
+run = [
+  "rm -rf tmp bin web/dist web/node_modules/.vite",
+]

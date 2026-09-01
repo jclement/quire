@@ -1,0 +1,184 @@
+/* Theme + global styles. All colors flow through the semantic custom properties
+   below (--surface, --heading, …), swapped by a `.dark` class on <html> that an
+   inline script in index.html sets before first paint. Tailwind v4 maps them to
+   utilities (bg-surface, text-heading, …) via the @theme inline block — there is
+   no tailwind.config file. Fonts are imported in src/main.tsx (fontsource). */
+@import "tailwindcss";
+
+:root {
+  /* Light palette: warm off-white, ink text, indigo accent. */
+  --surface: #fbfbfa;
+  --raised: #ffffff;
+  --heading: #1c1b19;
+  --body: #3e3d3a;
+  --muted: #8b8880;
+  --border: #e5e3dd;
+  --hover: #f1efe9;
+  --selected: #eae9fb;
+  --accent: #5b5bd6;
+  --danger: #c0453e;
+  --warn: #9a6700;
+  --ok: #1a7f37;
+  --code-bg: #f3f1ec;
+}
+
+.dark {
+  /* Dark palette: near-black with a hint of warmth, brighter accent for contrast. */
+  --surface: #17181c;
+  --raised: #1e1f24;
+  --heading: #ededea;
+  --body: #c5c5c1;
+  --muted: #85847e;
+  --border: #2c2d33;
+  --hover: #222329;
+  --selected: #2c2e49;
+  --accent: #8688ee;
+  --danger: #e5695f;
+  --warn: #d9a53f;
+  --ok: #4cae6a;
+  --code-bg: #212228;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-heading: var(--heading);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-warn: var(--warn);
+  --color-ok: var(--ok);
+  --color-code-bg: var(--code-bg);
+
+  --font-sans:
+    "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:
+    "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo,
+    Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface font-sans text-sm text-body antialiased;
+  overflow-x: hidden;
+}
+
+/* Every interactive element gets a visible focus ring; individual elements only
+   ever add to this, never remove it. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+::selection {
+  background: var(--selected);
+}
+
+/* ---- Rendered markdown (read mode, Today's daily note) ---- */
+/* Hand-rolled instead of @tailwindcss/typography: the house look is denser and
+   we need callouts/wikilinks/task styling the plugin doesn't know about. */
+
+.prose-quire {
+  @apply max-w-none text-sm leading-relaxed text-body;
+}
+.prose-quire > :first-child {
+  margin-top: 0;
+}
+.prose-quire h1,
+.prose-quire h2,
+.prose-quire h3,
+.prose-quire h4 {
+  @apply font-semibold text-heading;
+  margin: 1.5em 0 0.5em;
+}
+.prose-quire h1 {
+  @apply text-xl;
+}
+.prose-quire h2 {
+  @apply text-lg;
+}
+.prose-quire h3 {
+  @apply text-base;
+}
+.prose-quire h4 {
+  @apply text-sm;
+}
+.prose-quire p {
+  margin: 0.625em 0;
+}
+.prose-quire a {
+  @apply text-accent underline decoration-accent/40 underline-offset-2;
+}
+.prose-quire a:hover {
+  @apply decoration-accent;
+}
+.prose-quire ul,
+.prose-quire ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.prose-quire ul {
+  list-style: disc;
+}
+.prose-quire ol {
+  list-style: decimal;
+}
+.prose-quire li {
+  margin: 0.2em 0;
+}
+.prose-quire li.task-item {
+  list-style: none;
+  margin-left: -1.3em;
+}
+.prose-quire blockquote:not([data-callout]) {
+  @apply border-l-2 border-border pl-3 text-muted;
+  margin: 0.75em 0;
+}
+.prose-quire code {
+  @apply rounded bg-code-bg px-1 py-0.5 font-mono text-[0.85em];
+}
+.prose-quire pre {
+  @apply overflow-x-auto rounded border border-border bg-code-bg p-3;
+  margin: 0.75em 0;
+}
+.prose-quire pre code {
+  @apply bg-transparent p-0 text-xs leading-relaxed;
+}
+.prose-quire hr {
+  @apply border-border;
+  margin: 1.5em 0;
+}
+.prose-quire table {
+  @apply w-full border-collapse text-xs;
+  margin: 0.75em 0;
+}
+.prose-quire th {
+  @apply border-b border-border px-2 py-1.5 text-left font-semibold text-heading;
+}
+.prose-quire td {
+  @apply border-b border-border px-2 py-1.5 align-top;
+}
+.prose-quire img {
+  @apply max-w-full rounded border border-border;
+}
+
+/* ---- CodeMirror ---- */
+/* Structural bits only; syntax colors live in src/editor/extensions.ts where
+   they can reference the same custom properties. */
+
+.cm-editor {
+  height: 100%;
+  background: transparent;
+}
+.cm-editor.cm-focused {
+  outline: none;
+}

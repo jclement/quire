@@ -1,0 +1,394 @@
+// Package service is the one business-logic layer under every transport:
+// REST handlers and MCP tools both call these methods and nothing else, so
+// permissions and behavior cannot drift between them (DESIGN.md decision 5).
+// API-shaped types (JSON tags) live here; transports only translate.
+package service
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/jclement/quire/internal/index"
+	"github.com/jclement/quire/internal/markdown"
+	"github.com/jclement/quire/internal/vault"
+)
+
+// Service wires the vault and index together.
+type Service struct {
+	Vault *vault.Vault
+	Index *index.Index
+	// Now allows tests to pin the clock.
+	Now func() time.Time
+}
+
+// New returns a Service using the real clock.
+func New(v *vault.Vault, ix *index.Index) *Service {
+	return &Service{Vault: v, Index: ix, Now: time.Now}
+}
+
+func (s *Service) today() string { return s.Now().Format("2006-01-02") }
+
+// ---- API-shaped types ----
+
+// DocMeta is a document's listing metadata.
+type DocMeta struct {
+	Path   string   `json:"path"`
+	Type   string   `json:"type"`
+	Title  string   `json:"title"`
+	Mtime  string   `json:"mtime"`
+	SHA256 string   `json:"sha256"`
+	Tags   []string `json:"tags"`
+}
+
+// Link is a wikilink with its resolution ("" target = dangling → null).
+type Link struct {
+	Target  *string `json:"target"`
+	Raw     string  `json:"raw"`
+	Display string  `json:"display"`
+}
+
+// Document is the full read payload.
+type Document struct {
+	DocMeta
+	Markdown    string          `json:"markdown"`
+	Frontmatter json.RawMessage `json:"frontmatter"`
+	Links       []Link          `json:"links"`
+	Backlinks   []DocMeta       `json:"backlinks"`
+	Tasks       []Task          `json:"tasks"`
+}
+
+// Task is the API task shape.
+type Task struct {
+	ID          string   `json:"id"`
+	DocPath     string   `json:"doc_path"`
+	DocTitle    string   `json:"doc_title"`
+	Line        int      `json:"line"`
+	Text        string   `json:"text"`
+	Done        bool     `json:"done"`
+	Due         *string  `json:"due"`
+	Defer       *string  `json:"defer"`
+	Priority    int      `json:"priority"`
+	Waiting     bool     `json:"waiting"`
+	Project     *string  `json:"project"`
+	Tags        []string `json:"tags"`
+	CompletedOn *string  `json:"completed_on"`
+}
+
+// SearchResult is one search hit.
+type SearchResult struct {
+	Path    string `json:"path"`
+	Type    string `json:"type"`
+	Title   string `json:"title"`
+	Snippet string `json:"snippet"`
+}
+
+// TodayPayload is the composed home-screen (and MCP `today` tool) response.
+type TodayPayload struct {
+	Date      string    `json:"date"`
+	Daily     *Document `json:"daily"`
+	Meetings  []DocMeta `json:"meetings"`
+	Overdue   []Task    `json:"overdue"`
+	DueToday  []Task    `json:"due_today"`
+	Available []Task    `json:"available"`
+	Waiting   []Task    `json:"waiting"`
+	Recent    []DocMeta `json:"recent"`
+}
+
+// ---- conversions ----
+
+func metaFromRow(d index.DocRow) DocMeta {
+	return DocMeta{
+		Path:   d.Path,
+		Type:   d.Type,
+		Title:  d.Title,
+		Mtime:  d.Mtime.Format(time.RFC3339),
+		SHA256: d.SHA256,
+		Tags:   d.Tags,
+	}
+}
+
+func metasFromRows(rows []index.DocRow) []DocMeta {
+	out := make([]DocMeta, 0, len(rows))
+	for _, d := range rows {
+		out = append(out, metaFromRow(d))
+	}
+	return out
+}
+
+func optStr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func taskFromRow(t index.TaskRow) Task {
+	return Task{
+		ID:          t.ID,
+		DocPath:     t.DocPath,
+		DocTitle:    t.DocTitle,
+		Line:        t.Line,
+		Text:        t.Text,
+		Done:        t.Done,
+		Due:         optStr(t.Due),
+		Defer:       optStr(t.Defer),
+		Priority:    t.Priority,
+		Waiting:     t.Waiting,
+		Project:     optStr(t.ProjectPath),
+		Tags:        t.Tags,
+		CompletedOn: optStr(t.CompletedOn),
+	}
+}
+
+func tasksFromRows(rows []index.TaskRow) []Task {
+	out := make([]Task, 0, len(rows))
+	for _, t := range rows {
+		out = append(out, taskFromRow(t))
+	}
+	return out
+}
+
+// ---- documents ----
+
+// ListDocuments lists document metadata, optionally filtered by type and a
+// title substring.
+func (s *Service) ListDocuments(docType, q string, limit int) ([]DocMeta, error) {
+	rows, err := s.Index.ListDocuments(docType, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	return metasFromRows(rows), nil
+}
+
+// GetDocument returns the full document at path: raw markdown plus parsed
+// structure so clients (and agents) never re-parse markdown themselves.
+func (s *Service) GetDocument(path string) (Document, error) {
+	f, err := s.Vault.Read(path)
+	if err != nil {
+		return Document{}, err
+	}
+	return s.buildDocument(f)
+}
+
+func (s *Service) buildDocument(f vault.File) (Document, error) {
+	scanned := markdown.Scan(f.Path, f.Raw)
+	fm := vault.ParseFrontmatter(f.Raw)
+	fmJSON, err := json.Marshal(fm)
+	if err != nil || fm == nil {
+		fmJSON = []byte("{}")
+	}
+
+	meta := DocMeta{Path: f.Path, SHA256: f.SHA256, Mtime: f.ModTime.Format(time.RFC3339)}
+	// Prefer the indexed row for type/title/tags (it applies the same
+	// inference rules); fall back to a direct scan for not-yet-indexed files.
+	if row, err := s.Index.GetDocMeta(f.Path); err == nil {
+		meta.Type = row.Type
+		meta.Title = row.Title
+		meta.Tags = row.Tags
+	} else {
+		meta.Type = string(vault.InferType(f.Path))
+		meta.Title = scanned.Title
+		meta.Tags = scanned.Tags
+	}
+
+	links := make([]Link, 0, len(scanned.Links))
+	for _, l := range scanned.Links {
+		links = append(links, Link{Target: optStr(s.Index.ResolveLink(l.Raw)), Raw: l.Raw, Display: l.Display})
+	}
+	backRows, err := s.Index.Backlinks(f.Path)
+	if err != nil {
+		return Document{}, err
+	}
+
+	tasks := make([]Task, 0, len(scanned.Tasks))
+	for _, t := range scanned.Tasks {
+		row, err := s.Index.TaskByID(t.ID)
+		if err != nil {
+			// Not yet indexed (fresh write); shape it directly.
+			tasks = append(tasks, Task{
+				ID: t.ID, DocPath: f.Path, Line: t.Line, Text: t.Text, Done: t.Done,
+				Due: optStr(t.Due), Defer: optStr(t.Defer), Priority: t.Priority,
+				Waiting: t.Waiting, Tags: t.Tags, CompletedOn: optStr(t.CompletedOn),
+			})
+			continue
+		}
+		tasks = append(tasks, taskFromRow(row))
+	}
+
+	return Document{
+		DocMeta:     meta,
+		Markdown:    string(f.Raw),
+		Frontmatter: fmJSON,
+		Links:       links,
+		Backlinks:   metasFromRows(backRows),
+		Tasks:       tasks,
+	}, nil
+}
+
+// UpdateDocument replaces a document's content, guarded by the caller's base
+// hash (vault.ErrConflict when stale). The index is updated synchronously so
+// the response reflects the write.
+func (s *Service) UpdateDocument(path, content, baseSHA string) (Document, error) {
+	f, err := s.Vault.Write(path, []byte(content), baseSHA)
+	if err != nil {
+		return Document{}, err
+	}
+	if _, err := s.Index.IndexFile(path); err != nil {
+		return Document{}, fmt.Errorf("indexing after write: %w", err)
+	}
+	return s.buildDocument(f)
+}
+
+// CreateDocument creates a new typed document, picking its path and seeding
+// type-appropriate frontmatter. Duplicate titles get a numeric suffix.
+func (s *Service) CreateDocument(docType vault.DocType, title, body string) (Document, error) {
+	if title == "" {
+		return Document{}, fmt.Errorf("title is required")
+	}
+	path := vault.NewDocPath(docType, title, s.Now())
+	for n := 2; s.Vault.Exists(path); n++ {
+		base := strings.TrimSuffix(path, ".md")
+		path = fmt.Sprintf("%s-%d.md", base, n)
+		if n > 100 {
+			return Document{}, fmt.Errorf("could not find a free path for %q", title)
+		}
+	}
+
+	if body == "" {
+		body = "# " + title + "\n\n"
+	}
+	content := s.seedFrontmatter(docType, body)
+
+	f, err := s.Vault.Write(path, content, "")
+	if err != nil {
+		return Document{}, err
+	}
+	if _, err := s.Index.IndexFile(path); err != nil {
+		return Document{}, fmt.Errorf("indexing new document: %w", err)
+	}
+	return s.buildDocument(f)
+}
+
+// seedFrontmatter gives new entity documents their minimal starting block.
+// Notes get none — a plain file stays a plain file.
+func (s *Service) seedFrontmatter(docType vault.DocType, body string) []byte {
+	switch docType {
+	case vault.TypeProject:
+		return vault.BuildDoc([][2]string{{"status", "active"}}, body)
+	case vault.TypeMeeting:
+		return vault.BuildDoc([][2]string{{"date", s.Now().Format("2006-01-02T15:04")}, {"people", "[]"}}, body)
+	default:
+		return []byte(body)
+	}
+}
+
+// DeleteDocument removes a document and its index rows.
+func (s *Service) DeleteDocument(path string) error {
+	if err := s.Vault.Delete(path); err != nil {
+		return err
+	}
+	return s.Index.Remove(path)
+}
+
+// Search runs the shared query grammar.
+func (s *Service) Search(q string, limit int) ([]SearchResult, error) {
+	hits, err := s.Index.Search(q, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SearchResult, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, SearchResult{Path: h.Path, Type: h.Type, Title: h.Title, Snippet: h.Snippet})
+	}
+	return out, nil
+}
+
+// ---- daily & today ----
+
+// GetDaily returns the daily note for date (vault.ErrNotFound if absent).
+func (s *Service) GetDaily(date string) (Document, error) {
+	if _, err := time.Parse("2006-01-02", date); err != nil {
+		return Document{}, fmt.Errorf("invalid date %q", date)
+	}
+	return s.GetDocument("daily/" + date + ".md")
+}
+
+// EnsureDaily returns the daily note for date, creating it from the template
+// if missing.
+func (s *Service) EnsureDaily(date string) (Document, error) {
+	if _, err := time.Parse("2006-01-02", date); err != nil {
+		return Document{}, fmt.Errorf("invalid date %q", date)
+	}
+	path := "daily/" + date + ".md"
+	if s.Vault.Exists(path) {
+		return s.GetDocument(path)
+	}
+	f, err := s.Vault.Write(path, []byte("# "+date+"\n\n"), "")
+	if err != nil {
+		return Document{}, err
+	}
+	if _, err := s.Index.IndexFile(path); err != nil {
+		return Document{}, err
+	}
+	return s.buildDocument(f)
+}
+
+// Today composes the home-screen payload: meetings, task buckets, recent
+// documents, and the daily note if it exists (nil, not auto-created — files
+// appear when the user writes, DESIGN.md decision 9).
+func (s *Service) Today() (TodayPayload, error) {
+	day := s.today()
+	payload := TodayPayload{Date: day}
+
+	if doc, err := s.GetDaily(day); err == nil {
+		payload.Daily = &doc
+	}
+
+	meetings, err := s.Index.MeetingsOn(day)
+	if err != nil {
+		return payload, err
+	}
+	payload.Meetings = metasFromRows(meetings)
+
+	dueRows, err := s.Index.OpenTasksDue(day)
+	if err != nil {
+		return payload, err
+	}
+	payload.Overdue, payload.DueToday = []Task{}, []Task{}
+	for _, t := range dueRows {
+		if t.Due < day {
+			payload.Overdue = append(payload.Overdue, taskFromRow(t))
+		} else {
+			payload.DueToday = append(payload.DueToday, taskFromRow(t))
+		}
+	}
+
+	todayRows, err := s.Index.Tasks(index.ViewToday, day)
+	if err != nil {
+		return payload, err
+	}
+	payload.Available = []Task{}
+	for _, t := range todayRows {
+		// The today view includes due tasks; Available is only the
+		// deferred-to-now remainder so sections don't repeat rows.
+		if t.Due == "" {
+			payload.Available = append(payload.Available, taskFromRow(t))
+		}
+	}
+
+	waitingRows, err := s.Index.Tasks(index.ViewWaiting, day)
+	if err != nil {
+		return payload, err
+	}
+	payload.Waiting = tasksFromRows(waitingRows)
+
+	recent, err := s.Index.ListDocuments("", "", 8)
+	if err != nil {
+		return payload, err
+	}
+	payload.Recent = metasFromRows(recent)
+
+	return payload, nil
+}

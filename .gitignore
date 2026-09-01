@@ -1,0 +1,14 @@
+# Local state
+/tmp/
+/bin/
+/dist/
+mise.local.toml
+.env
+
+# Frontend
+web/node_modules/
+web/dist/
+!web/dist/.gitkeep
+
+# OS noise
+.DS_Store
