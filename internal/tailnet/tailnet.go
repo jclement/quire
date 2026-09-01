@@ -5,24 +5,86 @@
 //
 // With funnel enabled, the same listener also accepts public internet
 // traffic; the per-request gate gives those visitors exactly one surface:
-// /s/* share pages. WhoIs distinguishes the two — a tailnet peer resolves to
-// an identity, a funnel connection does not.
+// /s/* share pages (plus /mcp and OAuth when ts_funnel_mcp is on, each
+// demanding its own credential).
+//
+// WhoIs does NOT distinguish the two. A funnel connection is proxied to us
+// through Tailscale's ingress, so it presents a tailnet source address that
+// WhoIs resolves like any peer — an earlier version of this gate inferred
+// "public" from WhoIs failing and consequently served the whole vault to
+// anonymous internet requests. Tailscale marks funnel connections explicitly
+// (ipn.FunnelConn, captured in ConnContext); that mark, plus a check that the
+// peer address is inside the tailnet range, is what separates them, and the
+// gate fails closed if either is missing.
 package tailnet
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"tailscale.com/client/tailscale/apitype"
+	"tailscale.com/ipn"
+	"tailscale.com/net/tsaddr"
 	"tailscale.com/tsnet"
 
 	"github.com/jclement/quire/internal/auth"
 	"github.com/jclement/quire/internal/config"
 )
+
+// funnelKey marks a connection that arrived from the public internet.
+type funnelKey struct{}
+
+// ConnContext MUST be installed on any http.Server serving a funnel listener.
+//
+// Funnel and tailnet traffic share one listener, and a funnel connection is
+// proxied to us through Tailscale's ingress — so its remote address is a
+// tailnet address that WhoIs resolves happily. Inferring "public" from WhoIs
+// failing is therefore wrong, and wrong in the worst direction: it let
+// anonymous internet requests through as the vault owner. Tailscale marks
+// these connections explicitly; that mark is the only trustworthy signal.
+func ConnContext(ctx context.Context, c net.Conn) context.Context {
+	if conn, ok := c.(*tls.Conn); ok {
+		c = conn.NetConn()
+	}
+	if _, isFunnel := c.(*ipn.FunnelConn); isFunnel {
+		return context.WithValue(ctx, funnelKey{}, true)
+	}
+	return ctx
+}
+
+func fromFunnel(r *http.Request) bool {
+	marked, _ := r.Context().Value(funnelKey{}).(bool)
+	return marked
+}
+
+// fromTailnetAddr reports whether the peer address is inside the tailnet
+// range. A second, independent check: even if the funnel mark were ever
+// missing, a public client cannot present a 100.64.0.0/10 source.
+func fromTailnetAddr(remoteAddr string) bool {
+	addrPort, err := netip.ParseAddrPort(remoteAddr)
+	if err != nil {
+		host, _, splitErr := net.SplitHostPort(remoteAddr)
+		if splitErr != nil {
+			return false
+		}
+		addr, parseErr := netip.ParseAddr(host)
+		if parseErr != nil {
+			return false
+		}
+		return tsaddr.IsTailscaleIP(addr)
+	}
+	return tsaddr.IsTailscaleIP(addrPort.Addr())
+}
+
+// errPublicRequest marks a request we decided is public before ever asking
+// WhoIs.
+var errPublicRequest = fmt.Errorf("request did not arrive over the tailnet")
 
 // Node is a running tsnet instance.
 type Node struct {
@@ -114,7 +176,16 @@ func (n *Node) Handler(cfg GateConfig) http.Handler {
 		r.Header.Del(auth.HeaderTailnetLogin)
 		r.Header.Del(auth.HeaderPublicRequest)
 
-		who, err := n.whois(r.Context(), r.RemoteAddr)
+		// Fail closed: a request counts as tailnet only when it is NOT marked
+		// as funnel AND its peer address is inside the tailnet AND WhoIs
+		// identifies it. Any doubt means public.
+		var who *apitype.WhoIsResponse
+		var err error
+		if !fromFunnel(r) && fromTailnetAddr(r.RemoteAddr) {
+			who, err = n.whois(r.Context(), r.RemoteAddr)
+		} else {
+			err = errPublicRequest
+		}
 		if err != nil || who == nil || who.Node == nil {
 			if !cfg.publicAllowed(r.URL.Path) {
 				http.NotFound(w, r)

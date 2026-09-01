@@ -271,7 +271,7 @@ func serveTailnet(ctx context.Context, cfg config.Config, mux http.Handler, mcpH
 		oauthServer.Routes(publicMux)
 	}
 
-	server := &http.Server{Handler: securityHeaders(node.Handler(tailnet.GateConfig{
+	server := &http.Server{ConnContext: tailnet.ConnContext, Handler: securityHeaders(node.Handler(tailnet.GateConfig{
 		Full:         mux,
 		Public:       publicMux,
 		Store:        authStore,

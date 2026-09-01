@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"tailscale.com/client/tailscale/apitype"
+	"tailscale.com/ipn"
 	"tailscale.com/tailcfg"
 
 	"github.com/jclement/quire/internal/auth"
@@ -51,6 +52,21 @@ func gateFor(t *testing.T, ownerLogin string) http.Handler {
 func request(h http.Handler, remoteAddr, path string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest("GET", path, nil)
 	req.RemoteAddr = remoteAddr
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+// funnelRequest models what actually arrives over Tailscale Funnel: the
+// connection is proxied through Tailscale's ingress, so it carries a TAILNET
+// source address that WhoIs resolves — the mark on the connection is the only
+// thing that distinguishes it. This shape is why the gate leaked: inferring
+// "public" from WhoIs failing let anonymous internet traffic in as the owner.
+func funnelRequest(h http.Handler, path string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest("GET", path, nil)
+	req.RemoteAddr = "100.64.0.1:1234" // resolvable by the fake WhoIs
+	// The real type Tailscale hands us for public traffic.
+	req = req.WithContext(ConnContext(req.Context(), &ipn.FunnelConn{}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
@@ -122,6 +138,32 @@ func TestBearerTokenScopesHonoredOnTailnet(t *testing.T) {
 	gate.ServeHTTP(rec, req)
 	if rec.Code != 401 {
 		t.Errorf("bogus token on tailnet = %d, want 401", rec.Code)
+	}
+}
+
+// A funnel connection whose peer address WhoIs happily resolves must still be
+// treated as the public internet. Without this, an anonymous request reached
+// the API as the vault owner.
+func TestFunnelConnectionIsNeverTreatedAsTailnet(t *testing.T) {
+	gate := gateFor(t, "")
+	for _, path := range []string{"/api/v1/documents", "/api/v1/today", "/", "/today", "/api/v1/health"} {
+		if rec := funnelRequest(gate, path); rec.Code != 404 {
+			t.Errorf("funnel %s = %d (body %q), want 404 — the vault must not be reachable from the internet",
+				path, rec.Code, rec.Body.String())
+		}
+	}
+	// Share pages remain the one public surface.
+	if rec := funnelRequest(gate, "/s/abc123"); rec.Code != 200 || rec.Body.String() != "share" {
+		t.Errorf("funnel share page = %d %q", rec.Code, rec.Body.String())
+	}
+}
+
+// A source outside the tailnet range is public even with no funnel mark —
+// an independent check, in case the mark is ever absent.
+func TestNonTailnetAddressIsPublic(t *testing.T) {
+	gate := gateFor(t, "")
+	if rec := request(gate, "203.0.113.9:5555", "/api/v1/documents"); rec.Code != 404 {
+		t.Errorf("public address reached the API: %d", rec.Code)
 	}
 }
 

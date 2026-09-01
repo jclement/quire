@@ -181,11 +181,18 @@ pins access to one login. A bearer token presented over the tailnet is still hon
 radius.
 
 With `ts_funnel: true`, the same `:443` listener also accepts public internet traffic
-(Tailscale Funnel). The per-request gate is the whole public story: WhoIs succeeds →
-tailnet peer, full app; WhoIs fails → public visitor, `/s/*` share pages only, and
-every other path (including `/api/v1/health`) 404s so the internet can't even learn
-quire exists. Rejected alternative: a separate funnel port — one listener with an
-identity gate has fewer moving parts and can't be misconfigured into exposing the app.
+(Tailscale Funnel). The per-request gate is the whole public story: a request is
+treated as a tailnet peer only when it is not marked as a funnel connection, its peer
+address is inside the tailnet range, AND WhoIs identifies it; anything else is a public
+visitor who sees `/s/*` share pages only, with every other path (including
+`/api/v1/health`) 404ing so the internet can't even learn quire exists.
+
+**WhoIs alone cannot make that decision**, and assuming it could was a real
+vulnerability in v0.1.0: Funnel proxies connections through Tailscale's ingress, so
+they arrive with a tailnet source address that WhoIs resolves happily, and the gate
+served the entire vault to anonymous requests. Tailscale marks these connections
+(`ipn.FunnelConn`, captured via the server's `ConnContext`); the gate reads that mark,
+double-checks the address range, and fails closed when either signal is missing.
 
 ## Sharing
 
