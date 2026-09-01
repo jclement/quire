@@ -12,12 +12,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/jclement/quire/internal/api"
+	"github.com/jclement/quire/internal/auth"
 	"github.com/jclement/quire/internal/config"
 	"github.com/jclement/quire/internal/index"
+	"github.com/jclement/quire/internal/mcp"
 	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/vault"
 	"github.com/jclement/quire/internal/webui"
@@ -40,10 +43,12 @@ func main() {
 		err = runReindex()
 	case "doctor":
 		err = runDoctor()
+	case "token":
+		err = runToken(os.Args[2:])
 	case "version", "--version", "-v":
 		fmt.Println("quire", version)
 	default:
-		fmt.Fprintf(os.Stderr, "usage: quire [serve|reindex|doctor|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: quire [serve|reindex|doctor|token|version]\n")
 		os.Exit(2)
 	}
 	if err != nil {
@@ -87,6 +92,13 @@ func runServe() error {
 	if err != nil {
 		return err
 	}
+	if cfg.AuthMode == config.AuthPasskey {
+		return fmt.Errorf("auth mode \"passkey\" is not implemented yet — use \"token-only\" (with `quire token create`) or \"none\" on loopback")
+	}
+	authStore, err := auth.Open(filepath.Join(cfg.StateDir(), "auth.db"))
+	if err != nil {
+		return err
+	}
 
 	events := api.NewBroadcaster()
 	svc.Index.Notify = events.Publish
@@ -110,13 +122,14 @@ func runServe() error {
 	apiServer := &api.Server{Service: svc, Events: events, Version: version}
 	mux := http.NewServeMux()
 	apiServer.Routes(mux)
+	mux.Handle("/mcp", mcp.Handler(svc, version))
 	mux.Handle("/", webui.Handler())
 
 	if cfg.AuthMode == config.AuthNone {
 		slog.Warn("auth mode \"none\": every request is the vault owner (loopback only)")
 	}
 
-	server := &http.Server{Addr: cfg.Addr, Handler: securityHeaders(mux)}
+	server := &http.Server{Addr: cfg.Addr, Handler: securityHeaders(authStore.Middleware(cfg.AuthMode, mux))}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -191,6 +204,65 @@ func runDoctor() error {
 		fmt.Println("vault healthy: no dangling links")
 	} else {
 		fmt.Printf("%d dangling link(s)\n", dangling)
+	}
+	return nil
+}
+
+// runToken drives token lifecycle: create <name> [scopes...], list, revoke
+// <prefix>. Scopes default to read; pass any of read, write, tasks.
+func runToken(args []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	store, err := auth.Open(filepath.Join(cfg.StateDir(), "auth.db"))
+	if err != nil {
+		return err
+	}
+
+	if len(args) == 0 {
+		return fmt.Errorf("usage: quire token [create <name> [read|write|tasks ...] | list | revoke <prefix>]")
+	}
+	switch args[0] {
+	case "create":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: quire token create <name> [read|write|tasks ...]")
+		}
+		plaintext, t, err := store.CreateToken(args[1], args[2:], 0)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("token %q created (scopes: %v)\n\n  %s\n\nThis is the only time it will be shown.\n", t.Name, t.Scopes, plaintext)
+	case "list":
+		tokens, err := store.ListTokens()
+		if err != nil {
+			return err
+		}
+		if len(tokens) == 0 {
+			fmt.Println("no tokens")
+			return nil
+		}
+		for _, t := range tokens {
+			status := "active"
+			if t.RevokedAt != "" {
+				status = "revoked " + t.RevokedAt
+			}
+			lastUsed := t.LastUsedAt
+			if lastUsed == "" {
+				lastUsed = "never"
+			}
+			fmt.Printf("sk_%s…  %-20s %-24s %s  last used %s\n", t.Prefix, t.Name, strings.Join(t.Scopes, ","), status, lastUsed)
+		}
+	case "revoke":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: quire token revoke <prefix>")
+		}
+		if err := store.RevokeToken(strings.TrimPrefix(args[1], "sk_")); err != nil {
+			return err
+		}
+		fmt.Println("revoked")
+	default:
+		return fmt.Errorf("unknown token subcommand %q", args[0])
 	}
 	return nil
 }

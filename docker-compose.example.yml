@@ -1,0 +1,14 @@
+# Example deployment: quire on a Docker host, reachable over a tailnet or
+# reverse proxy. First run: create an API token for MCP/scripts with
+#   docker compose exec quire quire token create claude read write tasks
+services:
+  quire:
+    image: ghcr.io/jclement/quire:latest
+    restart: unless-stopped
+    ports:
+      - "8321:8321"
+    volumes:
+      - ./data:/data
+    environment:
+      QUIRE_BASE_URL: https://quire.your-tailnet.ts.net
+      QUIRE_AUTH_MODE: token-only # passkey once implemented

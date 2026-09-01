@@ -1,0 +1,51 @@
+# GoReleaser: single static binary per platform with the frontend embedded
+# (-tags prod; the release workflow builds web/dist first), plus a multi-arch
+# Docker image at ghcr.io/jclement/quire.
+version: 2
+
+builds:
+  - id: quire
+    main: .
+    binary: quire
+    flags:
+      - -tags=prod
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "quire_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+dockers:
+  - image_templates: ["ghcr.io/jclement/quire:{{ .Version }}-amd64"]
+    use: buildx
+    goarch: amd64
+    build_flag_templates: ["--platform=linux/amd64"]
+  - image_templates: ["ghcr.io/jclement/quire:{{ .Version }}-arm64"]
+    use: buildx
+    goarch: arm64
+    build_flag_templates: ["--platform=linux/arm64"]
+
+docker_manifests:
+  - name_template: "ghcr.io/jclement/quire:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/jclement/quire:{{ .Version }}-amd64"
+      - "ghcr.io/jclement/quire:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/jclement/quire:latest"
+    image_templates:
+      - "ghcr.io/jclement/quire:{{ .Version }}-amd64"
+      - "ghcr.io/jclement/quire:{{ .Version }}-arm64"
+
+changelog:
+  use: github-native
+
+release:
+  footer: |
+    Docker: `ghcr.io/jclement/quire:{{ .Version }}`

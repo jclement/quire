@@ -5,7 +5,6 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -52,11 +51,11 @@ type Link struct {
 // Document is the full read payload.
 type Document struct {
 	DocMeta
-	Markdown    string          `json:"markdown"`
-	Frontmatter json.RawMessage `json:"frontmatter"`
-	Links       []Link          `json:"links"`
-	Backlinks   []DocMeta       `json:"backlinks"`
-	Tasks       []Task          `json:"tasks"`
+	Markdown    string         `json:"markdown"`
+	Frontmatter map[string]any `json:"frontmatter"`
+	Links       []Link         `json:"links"`
+	Backlinks   []DocMeta      `json:"backlinks"`
+	Tasks       []Task         `json:"tasks"`
 }
 
 // Task is the API task shape.
@@ -175,9 +174,8 @@ func (s *Service) GetDocument(path string) (Document, error) {
 func (s *Service) buildDocument(f vault.File) (Document, error) {
 	scanned := markdown.Scan(f.Path, f.Raw)
 	fm := vault.ParseFrontmatter(f.Raw)
-	fmJSON, err := json.Marshal(fm)
-	if err != nil || fm == nil {
-		fmJSON = []byte("{}")
+	if fm == nil {
+		fm = map[string]any{}
 	}
 
 	meta := DocMeta{Path: f.Path, SHA256: f.SHA256, Mtime: f.ModTime.Format(time.RFC3339)}
@@ -220,7 +218,7 @@ func (s *Service) buildDocument(f vault.File) (Document, error) {
 	return Document{
 		DocMeta:     meta,
 		Markdown:    string(f.Raw),
-		Frontmatter: fmJSON,
+		Frontmatter: fm,
 		Links:       links,
 		Backlinks:   metasFromRows(backRows),
 		Tasks:       tasks,
@@ -283,6 +281,58 @@ func (s *Service) seedFrontmatter(docType vault.DocType, body string) []byte {
 		return []byte(body)
 	}
 }
+
+// AppendToDocument adds markdown to the end of a document, or to the end of
+// a named section when given — the safe write for agents and quick capture:
+// existing content is never rewritten, only added to.
+func (s *Service) AppendToDocument(path, addition, section string) (Document, error) {
+	f, err := s.Vault.Read(path)
+	if err != nil {
+		return Document{}, err
+	}
+	content := string(f.Raw)
+	addition = strings.TrimRight(addition, "\n") + "\n"
+
+	if section == "" {
+		if content != "" && !strings.HasSuffix(content, "\n") {
+			content += "\n"
+		}
+		return s.UpdateDocument(path, content+addition, f.SHA256)
+	}
+
+	lines := strings.Split(content, "\n")
+	start := -1
+	for i, line := range lines {
+		heading := strings.TrimLeft(line, "# ")
+		if strings.HasPrefix(line, "#") && strings.EqualFold(strings.TrimSpace(heading), strings.TrimSpace(section)) {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return Document{}, fmt.Errorf("section %q not found in %s", section, path)
+	}
+	// The section ends at the next heading of any level (or EOF).
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "#") {
+			end = i
+			break
+		}
+	}
+	// Insert before trailing blank lines so the appended text sits inside
+	// the section, not after its separating whitespace.
+	insert := end
+	for insert > start+1 && strings.TrimSpace(lines[insert-1]) == "" {
+		insert--
+	}
+	updated := append(append(append([]string{}, lines[:insert]...), strings.Split(strings.TrimRight(addition, "\n"), "\n")...), lines[insert:]...)
+	return s.UpdateDocument(path, strings.Join(updated, "\n"), f.SHA256)
+}
+
+// TasksFromRows converts index rows to the API shape (exported for the MCP
+// layer's rollup tools).
+func TasksFromRows(rows []index.TaskRow) []Task { return tasksFromRows(rows) }
 
 // DeleteDocument removes a document and its index rows.
 func (s *Service) DeleteDocument(path string) error {

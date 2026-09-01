@@ -218,6 +218,22 @@ func (ix *Index) TaskByID(id string) (TaskRow, error) {
 	return tasks[0], nil
 }
 
+// TasksMentioning returns open tasks whose text links the document at path
+// (by any name it answers to) — the person/project page rollup.
+func (ix *Index) TasksMentioning(path string) ([]TaskRow, error) {
+	rows, err := ix.DB.Query(taskSelect+`
+		WHERE t.done = 0 AND t.id IN (
+			SELECT tl.task_id FROM task_links tl
+			JOIN docnames n ON n.name = tl.target_norm
+			WHERE n.path = ?
+		) ORDER BY t.due = '', t.due`, path)
+	if err != nil {
+		return nil, fmt.Errorf("tasks mentioning %s: %w", path, err)
+	}
+	defer rows.Close()
+	return collectTasks(rows)
+}
+
 // OpenTasksDue returns open tasks with due <= day (the Today screen's
 // overdue + due-today sections split by the caller).
 func (ix *Index) OpenTasksDue(day string) ([]TaskRow, error) {

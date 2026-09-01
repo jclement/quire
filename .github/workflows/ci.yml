@@ -1,0 +1,16 @@
+# CI: the same gate as local development — `mise run check` (lint + tests).
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise run setup
+      - run: mise run check
+      - run: mise run build
