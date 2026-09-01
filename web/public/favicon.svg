@@ -1,4 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The glyph is positioned by measured ink bounds, not font metrics: a
+       lowercase italic "q" has a descender and no ascender, so baseline
+       centering leaves it visually low. y=19.37 at size 24 puts the painted
+       ink's center at exactly (16, 16). -->
   <rect width="32" height="32" rx="7" fill="#5b5bd6" />
-  <text x="16" y="23.5" font-family="Georgia, 'Times New Roman', serif" font-size="21" font-style="italic" fill="#ffffff" text-anchor="middle">q</text>
+  <text x="16" y="19.37" font-family="Georgia, 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', serif" font-size="24" font-style="italic" fill="#ffffff" text-anchor="middle">q</text>
 </svg>

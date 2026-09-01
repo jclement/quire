@@ -193,6 +193,15 @@ func (s *Server) handleEnsureDaily(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, doc)
 }
 
+func (s *Server) handleCalendar(w http.ResponseWriter, r *http.Request) {
+	payload, err := s.Service.Calendar(r.URL.Query().Get("month"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+	writeData(w, http.StatusOK, payload)
+}
+
 func (s *Server) handleToday(w http.ResponseWriter, r *http.Request) {
 	payload, err := s.Service.Today()
 	if err != nil {

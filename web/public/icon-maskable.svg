@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!-- Full-bleed background: maskable icons get cropped to arbitrary shapes,
-       so the glyph stays inside the central 80% safe zone. -->
+       so the glyph stays inside the central 80% safe zone. y is set from
+       measured ink bounds (see favicon.svg) so the "q" is optically centered. -->
   <rect width="512" height="512" fill="#5b5bd6" />
-  <text x="256" y="350" font-family="Georgia, 'Times New Roman', serif" font-size="270" font-style="italic" fill="#ffffff" text-anchor="middle">q</text>
+  <text x="256" y="294" font-family="Georgia, 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', serif" font-size="270" font-style="italic" fill="#ffffff" text-anchor="middle">q</text>
 </svg>

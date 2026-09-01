@@ -116,6 +116,15 @@ paths:
       summary: The composed home payload
       description: "date, daily (nullable), meetings, overdue, due_today, available, waiting, recent."
       responses: { "200": { description: "data: TodayPayload" } }
+  /api/v1/calendar:
+    get:
+      summary: Month view of vault activity
+      description: >
+        One cell per day of the month: whether a daily note exists, documents
+        touched (capped, newest first), meetings scheduled, and completed-task
+        count. `month` is YYYY-MM and defaults to the current month.
+      parameters: [{ name: month, in: query, schema: { type: string, example: "2026-09" } }]
+      responses: { "200": { description: "data: CalendarMonth {month, prev, next, days[]}" } }
   /api/v1/attachments:
     post:
       summary: Upload a file (multipart field `file`)

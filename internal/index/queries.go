@@ -157,6 +157,53 @@ func (ix *Index) PeopleWithBirthdays() ([]DocRow, error) {
 	return collectDocs(rows)
 }
 
+// DocsModifiedBetween returns documents whose mtime falls in [from, to),
+// oldest first — the input to the calendar month view.
+func (ix *Index) DocsModifiedBetween(from, to time.Time) ([]DocRow, error) {
+	rows, err := ix.DB.Query(docSelect+" WHERE d.mtime >= ? AND d.mtime < ? ORDER BY d.mtime",
+		from.Unix(), to.Unix())
+	if err != nil {
+		return nil, fmt.Errorf("documents modified between: %w", err)
+	}
+	defer rows.Close()
+	return collectDocs(rows)
+}
+
+// MeetingsBetween returns meetings whose frontmatter date falls on a day in
+// [fromDay, toDay] (inclusive, YYYY-MM-DD strings).
+func (ix *Index) MeetingsBetween(fromDay, toDay string) ([]DocRow, error) {
+	rows, err := ix.DB.Query(docSelect+`
+		WHERE d.type = 'meeting'
+		  AND substr(COALESCE(json_extract(d.frontmatter_json, '$.date'), ''), 1, 10) BETWEEN ? AND ?
+		ORDER BY json_extract(d.frontmatter_json, '$.date')`, fromDay, toDay)
+	if err != nil {
+		return nil, fmt.Errorf("meetings between: %w", err)
+	}
+	defer rows.Close()
+	return collectDocs(rows)
+}
+
+// TasksCompletedBetween counts completed tasks per day (YYYY-MM-DD → count)
+// across the given inclusive day range.
+func (ix *Index) TasksCompletedBetween(fromDay, toDay string) (map[string]int, error) {
+	rows, err := ix.DB.Query(`SELECT completed_on, COUNT(*) FROM tasks
+		WHERE done = 1 AND completed_on BETWEEN ? AND ? GROUP BY completed_on`, fromDay, toDay)
+	if err != nil {
+		return nil, fmt.Errorf("tasks completed between: %w", err)
+	}
+	defer rows.Close()
+	counts := map[string]int{}
+	for rows.Next() {
+		var day string
+		var n int
+		if err := rows.Scan(&day, &n); err != nil {
+			return nil, err
+		}
+		counts[day] = n
+	}
+	return counts, rows.Err()
+}
+
 // ---- tasks ----
 
 const taskSelect = `
