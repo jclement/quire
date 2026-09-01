@@ -21,7 +21,7 @@ mise run dev        # single-user, no auth, http://localhost:5173 (Vite → Go o
 ```
 
 The dev instance runs with `QUIRE_AUTH_MODE=none` against a scratch vault in
-`tmp/vault/`. `mise run dev:reset` wipes local state.
+`tmp/data/`. `mise run dev:reset` wipes local state.
 
 ## Running for real
 
@@ -116,6 +116,7 @@ quire today
 | `QUIRE_TS_AUTHKEY` | | Tailscale auth key — needed on first boot only |
 | `QUIRE_TS_FUNNEL` | `false` | Publish `/s/*` share pages via Tailscale Funnel |
 | `QUIRE_TS_OWNER` | _(any member)_ | Restrict tailnet access to this login |
+| `QUIRE_GIT` | `true` | Git-backed vault (auto-init + debounced auto-commit) |
 | `QUIRE_URL` / `QUIRE_TOKEN` | | CLI verbs: which quire to talk to, and as whom |
 
 ## Agents (MCP)
