@@ -89,6 +89,15 @@ paths:
                 due: { type: string, format: date }
                 defer: { type: string, format: date, description: hidden until this date }
       responses: { "201": { description: "data: Task" } }
+  /api/v1/tasks/{id}:
+    patch:
+      summary: Edit a task's dates/priority (surgical single-line rewrite)
+      description: >
+        Body fields: due, defer (YYYY-MM-DD; empty string clears; omitted
+        leaves unchanged), priority (0 none, 1 high, 2 medium, 3 low). The
+        returned task's id may differ — ids are content-derived.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: "data: Task" } }
   /api/v1/tasks/{id}/toggle:
     post:
       summary: Toggle a task's checkbox in its source markdown (surgical, one line)
@@ -121,6 +130,31 @@ paths:
       summary: SSE stream of index changes
       description: "Events named `doc` with JSON `{path, action: upsert|delete}` — invalidate caches on receipt."
       responses: { "200": { description: text/event-stream } }
+  /api/v1/rename:
+    post:
+      summary: Move a document, optionally rewriting inbound links
+      description: >
+        Body {path, new_path, rewrite_links}. Only links that stop resolving
+        (filename/path-shaped) are rewritten; title/alias links survive a
+        move untouched. Returns {document, rewritten: [paths]}. 409 when
+        new_path exists.
+      responses: { "200": { description: "data: RenameResult" }, "409": { description: target exists } }
+  /api/v1/shares:
+    get:
+      summary: List share links (revoked included — audit trail)
+      responses: { "200": { description: "data: ShareInfo[] — token, doc_path, url, view_count, expires_at, revoked_at" } }
+    post:
+      summary: Create a share link for a document
+      description: "Body {path, expires_in_days?}. The returned url advertises the tailnet/funnel hostname when configured."
+      responses: { "201": { description: "data: ShareInfo" } }
+  /api/v1/shares/{token}:
+    delete:
+      summary: Revoke a share link
+      responses: { "204": { description: revoked } }
+  /api/v1/auth/status:
+    get:
+      summary: Passkey-mode status (unauthenticated)
+      responses: { "200": { description: "data: {registered, authenticated}" } }
   /mcp:
     post:
       summary: MCP endpoint (Streamable HTTP)
