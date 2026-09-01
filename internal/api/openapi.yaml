@@ -1,0 +1,128 @@
+# Hand-maintained OpenAPI spec, served at /api/openapi.yaml. It IS the API
+# documentation — keep it truthful when handlers change.
+openapi: 3.1.0
+info:
+  title: quire API
+  version: "1"
+  description: |
+    quire's REST surface. Markdown on disk is canonical; every response is
+    derived from it. Envelope: successes are `{"data": ...}`, errors are
+    `{"error": {"code", "message"}}` with codes VALIDATION_ERROR,
+    UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, INTERNAL_ERROR.
+
+    Authentication: session-less. In auth mode "none" (loopback), requests
+    are the vault owner. Otherwise send `Authorization: Bearer sk_...`
+    (create tokens with `quire token create`). Scopes: read, write, tasks.
+paths:
+  /api/v1/health:
+    get:
+      summary: Liveness, version, update availability (unauthenticated)
+      responses: { "200": { description: OK } }
+  /api/v1/documents:
+    get:
+      summary: List documents
+      parameters:
+        - { name: type, in: query, schema: { type: string, enum: [note, person, company, project, meeting, daily] } }
+        - { name: q, in: query, description: case-insensitive title substring, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 500 } }
+      responses: { "200": { description: "data: DocMeta[]" } }
+    post:
+      summary: Create a typed document (server picks the path from the title)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, title]
+              properties:
+                type: { type: string, enum: [note, person, company, project, meeting] }
+                title: { type: string }
+                markdown: { type: string, description: optional body; defaults to a heading }
+      responses: { "201": { description: "data: Document" } }
+  /api/v1/documents/{path}:
+    get:
+      summary: Full document — raw markdown plus parsed structure
+      description: >
+        Returns markdown, frontmatter (object), links (with resolution),
+        backlinks, and contained tasks. `sha256` is the concurrency token for
+        writes.
+      parameters: [{ name: path, in: path, required: true, schema: { type: string }, description: "vault-relative, may contain slashes" }]
+      responses: { "200": { description: "data: Document" }, "404": { description: not found } }
+    put:
+      summary: Replace document content (compare-and-swap)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [markdown, base_sha256]
+              properties:
+                markdown: { type: string }
+                base_sha256: { type: string, description: sha256 from the read this edit is based on }
+      responses:
+        "200": { description: "data: Document" }
+        "409": { description: file changed on disk — re-read and reapply }
+    delete:
+      summary: Delete a document
+      responses: { "204": { description: deleted } }
+  /api/v1/search:
+    get:
+      summary: Search (shared grammar)
+      description: "Bare words are FTS (last word prefix-matched); `type:x` and `tag:x` filter."
+      parameters: [{ name: q, in: query, required: true, schema: { type: string } }]
+      responses: { "200": { description: "data: SearchResult[] (snippet uses <mark>)" } }
+  /api/v1/tasks:
+    get:
+      summary: Task views
+      parameters: [{ name: view, in: query, schema: { type: string, enum: [inbox, today, upcoming, waiting, logbook], default: today } }]
+      responses: { "200": { description: "data: Task[]" } }
+    post:
+      summary: Quick capture — appends a task to today's daily note
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+                due: { type: string, format: date }
+                defer: { type: string, format: date, description: hidden until this date }
+      responses: { "201": { description: "data: Task" } }
+  /api/v1/tasks/{id}/toggle:
+    post:
+      summary: Toggle a task's checkbox in its source markdown (surgical, one line)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: "data: Task (note: the id may change — completion stamps alter the content hash)" } }
+  /api/v1/daily/{date}:
+    get:
+      summary: The daily note for a date (404 if not started)
+      parameters: [{ name: date, in: path, required: true, schema: { type: string, format: date } }]
+      responses: { "200": { description: "data: Document" }, "404": { description: no note that day } }
+    post:
+      summary: Get-or-create the daily note
+      responses: { "200": { description: "data: Document" } }
+  /api/v1/today:
+    get:
+      summary: The composed home payload
+      description: "date, daily (nullable), meetings, overdue, due_today, available, waiting, recent."
+      responses: { "200": { description: "data: TodayPayload" } }
+  /api/v1/attachments:
+    post:
+      summary: Upload a file (multipart field `file`)
+      description: Stored under vault attachments/YYYY/MM with a collision-resistant name; response includes ready-to-insert markdown.
+      responses: { "201": { description: "data: {path, markdown}" } }
+  /api/v1/files/{path}:
+    get:
+      summary: Serve a non-markdown vault file (images, PDFs)
+      responses: { "200": { description: file bytes } }
+  /api/v1/events:
+    get:
+      summary: SSE stream of index changes
+      description: "Events named `doc` with JSON `{path, action: upsert|delete}` — invalidate caches on receipt."
+      responses: { "200": { description: text/event-stream } }
+  /mcp:
+    post:
+      summary: MCP endpoint (Streamable HTTP)
+      description: The agent interface — same service layer and permissions as this API.
+      responses: { "200": { description: MCP protocol } }

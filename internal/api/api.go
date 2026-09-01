@@ -4,6 +4,7 @@
 package api
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -12,6 +13,9 @@ import (
 	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/vault"
 )
+
+//go:embed openapi.yaml
+var openAPISpec []byte
 
 // Server carries the API's dependencies.
 type Server struct {
@@ -23,6 +27,10 @@ type Server struct {
 // Routes registers all /api/v1 handlers onto mux.
 func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
+	mux.HandleFunc("GET /api/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml")
+		_, _ = w.Write(openAPISpec)
+	})
 
 	mux.HandleFunc("GET /api/v1/documents", s.handleListDocuments)
 	mux.HandleFunc("POST /api/v1/documents", s.handleCreateDocument)
