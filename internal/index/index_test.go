@@ -2,6 +2,7 @@ package index
 
 import (
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/jclement/quire/internal/vault"
@@ -235,5 +236,51 @@ func TestReindexIsIdempotentAndDetectsChanges(t *testing.T) {
 	}
 	if _, err := ix.GetDocMeta("daily/2026-09-01.md"); err == nil {
 		t.Errorf("deleted doc still indexed")
+	}
+}
+
+// Relationships declared ONLY in frontmatter must index. The original suite
+// missed this because its fixtures also linked the same people in the body,
+// so `company: "[[Acme]]"` silently produced no backlink at all.
+func TestFrontmatterLinksAndTagsAreIndexed(t *testing.T) {
+	ix := newTestIndex(t)
+	// No wikilink or #tag anywhere in the body — everything is frontmatter.
+	if _, err := ix.Vault.Write("people/dan-roe.md",
+		[]byte("---\ntype: person\ncompany: \"[[Acme]]\"\ntags: [customer, vip]\n---\n# Dan Roe\n\nPlain prose.\n"),
+		""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ix.IndexFile("people/dan-roe.md"); err != nil {
+		t.Fatal(err)
+	}
+
+	back, err := ix.Backlinks("companies/acme.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, d := range back {
+		if d.Path == "people/dan-roe.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("frontmatter company link produced no backlink: %+v", back)
+	}
+
+	meta, err := ix.GetDocMeta("people/dan-roe.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(meta.Tags, "customer") || !slices.Contains(meta.Tags, "vip") {
+		t.Errorf("frontmatter tags not indexed: %v", meta.Tags)
+	}
+	// And they are searchable by the shared tag: filter.
+	hits, err := ix.Search("tag:vip", 10, "2026-09-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].Path != "people/dan-roe.md" {
+		t.Errorf("tag:vip search = %+v", hits)
 	}
 }

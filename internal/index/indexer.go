@@ -93,7 +93,20 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 			return false, fmt.Errorf("inserting link in %s: %w", rel, err)
 		}
 	}
+	// Body #tags plus frontmatter `tags:` — the schemas in DESIGN.md put tags
+	// in frontmatter, so indexing only the body would silently drop them.
+	tags := map[string]struct{}{}
 	for _, tag := range doc.Tags {
+		tags[tag] = struct{}{}
+	}
+	for _, tag := range stringList(fm["tags"]) {
+		if trimmed := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(tag), "#")); trimmed != "" {
+			tags[trimmed] = struct{}{}
+		}
+	}
+	allTags := make([]string, 0, len(tags))
+	for tag := range tags {
+		allTags = append(allTags, tag)
 		if _, err := tx.Exec(`INSERT INTO tags (path, tag) VALUES (?, ?)`, rel, tag); err != nil {
 			return false, fmt.Errorf("inserting tag in %s: %w", rel, err)
 		}
@@ -102,7 +115,7 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 		return false, err
 	}
 	if _, err := tx.Exec(`INSERT INTO fts (path, title, body, tags) VALUES (?, ?, ?, ?)`,
-		rel, title, doc.Body, strings.Join(doc.Tags, " ")); err != nil {
+		rel, title, doc.Body, strings.Join(allTags, " ")); err != nil {
 		return false, fmt.Errorf("inserting fts row for %s: %w", rel, err)
 	}
 

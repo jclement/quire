@@ -71,6 +71,33 @@ func BuildDoc(fields [][2]string, body string) []byte {
 	return b.Bytes()
 }
 
+// RemoveFrontmatterKey deletes a top-level key, leaving every other line
+// (including comments) untouched. Removing the last key leaves an empty
+// block rather than guessing whether the user wants the delimiters gone.
+func RemoveFrontmatterKey(raw []byte, key string) []byte {
+	block, body, ok := SplitFrontmatter(raw)
+	if !ok {
+		return raw
+	}
+	prefix := key + ":"
+	var kept []string
+	for _, line := range strings.Split(string(block), "\n") {
+		if strings.HasPrefix(line, prefix) {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	var b bytes.Buffer
+	b.WriteString("---\n")
+	if joined := strings.Join(kept, "\n"); strings.TrimSpace(joined) != "" {
+		b.WriteString(strings.TrimSuffix(joined, "\n"))
+		b.WriteString("\n")
+	}
+	b.WriteString("---\n")
+	b.Write(body)
+	return b.Bytes()
+}
+
 // SetFrontmatterKey surgically sets a top-level scalar key in the document's
 // frontmatter, replacing the key's line if present (preserving everything
 // else byte-for-byte) or appending it just before the closing delimiter.

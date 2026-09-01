@@ -78,6 +78,22 @@ func Scan(docPath string, raw []byte) Doc {
 	doc.Body = string(body)
 	tagSet := map[string]struct{}{}
 
+	// Frontmatter carries the entity graph — `company: "[[Acme]]"`,
+	// `people: ["[[Sarah Chen]]"]` — so its wikilinks are real links. Without
+	// this, linking a meeting to its attendees in frontmatter produced no
+	// backlink at all.
+	if hasFM {
+		for i, line := range strings.Split(string(raw[:len(raw)-len(body)]), "\n") {
+			for _, lm := range wikilinkRe.FindAllStringSubmatch(line, -1) {
+				doc.Links = append(doc.Links, Link{
+					Raw:     strings.TrimSpace(lm[1]),
+					Display: strings.TrimSpace(lm[2]),
+					Line:    i + 1,
+				})
+			}
+		}
+	}
+
 	inFence := false
 	for i, line := range strings.Split(doc.Body, "\n") {
 		lineNo := offset + i + 1

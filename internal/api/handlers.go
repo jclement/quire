@@ -107,6 +107,50 @@ func (s *Server) handleRenameDocument(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, result)
 }
 
+// handleSetFrontmatter applies surgical frontmatter edits (a null value
+// removes the key) — the API behind entity linking and properties editing.
+func (s *Server) handleSetFrontmatter(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Set        map[string]any `json:"set"`
+		BaseSHA256 string         `json:"base_sha256"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	doc, err := s.Service.SetFrontmatter(r.PathValue("path"), body.Set, body.BaseSHA256)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, doc)
+}
+
+// handleLink adds or removes a wikilink in a list-valued frontmatter key:
+// attendees on a meeting, people at a company, projects for a person.
+func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Path   string `json:"path"`
+		Key    string `json:"key"`
+		Target string `json:"target"`
+		Remove bool   `json:"remove"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	var doc service.Document
+	var err error
+	if body.Remove {
+		doc, err = s.Service.UnlinkEntity(body.Path, body.Key, body.Target)
+	} else {
+		doc, err = s.Service.LinkEntity(body.Path, body.Key, body.Target)
+	}
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, doc)
+}
+
 // ---- search ----
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {

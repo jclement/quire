@@ -65,6 +65,14 @@ paths:
     delete:
       summary: Delete a document
       responses: { "204": { description: deleted } }
+    patch:
+      summary: Surgically set or remove frontmatter keys
+      description: >
+        Body {set: {key: value}, base_sha256?}. A null value removes the key.
+        Only the touched keys' lines change — key order, comments and quoting
+        elsewhere are preserved. Strings are quoted when YAML needs it (a
+        wikilink starts with `[`); arrays are written inline.
+      responses: { "200": { description: "data: Document" }, "409": { description: stale base_sha256 } }
   /api/v1/search:
     get:
       summary: Search (shared grammar)
@@ -148,6 +156,16 @@ paths:
         move untouched. Returns {document, rewritten: [paths]}. 409 when
         new_path exists.
       responses: { "200": { description: "data: RenameResult" }, "409": { description: target exists } }
+  /api/v1/link:
+    post:
+      summary: Add or remove a wikilink in a list-valued frontmatter key
+      description: >
+        Body {path, key, target, remove?}. This is how entities relate:
+        attendees on a meeting (`people`), a person's employer (`company`),
+        projects, etc. Idempotent — linking the same target twice does not
+        rewrite the file. Frontmatter wikilinks are indexed, so the link
+        immediately appears as a backlink on the target.
+      responses: { "200": { description: "data: Document" } }
   /api/v1/shares:
     get:
       summary: List share links (revoked included — audit trail)
