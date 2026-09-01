@@ -82,9 +82,11 @@ export function FrontmatterStrip({ doc }: { doc: Document }) {
   );
 }
 
-/** The shell every property shares — one dense bordered pill. */
+/** The shell every property shares — one dense bordered pill. On paper the
+ * pill dissolves: the values are worth printing, the chrome around them is
+ * not. */
 const CHIP_CLASSES =
-  "inline-flex items-center gap-1 rounded border border-border bg-raised px-1.5 py-0.5 font-mono text-[10px]";
+  "inline-flex items-center gap-1 rounded border border-border bg-raised px-1.5 py-0.5 font-mono text-[10px] print:rounded-none print:border-0 print:bg-transparent print:px-0";
 
 function formatFrontmatterValue(value: unknown): string {
   if (Array.isArray(value)) return value.map(String).join(", ");
@@ -115,7 +117,13 @@ function LinkKeyChips({
   const canAdd = !linkKey.singular || targets.length === 0;
   // A div, not a span: the popover below it is block content.
   return (
-    <div className={`${CHIP_CLASSES} relative max-w-full`}>
+    <div
+      // A key with nothing linked is an invitation to link something, which is
+      // an edit affordance — on paper it would print as a bare "people:".
+      className={`${CHIP_CLASSES} relative max-w-full ${
+        targets.length === 0 ? "print:hidden" : ""
+      }`}
+    >
       <span className="text-muted">{linkKey.key}:</span>
       {targets.map((target) => (
         <LinkChip
@@ -131,7 +139,7 @@ function LinkKeyChips({
           onClick={() => onAdding(!adding)}
           aria-label={`Add ${linkKey.key} to this document`}
           aria-expanded={adding}
-          className="-my-0.5 flex items-center rounded p-1 text-muted hover:bg-hover hover:text-heading"
+          className="-my-0.5 flex items-center rounded p-1 text-muted hover:bg-hover hover:text-heading print:hidden"
         >
           <Plus className="size-3" aria-hidden="true" />
         </button>
@@ -157,7 +165,7 @@ function LinkChip({
   onRemove: () => void;
 }) {
   return (
-    <span className="inline-flex min-w-0 items-center gap-0.5 rounded-sm bg-hover px-1">
+    <span className="inline-flex min-w-0 items-center gap-0.5 rounded-sm bg-hover px-1 print:bg-transparent print:px-0">
       {path ? (
         <RouterLink
           to={docHref(path)}
@@ -177,7 +185,7 @@ function LinkChip({
         type="button"
         onClick={onRemove}
         aria-label={`Unlink ${target}`}
-        className="-my-0.5 flex shrink-0 items-center rounded p-1 text-muted hover:text-danger"
+        className="-my-0.5 flex shrink-0 items-center rounded p-1 text-muted hover:text-danger print:hidden"
       >
         <X className="size-2.5" aria-hidden="true" />
       </button>

@@ -220,6 +220,30 @@ internal/mail wraps wneessen/go-mail behind a Sender interface so an API transpo
 can slot in later. One consumer today: the morning digest (meetings, birthdays,
 overdue, due, waiting) at QUIRE_DIGEST_TIME — quiet days send nothing.
 
+## Printing / PDF
+
+PDF export is the browser's, not the server's. Anything that renders Mermaid
+needs a browser engine: embedding headless Chrome would add hundreds of
+megabytes and a browser's attack surface to a distroless image, and pure-Go
+PDF libraries cannot execute Mermaid's JavaScript at all. Printing the page
+we already render gets diagrams, images, highlighted code, callouts and
+tables for free, because it *is* the rendered DOM.
+
+Three things make that produce a good PDF rather than a screenshot of an app:
+print CSS hides the chrome and controls fragmentation (nothing breaks inside
+a code block, callout, table row or image; headings never end a page; external
+link targets are spelled out since paper has no hrefs); the light palette is
+restated under `@media print` so a dark-mode session doesn't print white on
+black; and Mermaid diagrams are re-rendered in their light theme first.
+Cmd/Ctrl+P is intercepted so that last step can finish — `beforeprint` cannot
+be awaited, so the diagram swap has to happen before the dialog opens. Share
+pages carry their own copy of the same rules, since a recipient prints too.
+
+Callout panels are tinted across their whole background rather than marked
+with a left edge alone. That forces all eight types to have distinct hues
+(note/info, tip/success and warning/question would otherwise be identical
+panels), derived from the existing semantic tokens.
+
 ## Agent guidance
 
 The MCP server's `instructions` are composed at session start from built-in

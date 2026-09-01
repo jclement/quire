@@ -134,7 +134,7 @@ function Header({ onMenu }: { onMenu: () => void }) {
     select: (state) => state.location.pathname,
   });
   return (
-    <header className="flex h-10 shrink-0 items-center gap-3 border-b border-border bg-raised px-3">
+    <header className="flex h-10 shrink-0 items-center gap-3 border-b border-border bg-raised px-3 print:hidden">
       <button
         type="button"
         onClick={onMenu}
@@ -168,7 +168,7 @@ function MobileDrawer({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 md:hidden">
+    <div className="fixed inset-0 z-40 md:hidden print:hidden">
       <div
         className="absolute inset-0 bg-black/40"
         aria-hidden="true"
@@ -214,7 +214,7 @@ function MobileBottomBar() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-border bg-raised pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-border bg-raised pb-[env(safe-area-inset-bottom)] md:hidden print:hidden"
     >
       {MOBILE_NAV.slice(0, half).map(navItem)}
       <div className="flex h-14 flex-1 items-center justify-center">
@@ -232,17 +232,21 @@ function MobileBottomBar() {
   );
 }
 
+// Print drops every layout constraint the shell exists for: the viewport-tall
+// flex column and the scrolling <main> would otherwise print as a single
+// clipped page (a scroll container prints only its visible slice), and the
+// content column takes the whole sheet minus the @page margin.
 export function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-dvh flex-col print:block print:h-auto">
       <Header onMenu={() => setDrawerOpen(true)} />
-      <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-48 shrink-0 border-r border-border bg-raised md:block">
+      <div className="flex min-h-0 flex-1 print:block">
+        <aside className="hidden w-48 shrink-0 border-r border-border bg-raised md:block print:hidden">
           <NavSections />
         </aside>
-        <main className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto flex min-h-full max-w-4xl flex-col px-4 pt-4 pb-20 md:px-6 md:pb-4">
+        <main className="min-w-0 flex-1 overflow-y-auto print:overflow-y-visible">
+          <div className="mx-auto flex min-h-full max-w-4xl flex-col px-4 pt-4 pb-20 md:px-6 md:pb-4 print:block print:min-h-0 print:max-w-none print:p-0">
             <div className="flex-1">{children}</div>
           </div>
         </main>

@@ -53,7 +53,7 @@ export function DocumentRail({
   };
 
   return (
-    <div className="sticky top-4 hidden w-44 shrink-0 flex-col gap-5 self-start lg:flex">
+    <div className="sticky top-4 hidden w-44 shrink-0 flex-col gap-5 self-start lg:flex print:hidden">
       {showOutline ? (
         <nav aria-label="Document outline">
           <RailHeading>On this page</RailHeading>

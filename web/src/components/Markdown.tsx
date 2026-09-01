@@ -279,37 +279,34 @@ function Pre(props: ComponentProps<"pre"> & ExtraProps) {
 
 // ---- Callouts ----
 
-const CALLOUT_STYLE: Record<
-  CalloutType,
-  { icon: LucideIcon; edge: string; text: string }
-> = {
-  note: { icon: StickyNote, edge: "border-l-accent", text: "text-accent" },
-  info: { icon: Info, edge: "border-l-accent", text: "text-accent" },
-  tip: { icon: Lightbulb, edge: "border-l-ok", text: "text-ok" },
-  warning: { icon: AlertTriangle, edge: "border-l-warn", text: "text-warn" },
-  danger: { icon: Flame, edge: "border-l-danger", text: "text-danger" },
-  question: { icon: HelpCircle, edge: "border-l-warn", text: "text-warn" },
-  success: { icon: CheckCircle2, edge: "border-l-ok", text: "text-ok" },
-  example: { icon: FileCode2, edge: "border-l-muted", text: "text-muted" },
+// The type's colour — panel tint, left edge and title — is --callout-hue,
+// defined per type in index.css next to the rest of the .prose-quire styles.
+const CALLOUT_ICON: Record<CalloutType, LucideIcon> = {
+  note: StickyNote,
+  info: Info,
+  tip: Lightbulb,
+  warning: AlertTriangle,
+  danger: Flame,
+  question: HelpCircle,
+  success: CheckCircle2,
+  example: FileCode2,
 };
 
 function Blockquote(props: ComponentProps<"blockquote"> & ExtraProps) {
   const extra = props as Record<string, unknown>;
   const type = extra["data-callout"] as CalloutType | undefined;
-  if (!type || !(type in CALLOUT_STYLE)) {
+  if (!type || !(type in CALLOUT_ICON)) {
     return <blockquote>{props.children as ReactNode}</blockquote>;
   }
   const title = (extra["data-callout-title"] as string) || type;
-  const style = CALLOUT_STYLE[type];
+  const Icon = CALLOUT_ICON[type];
   return (
     <div
       data-callout={type}
-      className={`my-3 rounded border border-border border-l-2 bg-raised ${style.edge}`}
+      className="my-3 rounded border border-border border-l-2 border-l-(color:--callout-hue)"
     >
-      <p
-        className={`flex items-center gap-1.5 px-3 pt-2 text-xs font-semibold capitalize ${style.text}`}
-      >
-        <style.icon className="size-3.5 shrink-0" aria-hidden="true" />
+      <p className="flex items-center gap-1.5 px-3 pt-2 text-xs font-semibold text-(--callout-hue) capitalize">
+        <Icon className="size-3.5 shrink-0" aria-hidden="true" />
         {title}
       </p>
       <div className="px-3 pb-2 text-body [&>p:first-child]:mt-1">

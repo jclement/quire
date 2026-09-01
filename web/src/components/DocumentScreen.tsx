@@ -12,6 +12,7 @@ import {
   HelpCircle,
   MoreHorizontal,
   Pencil,
+  Printer,
   Share2,
   Trash2,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import { ApiError } from "../api/client.ts";
 import { useDocument, useToggleTask } from "../api/queries.ts";
 import type { Document } from "../api/types.ts";
@@ -33,6 +35,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import type { MarkdownEditorHandle } from "../editor/MarkdownEditor.tsx";
 import { extractHeadings } from "../lib/headings.ts";
+import { printPage, registerPrintHook } from "../lib/printing.ts";
 import { DocumentRail } from "./DocumentRail.tsx";
 import { EmptyState, ErrorState } from "./EmptyState.tsx";
 import { FrontmatterStrip } from "./FrontmatterStrip.tsx";
@@ -153,6 +156,18 @@ function DocumentView({
     [registerKey],
   );
 
+  // Printing the editor is useless, so every print — the menu, the palette,
+  // ⌘P, and the browser's own File ▸ Print — drops to read mode first.
+  // flushSync, not a queued setState: `beforeprint` snapshots the page as soon
+  // as its listeners return, so the switch has to be in the DOM by then.
+  useEffect(
+    () =>
+      registerPrintHook((phase) => {
+        if (phase === "print") flushSync(() => setMode("read"));
+      }),
+    [],
+  );
+
   // Any route back to read mode flushes pending edits (Cmd+E cycling included;
   // a no-op when nothing changed).
   useEffect(() => {
@@ -182,12 +197,14 @@ function DocumentView({
         <span className="hidden font-mono text-[10px] uppercase text-muted sm:inline">
           {doc.type}
         </span>
-        <span className="ml-auto hidden text-xs text-muted sm:inline">
+        {/* Everything from here right is screen furniture: on paper the header
+            is just the type icon, the title and the rule under it. */}
+        <span className="ml-auto hidden text-xs text-muted sm:inline print:hidden">
           {formatRelativeTime(doc.mtime)}
         </span>
         {mode !== "read" ? (
           <span
-            className={`font-mono text-[10px] ${STATUS_LABEL[save.status].classes}`}
+            className={`font-mono text-[10px] print:hidden ${STATUS_LABEL[save.status].classes}`}
           >
             {STATUS_LABEL[save.status].text}
           </span>
@@ -198,7 +215,7 @@ function DocumentView({
           onClick={() => setOverlay("markdownHelp", true)}
           aria-label="Markdown help"
           title="Markdown reference"
-          className="flex size-7 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-heading"
+          className="flex size-7 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-heading print:hidden"
         >
           <HelpCircle className="size-3.5" aria-hidden="true" />
         </button>
@@ -206,7 +223,7 @@ function DocumentView({
           type="button"
           onClick={() => setShareDocPath(path)}
           aria-label="Share this document"
-          className="flex size-7 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-heading"
+          className="flex size-7 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-heading print:hidden"
         >
           <Share2 className="size-3.5" aria-hidden="true" />
         </button>
@@ -217,7 +234,7 @@ function DocumentView({
         <button
           type="button"
           onClick={mode === "read" ? () => setMode("edit") : exitEdit}
-          className="flex h-7 items-center gap-1.5 rounded border border-border px-2 text-xs text-body hover:bg-hover hover:text-heading md:hidden"
+          className="flex h-7 items-center gap-1.5 rounded border border-border px-2 text-xs text-body hover:bg-hover hover:text-heading md:hidden print:hidden"
         >
           <Pencil className="size-3" aria-hidden="true" />
           {mode === "read" ? "Edit" : "Done"}
@@ -242,7 +259,7 @@ function DocumentView({
       {/* The rail (outline + backlinks) is a sibling column, never an overlay:
           it shortens the content rather than floating over it, so nothing can
           overlap and the page can never scroll sideways. */}
-      <div className="flex min-h-0 flex-1 gap-6">
+      <div className="flex min-h-0 flex-1 gap-6 print:block">
         <div className="flex min-w-0 flex-1 flex-col">
           {mode === "read" ? (
             <>
@@ -325,7 +342,7 @@ function ModeSwitch({
       role="group"
       aria-label="View mode"
       title="Switch view — ⌘E cycles read / edit / split"
-      className="hidden h-7 items-center rounded border border-border md:flex"
+      className="hidden h-7 items-center rounded border border-border md:flex print:hidden"
     >
       {options.map((option) => (
         <button
@@ -350,7 +367,8 @@ function ModeSwitch({
   );
 }
 
-/** The "…" menu on the doc header — non-primary actions (Rename, Delete). */
+/** The "…" menu on the doc header — non-primary actions (Print, Rename,
+ * Delete). */
 function DocMenu({
   onRename,
   onDelete,
@@ -360,7 +378,7 @@ function DocMenu({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="relative">
+    <div className="relative print:hidden">
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -377,7 +395,20 @@ function DocMenu({
             aria-hidden="true"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute top-full right-0 z-20 mt-1 w-36 rounded border border-border bg-raised py-1 shadow-lg">
+          <div className="absolute top-full right-0 z-20 mt-1 w-44 rounded border border-border bg-raised py-1 shadow-lg">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                // The print hooks put the page in read mode and re-render any
+                // diagrams for paper before the dialog opens.
+                void printPage();
+              }}
+              className="flex h-8 w-full items-center gap-2 px-3 text-left text-xs text-body hover:bg-hover hover:text-heading"
+            >
+              <Printer className="size-3.5 text-muted" aria-hidden="true" />
+              Print / Save as PDF
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -448,7 +479,7 @@ function ConflictBanner({
 function Backlinks({ doc }: { doc: Document }) {
   if (doc.backlinks.length === 0) return null;
   return (
-    <section className="mt-8 border-t border-border pt-3 lg:hidden">
+    <section className="mt-8 border-t border-border pt-3 lg:hidden print:hidden">
       <h2 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
         Linked from
       </h2>

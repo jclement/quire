@@ -50,7 +50,10 @@ export function Modal({ open, onClose, variant, label, children }: ModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50"
+      // Overlays never print: an open palette or dialog would otherwise cover
+      // the first page (the palette closes on pick, but not before the print
+      // it just triggered starts preparing).
+      className="fixed inset-0 z-50 print:hidden"
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();

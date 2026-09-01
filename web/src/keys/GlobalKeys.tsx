@@ -4,6 +4,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { todayISO } from "../lib/dates.ts";
+import { installPrintListeners, printPage } from "../lib/printing.ts";
 import { useUi } from "./UiContext.tsx";
 
 /** How long a `g` chord waits for its second key. */
@@ -47,6 +48,11 @@ export function GlobalKeys() {
     escapeStackRef,
     keyActionsRef,
   } = useUi();
+
+  // A print started from the browser's own UI (File ▸ Print, iOS's share
+  // sheet) never passes through ⌘P or the palette; the window events are the
+  // backstop that at least gets read mode and the light palette.
+  useEffect(() => installPrintListeners(), []);
 
   useEffect(() => {
     let chordPending = false;
@@ -128,6 +134,12 @@ export function GlobalKeys() {
           return true;
         case "]":
           window.history.forward();
+          return true;
+        case "p":
+          // Taken over from the browser so the page can be prepared first —
+          // dropped to read mode, diagrams re-rendered light. `beforeprint`
+          // alone is too late for anything asynchronous (lib/printing.ts).
+          void printPage();
           return true;
         default: {
           // Page-registered combos like "mod+e" (view cycling on documents).

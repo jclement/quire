@@ -43,7 +43,10 @@ export function DailyPage({ date, edit }: { date: string; edit: boolean }) {
 function DayNav({ date }: { date: string }) {
   const isToday = date === todayISO();
   return (
-    <nav aria-label="Day navigation" className="flex items-center gap-1">
+    <nav
+      aria-label="Day navigation"
+      className="flex items-center gap-1 print:hidden"
+    >
       <RouterLink
         to={`/daily/${addDaysISO(date, -1)}`}
         aria-label="Previous day"

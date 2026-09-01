@@ -17,6 +17,7 @@ const GROUPS: { title: string; bindings: KeyBinding[] }[] = [
       { keys: "c", action: "Quick capture" },
       { keys: "/", action: "Search" },
       { keys: "⌘[ / ⌘]", action: "History back / forward" },
+      { keys: "⌘P", action: "Print / Save as PDF" },
       { keys: "?", action: "This cheat sheet" },
       { keys: "esc", action: "One level out" },
     ],

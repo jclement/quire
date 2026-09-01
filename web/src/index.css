@@ -201,6 +201,60 @@ select:focus-visible {
   @apply max-w-full rounded border border-border;
 }
 
+/* ---- Callouts ---- */
+/* Obsidian callouts; components/Markdown.tsx supplies the structure, the icon
+   and the data-callout type, this owns what colour each type is. The whole
+   panel carries that colour: a mix into the page surface rather than an alpha
+   wash, so the tint composites identically over anything behind it.
+   Strength is per-theme because the mix is not symmetric — 7% of a saturated
+   hue reads clearly on the near-white surface, and the same 7% disappears into
+   the near-black one, while pushing the light number up to match would start
+   eating body-text contrast.
+   Eight types share five semantic tokens, so the pairs that would otherwise be
+   indistinguishable now the whole panel is coloured (note/info, tip/success,
+   warning/question) are pulled apart with a mix rather than by inventing new
+   palette entries. */
+
+:root {
+  --callout-tint: 7%;
+}
+.dark {
+  --callout-tint: 15%;
+}
+
+.prose-quire [data-callout] {
+  --callout-hue: var(--accent);
+  background: color-mix(
+    in oklab,
+    var(--callout-hue) var(--callout-tint),
+    var(--surface)
+  );
+}
+.prose-quire [data-callout="note"] {
+  --callout-hue: color-mix(in oklab, var(--accent) 45%, var(--muted));
+}
+.prose-quire [data-callout="info"] {
+  --callout-hue: var(--accent);
+}
+.prose-quire [data-callout="tip"] {
+  --callout-hue: color-mix(in oklab, var(--ok) 70%, var(--accent));
+}
+.prose-quire [data-callout="success"] {
+  --callout-hue: var(--ok);
+}
+.prose-quire [data-callout="warning"] {
+  --callout-hue: var(--warn);
+}
+.prose-quire [data-callout="question"] {
+  --callout-hue: color-mix(in oklab, var(--warn) 60%, var(--danger));
+}
+.prose-quire [data-callout="danger"] {
+  --callout-hue: var(--danger);
+}
+.prose-quire [data-callout="example"] {
+  --callout-hue: var(--muted);
+}
+
 /* ---- highlight.js tokens (read-view fenced code) ---- */
 /* Colors come from the semantic custom properties, so dark mode is free.
    Applied by components/HighlightedCode.tsx. */
@@ -258,4 +312,139 @@ select:focus-visible {
 }
 .cm-editor.cm-focused {
   outline: none;
+}
+
+/* ---- Print ---- */
+/* Printing is a first-class output: the document "…" menu's Print / Save as
+   PDF, the palette's `>print`, ⌘P (intercepted in keys/GlobalKeys.tsx) and the
+   browser's own File ▸ Print all end up here. Two halves:
+   - App chrome opts out at the component with Tailwind's `print:` variant
+     (`print:hidden` on the sidebar, nav, rail, action buttons, overlays), so
+     the decision lives next to the element it hides and survives refactors.
+   - Everything structural lives below: the page box, the forced light palette,
+     and the fragmentation rules that decide where a page may break.
+   Anything the browser does asynchronously (a Mermaid re-render) is prepared
+   before the dialog opens by lib/printing.ts, not here. */
+
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+
+  /* The light palette wins whatever the theme is: nobody wants white-on-black
+     on paper. @media print cannot reach past the `.dark` class, so both roots
+     are restated — same specificity, later in the file, so this is what
+     applies. Values are the light palette verbatim except the surface, which
+     is the paper itself (and what the callout tints mix into). */
+  :root,
+  .dark {
+    --surface: #ffffff;
+    --raised: #ffffff;
+    --heading: #1c1b19;
+    --body: #3e3d3a;
+    --muted: #8b8880;
+    --border: #e5e3dd;
+    --hover: #f1efe9;
+    --selected: #eae9fb;
+    --accent: #5b5bd6;
+    --danger: #c0453e;
+    --warn: #9a6700;
+    --ok: #1a7f37;
+    --code-bg: #f3f1ec;
+    --callout-tint: 7%;
+    --syn-heading: #1a4fb4;
+    --syn-marker: #a8a49a;
+    --syn-link: #5b5bd6;
+    --syn-code: #9a3d7a;
+    --syn-quote: #6d7a5e;
+    --syn-keyword: #9a6700;
+  }
+
+  /* Nothing scrolls on paper. The shell is a viewport-height flex column with
+     a scrolling <main>, and a scroll container prints as its visible slice —
+     one page, the rest silently clipped. */
+  html,
+  body,
+  #root {
+    height: auto;
+    overflow: visible;
+    background: var(--surface);
+  }
+
+  /* A heading never ends a page, and the blocks that only mean something whole
+     stay whole. `break-inside: avoid` is a preference, not a promise: a code
+     block taller than the sheet still breaks, it just stops breaking early. */
+  .prose-quire h1,
+  .prose-quire h2,
+  .prose-quire h3,
+  .prose-quire h4,
+  .prose-quire h5,
+  .prose-quire h6 {
+    break-after: avoid;
+  }
+  .prose-quire p,
+  .prose-quire li {
+    orphans: 3;
+    widows: 3;
+  }
+  .prose-quire pre,
+  .prose-quire blockquote,
+  .prose-quire [data-callout],
+  .prose-quire tr,
+  .prose-quire img,
+  .prose-quire svg {
+    break-inside: avoid;
+  }
+  /* Rows are what we protect; a long table still spans pages. */
+  .prose-quire table {
+    break-inside: auto;
+  }
+
+  /* Browsers drop backgrounds from print by default. Here they are
+     information — the callout's type, the extent of a code block — not
+     decoration. */
+  .prose-quire pre,
+  .prose-quire code,
+  .prose-quire [data-callout],
+  .prose-quire img,
+  .prose-quire svg {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Long lines wrap rather than run off the sheet: there is no scrollbar to
+     reach for. */
+  .prose-quire pre {
+    overflow: visible;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Images and Mermaid SVGs shrink to the text column and never clip — but
+     they must not grow: a four-node diagram blown up to fill a whole sheet is
+     worse than one printed at the size it was drawn. Deliberately not
+     !important, so Mermaid's own inline max-width (the diagram's natural
+     width, paired with width="100%") still wins and small diagrams stay
+     small; this caps everything that has no such ceiling of its own. */
+  .prose-quire img,
+  .prose-quire svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Paper has no hrefs, so external targets are spelled out. Wikilinks resolve
+     to app routes that mean nothing off-screen, so they stay silent — they are
+     already excluded by the http prefix. */
+  .prose-quire a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    font-weight: normal;
+    color: var(--muted);
+    word-break: break-all;
+  }
+
+  /* Focus rings are a screen affordance. */
+  :focus-visible {
+    outline: none;
+  }
 }

@@ -11,6 +11,7 @@ import {
   FolderPen,
   HelpCircle,
   Plus,
+  Printer,
   Search,
   Share2,
   Sunrise,
@@ -28,6 +29,7 @@ import type { DocMeta, DocType } from "../api/types.ts";
 import { todayISO } from "../lib/dates.ts";
 import { DOC_TYPE_INFO, docHref, vaultPathFromRoute } from "../lib/docs.ts";
 import { fuzzyRank } from "../lib/fuzzy.ts";
+import { printPage } from "../lib/printing.ts";
 import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
 import { noAutofill } from "../lib/noAutofill.ts";
 import { useUi } from "../keys/UiContext.tsx";
@@ -87,6 +89,14 @@ const COMMANDS: Command[] = [
     label: "Markdown help",
     icon: HelpCircle,
     run: (ui) => ui.setOverlay("markdownHelp", true),
+  },
+  {
+    // Not a document-context command: any page is printable, and on a document
+    // the registered print hooks drop it to read mode first (lib/printing.ts).
+    id: "print",
+    label: "Print / Save as PDF",
+    icon: Printer,
+    run: () => void printPage(),
   },
 ];
 
