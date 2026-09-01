@@ -170,6 +170,15 @@ func runServe() error {
 		authHTTP := &auth.HTTPConfig{Passkeys: passkeys, SecureCookies: baseURL.Scheme == "https"}
 		authHTTP.Routes(mux)
 		slog.Info("passkey auth enabled", "rp_id", baseURL.Hostname())
+	} else {
+		// Without passkey mode there is no auth surface; answer explicitly
+		// (the SPA's auth gate keys off this 404) instead of letting the SPA
+		// fallback serve HTML for an API path.
+		mux.HandleFunc("/api/v1/auth/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"error":{"code":"NOT_FOUND","message":"authentication is not enabled on this instance"}}`)
+		})
 	}
 
 	if cfg.TailscaleEnabled() {

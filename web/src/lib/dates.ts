@@ -130,6 +130,24 @@ export function groupByDate<T>(
   return undated ? [...dated, { date: null, items: undated }] : dated;
 }
 
+/**
+ * When a birthday lands, warmly: "today!", "tomorrow", a weekday name inside
+ * the coming week, else a short date.
+ */
+export function birthdayWhen(
+  date: string,
+  daysUntil: number,
+  todayIso: string = todayISO(),
+): string {
+  if (daysUntil === 0) return "today!";
+  if (daysUntil === 1) return "tomorrow";
+  if (daysUntil < 7) {
+    const parsed = parseISODate(date);
+    if (parsed) return parsed.toLocaleDateString("en-US", { weekday: "long" });
+  }
+  return formatShortDate(date, todayIso);
+}
+
 /** Relative timestamp for mtimes: "just now", "5m ago", "2h ago", "3d ago", "Aug 12". */
 export function formatRelativeTime(
   iso: string,

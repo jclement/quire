@@ -171,6 +171,53 @@ body {
   @apply max-w-full rounded border border-border;
 }
 
+/* ---- highlight.js tokens (read-view fenced code) ---- */
+/* Colors come from the semantic custom properties, so dark mode is free.
+   Applied by components/HighlightedCode.tsx. */
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--muted);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-tag,
+.hljs-name,
+.hljs-built_in,
+.hljs-type {
+  color: var(--accent);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--ok);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-meta {
+  color: var(--warn);
+}
+.hljs-title,
+.hljs-attr,
+.hljs-attribute,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-section {
+  color: var(--heading);
+}
+.hljs-deletion {
+  color: var(--danger);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+
 /* ---- CodeMirror ---- */
 /* Structural bits only; syntax colors live in src/editor/extensions.ts where
    they can reference the same custom properties. */

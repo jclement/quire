@@ -2,7 +2,8 @@
 // frontmatter (parsed away, shown by DocumentScreen as a properties strip), and
 // the quire flavor from remarkQuire: wikilinks resolved through the document's
 // links array, Obsidian callouts, clickable task checkboxes matched to indexed
-// tasks by source line, and a copy button on fenced code.
+// tasks by source line, and fenced code with a copy button, lazy syntax
+// highlighting, and lazy ```mermaid diagram rendering.
 import { Link as RouterLink } from "@tanstack/react-router";
 import {
   AlertTriangle,
@@ -19,13 +20,15 @@ import {
 } from "lucide-react";
 import {
   createContext,
+  lazy,
+  Suspense,
   useContext,
   useMemo,
-  useRef,
   useState,
   type ComponentProps,
   type ReactNode,
 } from "react";
+import type { ElementContent } from "hast";
 import ReactMarkdown, {
   type Components,
   type ExtraProps,
@@ -36,6 +39,11 @@ import type { Link, Task } from "../api/types.ts";
 import type { CalloutType } from "../lib/callouts.ts";
 import { docHref } from "../lib/docs.ts";
 import { remarkQuire, WIKILINK_HREF_PREFIX } from "../lib/remarkQuire.ts";
+
+// Both are heavy and rare per-page; each stays in its own chunk and loads only
+// when a matching fence is actually rendered.
+const MermaidDiagram = lazy(() => import("./MermaidDiagram.tsx"));
+const HighlightedCode = lazy(() => import("./HighlightedCode.tsx"));
 
 interface MarkdownProps {
   markdown: string;
@@ -157,21 +165,70 @@ function Checkbox(props: ComponentProps<"input"> & ExtraProps) {
   );
 }
 
-// ---- Fenced code with copy ----
+// ---- Fenced code: copy button, highlighting, mermaid ----
+
+/** Concatenated text content of a hast subtree. */
+function hastText(node: ElementContent | undefined): string {
+  if (!node) return "";
+  if (node.type === "text") return node.value;
+  if ("children" in node) return node.children.map(hastText).join("");
+  return "";
+}
+
+/** The fence's ```lang, read off the generated <code class="language-lang">. */
+function fenceLanguage(node: ExtraProps["node"]): {
+  language: string | null;
+  code: string;
+} {
+  const codeEl = node?.children.find(
+    (child): child is Extract<ElementContent, { type: "element" }> =>
+      child.type === "element" && child.tagName === "code",
+  );
+  const classes = Array.isArray(codeEl?.properties?.className)
+    ? (codeEl.properties.className as string[])
+    : [];
+  const langClass = classes.find(
+    (name) => typeof name === "string" && name.startsWith("language-"),
+  );
+  return {
+    language: langClass ? langClass.slice("language-".length) : null,
+    code: hastText(codeEl).replace(/\n$/, ""),
+  };
+}
 
 function Pre(props: ComponentProps<"pre"> & ExtraProps) {
-  const codeRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
+  const { language, code } = fenceLanguage(props.node);
+
+  if (language === "mermaid") {
+    return (
+      <Suspense
+        fallback={
+          <div className="my-3 h-24 animate-pulse rounded border border-border bg-hover" />
+        }
+      >
+        <MermaidDiagram code={code} />
+      </Suspense>
+    );
+  }
+
   const copy = () => {
-    const text = codeRef.current?.innerText ?? "";
-    void navigator.clipboard.writeText(text).then(() => {
+    void navigator.clipboard.writeText(code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1_500);
     });
   };
   return (
     <div className="group relative">
-      <pre ref={codeRef}>{props.children}</pre>
+      <pre>
+        {language ? (
+          <Suspense fallback={<code>{code}</code>}>
+            <HighlightedCode code={code} language={language} />
+          </Suspense>
+        ) : (
+          props.children
+        )}
+      </pre>
       <button
         type="button"
         onClick={copy}

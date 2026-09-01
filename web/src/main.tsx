@@ -7,6 +7,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ApiError } from "./api/client.ts";
+import { AuthGate } from "./components/auth/AuthGate.tsx";
 import { UiProvider } from "./keys/UiContext.tsx";
 import { router } from "./routes/router.tsx";
 
@@ -27,7 +28,9 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <UiProvider>
-        <RouterProvider router={router} />
+        <AuthGate>
+          <RouterProvider router={router} />
+        </AuthGate>
       </UiProvider>
     </QueryClientProvider>
   </StrictMode>,

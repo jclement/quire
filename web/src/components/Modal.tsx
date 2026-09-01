@@ -14,17 +14,20 @@ interface ModalProps {
   children: ReactNode;
 }
 
-/** Panel geometry per variant: mobile-first, desktop refinements behind md:. */
+/** Panel geometry per variant: mobile-first, desktop refinements behind md:.
+ * Panels stay *positioned* at every size (md:relative, never md:static) so
+ * they paint above the absolutely-positioned backdrop — a static panel would
+ * sit underneath it and never receive clicks. */
 const PANEL_CLASSES: Record<ModalVariant, string> = {
   center:
     "absolute inset-x-0 bottom-0 rounded-t-lg pb-[env(safe-area-inset-bottom)] " +
-    "md:static md:mx-auto md:mt-[20vh] md:w-full md:max-w-md md:rounded-lg md:pb-0",
+    "md:relative md:inset-auto md:mx-auto md:mt-[20vh] md:w-full md:max-w-md md:rounded-lg md:pb-0",
   sheet:
     "absolute inset-x-0 bottom-0 rounded-t-lg pb-[env(safe-area-inset-bottom)] " +
-    "md:static md:mx-auto md:mt-[20vh] md:w-full md:max-w-md md:rounded-lg md:pb-0",
+    "md:relative md:inset-auto md:mx-auto md:mt-[20vh] md:w-full md:max-w-md md:rounded-lg md:pb-0",
   palette:
     "absolute inset-0 flex flex-col " +
-    "md:static md:mx-auto md:mt-[12vh] md:h-auto md:max-h-[60vh] md:w-full md:max-w-xl md:rounded-lg",
+    "md:relative md:inset-auto md:mx-auto md:mt-[12vh] md:h-auto md:max-h-[60vh] md:w-full md:max-w-xl md:rounded-lg",
 };
 
 export function Modal({ open, onClose, variant, label, children }: ModalProps) {

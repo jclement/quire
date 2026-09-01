@@ -219,12 +219,16 @@ function TaskRow({
         }}
         aria-label={`Snooze: ${task.text}`}
         className={`hidden size-6 shrink-0 items-center justify-center rounded text-muted hover:bg-border hover:text-heading md:flex ${
-          snoozeOpen ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          snoozeOpen
+            ? ""
+            : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
         }`}
       >
         <CalendarClock className="size-3.5" aria-hidden="true" />
       </button>
-      {snoozeOpen ? <SnoozePopover task={task} onClose={onSnoozeClose} /> : null}
+      {snoozeOpen ? (
+        <SnoozePopover task={task} onClose={onSnoozeClose} />
+      ) : null}
       {showCompletedOn && task.completed_on ? (
         <span className="shrink-0 font-mono text-[10px] text-muted">
           ✓ {formatShortDate(task.completed_on, todayISO())}

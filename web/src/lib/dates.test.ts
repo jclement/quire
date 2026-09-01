@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   addDaysISO,
+  birthdayWhen,
   daysFromToday,
   dueInfo,
   formatDayHeading,
@@ -114,6 +115,24 @@ describe("groupByDate", () => {
 
   test("empty input yields no groups", () => {
     expect(groupByDate([], () => null)).toEqual([]);
+  });
+});
+
+describe("birthdayWhen", () => {
+  const today = "2026-09-01";
+
+  test("today and tomorrow get words", () => {
+    expect(birthdayWhen("2026-09-01", 0, today)).toBe("today!");
+    expect(birthdayWhen("2026-09-02", 1, today)).toBe("tomorrow");
+  });
+
+  test("inside the week shows the weekday name", () => {
+    // 2026-09-04 is a Friday.
+    expect(birthdayWhen("2026-09-04", 3, today)).toBe("Friday");
+  });
+
+  test("beyond a week shows a short date", () => {
+    expect(birthdayWhen("2026-09-12", 11, today)).toBe("Sep 12");
   });
 });
 

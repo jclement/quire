@@ -1,11 +1,14 @@
 // Quick capture (`c` key / mobile FAB): one autofocused text input that POSTs a
-// task into today's daily note. Enter saves and closes; Shift+Enter saves and
-// stays for the next thought. Optional due chips (Today / Tomorrow / Weekend)
-// are the only other interaction — zero required fields beyond the text. The
-// content mounts fresh per open, so no reset bookkeeping.
-import { Check, Zap } from "lucide-react";
-import { useRef, useState } from "react";
-import { useCreateTask } from "../api/queries.ts";
+// task into today's daily note, plus an optional photo (camera on mobile) —
+// with a file attached it goes through POST /capture and the text becomes
+// optional. Enter saves and closes; Shift+Enter saves and stays. Due chips
+// (Today / Tomorrow / Weekend) are the only other interaction. The content
+// mounts fresh per open, so no reset bookkeeping.
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, ImagePlus, X, Zap } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, errorMessage } from "../api/client.ts";
+import { invalidateTaskCaches } from "../api/queries.ts";
 import { addDaysISO, nextSaturdayISO, todayISO } from "../lib/dates.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import { Modal } from "./Modal.tsx";
@@ -30,18 +33,41 @@ export function QuickCapture() {
   );
 }
 
+interface CaptureInput {
+  text: string;
+  due?: string;
+  file: File | null;
+}
+
 function CaptureContent({ close }: { close: () => void }) {
   const [text, setText] = useState("");
   const [chip, setChip] = useState<DueChip | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [justSaved, setJustSaved] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const createTask = useCreateTask();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
-  const save = (keepOpen: boolean) => {
+  const save = useMutation({
+    // A photo goes through /capture (which files it + mints the task); plain
+    // text stays on the cheaper /tasks path.
+    mutationFn: (input: CaptureInput) =>
+      input.file
+        ? api.capture({
+            file: input.file,
+            ...(input.text ? { text: input.text } : {}),
+            ...(input.due ? { due: input.due } : {}),
+          })
+        : api.createTask(input.text, input.due),
+    onSuccess: () => invalidateTaskCaches(queryClient),
+  });
+
+  const submit = (keepOpen: boolean) => {
     const trimmed = text.trim();
-    if (!trimmed || createTask.isPending) return;
-    createTask.mutate(
-      { text: trimmed, ...(chip ? { due: chipDate(chip) } : {}) },
+    // With a photo attached the text is optional; without one it's the task.
+    if ((!trimmed && !file) || save.isPending) return;
+    save.mutate(
+      { text: trimmed, ...(chip ? { due: chipDate(chip) } : {}), file },
       {
         onSuccess: () => {
           if (!keepOpen) {
@@ -50,6 +76,7 @@ function CaptureContent({ close }: { close: () => void }) {
           }
           setText("");
           setChip(null);
+          setFile(null);
           setJustSaved(true);
           setTimeout(() => setJustSaved(false), 1_500);
           inputRef.current?.focus();
@@ -70,17 +97,41 @@ function CaptureContent({ close }: { close: () => void }) {
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
-              save(event.shiftKey);
+              submit(event.shiftKey);
             }
           }}
-          placeholder="Capture a task…"
+          placeholder={file ? "Add a note (optional)…" : "Capture a task…"}
           aria-label="New task text"
           className="h-12 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
         {justSaved ? (
           <Check className="size-4 shrink-0 text-ok" aria-hidden="true" />
         ) : null}
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          aria-label="Attach a photo"
+          className="flex size-8 shrink-0 items-center justify-center rounded text-muted hover:bg-hover hover:text-heading"
+        >
+          <ImagePlus className="size-4" aria-hidden="true" />
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={(event) => {
+            setFile(event.target.files?.[0] ?? null);
+            // Same file re-pickable after remove.
+            event.target.value = "";
+            inputRef.current?.focus();
+          }}
+        />
       </div>
+      {file ? <PhotoChip file={file} onRemove={() => setFile(null)} /> : null}
       <div className="flex items-center gap-1.5 px-3 py-2.5">
         {(["today", "tomorrow", "weekend"] as const).map((option) => (
           <button
@@ -100,11 +151,35 @@ function CaptureContent({ close }: { close: () => void }) {
           ↵ save · ⇧↵ save + another
         </span>
       </div>
-      {createTask.isError ? (
+      {save.isError ? (
         <p className="border-t border-border px-3 py-2 text-xs text-danger">
-          Couldn't save — {createTask.error.message}
+          Couldn't save — {errorMessage(save.error)}
         </p>
       ) : null}
     </>
+  );
+}
+
+/** Tiny thumbnail chip for the attached photo. */
+function PhotoChip({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const url = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return (
+    <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+      <img
+        src={url}
+        alt=""
+        className="size-8 shrink-0 rounded border border-border object-cover"
+      />
+      <span className="truncate text-xs text-muted">{file.name}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Remove photo"
+        className="ml-auto flex size-6 shrink-0 items-center justify-center rounded text-muted hover:bg-hover hover:text-heading"
+      >
+        <X className="size-3.5" aria-hidden="true" />
+      </button>
+    </div>
   );
 }

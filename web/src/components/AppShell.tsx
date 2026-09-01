@@ -8,6 +8,7 @@ import {
   Menu,
   Plus,
   Search,
+  Settings,
   Sunrise,
   X,
   type LucideIcon,
@@ -101,6 +102,10 @@ function NavSections({ onNavigate }: { onNavigate?: () => void }) {
       <div className="mt-auto border-t border-border pt-2">
         <NavLink
           entry={{ to: "/search", label: "Search", icon: Search }}
+          onNavigate={onNavigate}
+        />
+        <NavLink
+          entry={{ to: "/settings", label: "Settings", icon: Settings }}
           onNavigate={onNavigate}
         />
       </div>

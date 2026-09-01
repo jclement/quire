@@ -129,7 +129,9 @@ export function GlobalKeys() {
           return true;
         default: {
           // Page-registered combos like "mod+e" (view cycling on documents).
-          const action = keyActionsRef.current.get(`mod+${event.key.toLowerCase()}`);
+          const action = keyActionsRef.current.get(
+            `mod+${event.key.toLowerCase()}`,
+          );
           if (!action) return false;
           action();
           return true;

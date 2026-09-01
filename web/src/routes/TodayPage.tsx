@@ -7,8 +7,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Coffee, Pencil, Sparkles } from "lucide-react";
 import { api } from "../api/client.ts";
 import { queryKeys, useToday, useToggleTask } from "../api/queries.ts";
-import type { DocMeta, TodayPayload } from "../api/types.ts";
-import { formatDayHeading, formatRelativeTime } from "../lib/dates.ts";
+import type { Birthday, DocMeta, TodayPayload } from "../api/types.ts";
+import {
+  birthdayWhen,
+  formatDayHeading,
+  formatRelativeTime,
+} from "../lib/dates.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import { EmptyState, ErrorState } from "../components/EmptyState.tsx";
 import { Markdown } from "../components/Markdown.tsx";
@@ -52,6 +56,7 @@ function TodayView({ payload }: { payload: TodayPayload }) {
       </header>
 
       <MeetingsToday meetings={payload.meetings} />
+      <Birthdays birthdays={payload.birthdays} />
 
       {anyTasks ? (
         <GroupedTaskList groups={groups} />
@@ -98,6 +103,41 @@ function MeetingsToday({ meetings }: { meetings: DocMeta[] }) {
           </RouterLink>
         ))}
       </div>
+    </section>
+  );
+}
+
+/** Upcoming birthdays, small and warm: "🎂 Sarah Chen — Friday (turns 41)". */
+function Birthdays({ birthdays }: { birthdays: Birthday[] }) {
+  if (birthdays.length === 0) return null;
+  return (
+    <section>
+      <h2 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+        Birthdays
+      </h2>
+      <ul className="divide-y divide-border border-y border-border">
+        {birthdays.map((birthday) => (
+          <li key={birthday.path}>
+            <RouterLink
+              to={docHref(birthday.path)}
+              className="flex h-8 items-center gap-2 px-2 text-sm text-body hover:bg-hover hover:text-heading"
+            >
+              <span aria-hidden="true">🎂</span>
+              <span className="truncate font-medium text-heading">
+                {birthday.title}
+              </span>
+              <span
+                className={
+                  birthday.days_until === 0 ? "text-accent" : "text-muted"
+                }
+              >
+                — {birthdayWhen(birthday.date, birthday.days_until)}
+                {birthday.age !== null ? ` (turns ${birthday.age})` : ""}
+              </span>
+            </RouterLink>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

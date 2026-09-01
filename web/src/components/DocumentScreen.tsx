@@ -1,9 +1,18 @@
 // The document page body, shared by /doc/* and /daily/<date>: read mode
-// (rendered markdown, frontmatter properties strip, backlinks) and edit mode
-// (CodeMirror with autosave + conflict banner). Callers key this component by
-// path so all editing state resets on navigation.
+// (rendered markdown, frontmatter properties strip, backlinks), edit mode
+// (CodeMirror with autosave + conflict banner), and a desktop split view
+// (editor left, live preview right). Cmd+E cycles the modes; Share/Rename
+// actions live in the header. Callers key this component by path so all
+// editing state resets on navigation.
 import { Link as RouterLink } from "@tanstack/react-router";
-import { AlertTriangle, FileQuestion, Pencil } from "lucide-react";
+import {
+  AlertTriangle,
+  FileQuestion,
+  FolderPen,
+  MoreHorizontal,
+  Pencil,
+  Share2,
+} from "lucide-react";
 import {
   lazy,
   Suspense,
@@ -17,12 +26,16 @@ import { useDocument, useToggleTask } from "../api/queries.ts";
 import type { Document } from "../api/types.ts";
 import { formatRelativeTime } from "../lib/dates.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
+import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import type { MarkdownEditorHandle } from "../editor/MarkdownEditor.tsx";
 import { EmptyState, ErrorState } from "./EmptyState.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { SkeletonRows } from "./Skeleton.tsx";
 import { useDocumentSave, type SaveStatus } from "./useDocumentSave.ts";
+
+/** Split preview re-renders this long after the last keystroke. */
+const PREVIEW_DEBOUNCE_MS = 300;
 
 // CodeMirror is ~⅓ of the bundle and only needed once someone edits; keep it
 // off the critical path (DESIGN.md's bundle budget).
@@ -70,6 +83,8 @@ const STATUS_LABEL: Record<SaveStatus, { text: string; classes: string }> = {
   error: { text: "save failed", classes: "text-danger" },
 };
 
+type ViewMode = "read" | "edit" | "split";
+
 function DocumentView({
   path,
   doc,
@@ -79,13 +94,16 @@ function DocumentView({
   doc: Document;
   initialEdit: boolean;
 }) {
-  const [mode, setMode] = useState<"read" | "edit">(
-    initialEdit ? "edit" : "read",
-  );
-  const { registerKey, pushEscape } = useUi();
+  const [mode, setMode] = useState<ViewMode>(initialEdit ? "edit" : "read");
+  const { registerKey, pushEscape, setShareDocPath, setRenameDocPath } =
+    useUi();
   const save = useDocumentSave(path, doc);
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const toggleTask = useToggleTask();
+  // Editor buffer mirrored into state for the split preview (debounced so the
+  // markdown re-render doesn't run per keystroke).
+  const [liveText, setLiveText] = useState(save.currentText);
+  const previewText = useDebouncedValue(liveText, PREVIEW_DEBOUNCE_MS);
 
   const exitEdit = () => {
     void save.save();
@@ -99,6 +117,29 @@ function DocumentView({
     // exitEdit identity is per-render but only mode changes matter here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, registerKey, pushEscape]);
+
+  // Cmd/Ctrl+E cycles read → edit → split (split is desktop-only; small
+  // screens bounce back to read). Registered once; uses functional setState.
+  useEffect(
+    () =>
+      registerKey("mod+e", () => {
+        const desktop = window.matchMedia("(min-width: 768px)").matches;
+        setMode((current) => {
+          if (current === "read") return "edit";
+          if (current === "edit" && desktop) return "split";
+          return "read";
+        });
+      }),
+    [registerKey],
+  );
+
+  // Any route back to read mode flushes pending edits (Cmd+E cycling included;
+  // a no-op when nothing changed).
+  useEffect(() => {
+    if (mode === "read") void save.save();
+    // save.save is stable per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
 
   // Tag pool for `#` autocomplete: everything this doc and its neighbors carry.
   const getTags = () => [
@@ -124,13 +165,22 @@ function DocumentView({
         <span className="ml-auto hidden text-xs text-muted sm:inline">
           {formatRelativeTime(doc.mtime)}
         </span>
-        {mode === "edit" ? (
+        {mode !== "read" ? (
           <span
             className={`font-mono text-[10px] ${STATUS_LABEL[save.status].classes}`}
           >
             {STATUS_LABEL[save.status].text}
           </span>
         ) : null}
+        <button
+          type="button"
+          onClick={() => setShareDocPath(path)}
+          aria-label="Share this document"
+          className="flex size-7 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-heading"
+        >
+          <Share2 className="size-3.5" aria-hidden="true" />
+        </button>
+        <DocMenu onRename={() => setRenameDocPath(path)} />
         <button
           type="button"
           onClick={mode === "read" ? () => setMode("edit") : exitEdit}
@@ -168,19 +218,81 @@ function DocumentView({
           <Backlinks doc={doc} />
         </>
       ) : (
-        <Suspense fallback={<SkeletonRows count={6} />}>
-          <MarkdownEditor
-            ref={editorRef}
-            initialValue={save.currentText()}
-            onChange={save.onEditorChange}
-            onSave={() => void save.save()}
-            onSaveAndExit={exitEdit}
-            onBlur={() => void save.save()}
-            getTags={getTags}
-          />
-        </Suspense>
+        <div
+          className={
+            mode === "split"
+              ? "grid flex-1 md:grid-cols-2"
+              : "flex flex-1 flex-col"
+          }
+        >
+          <Suspense fallback={<SkeletonRows count={6} />}>
+            <MarkdownEditor
+              ref={editorRef}
+              initialValue={save.currentText()}
+              onChange={(text) => {
+                save.onEditorChange(text);
+                setLiveText(text);
+              }}
+              onSave={() => void save.save()}
+              onSaveAndExit={exitEdit}
+              onBlur={() => void save.save()}
+              getTags={getTags}
+            />
+          </Suspense>
+          {mode === "split" ? (
+            <div className="hidden border-l border-border pt-3 pl-4 md:block">
+              {/* Preview follows the buffer, debounced; task toggling is off
+                  here because line numbers shift while typing. */}
+              <Markdown
+                markdown={previewText}
+                links={doc.links}
+                tasks={doc.tasks}
+              />
+            </div>
+          ) : null}
+        </div>
       )}
     </article>
+  );
+}
+
+/** The "…" menu on the doc header — non-primary actions (Rename). */
+function DocMenu({ onRename }: { onRename: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-label="Document actions"
+        aria-expanded={open}
+        className="flex size-7 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-heading"
+      >
+        <MoreHorizontal className="size-3.5" aria-hidden="true" />
+      </button>
+      {open ? (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            aria-hidden="true"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute top-full right-0 z-20 mt-1 w-36 rounded border border-border bg-raised py-1 shadow-lg">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onRename();
+              }}
+              className="flex h-8 w-full items-center gap-2 px-3 text-left text-xs text-body hover:bg-hover hover:text-heading"
+            >
+              <FolderPen className="size-3.5 text-muted" aria-hidden="true" />
+              Rename…
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
 

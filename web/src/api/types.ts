@@ -67,10 +67,21 @@ export interface SearchResult {
   snippet: string;
 }
 
+/** An upcoming birthday from a person doc's frontmatter. */
+export interface Birthday {
+  path: string;
+  title: string;
+  date: string;
+  days_until: number;
+  /** Age they turn on that date; null when the birth year is unknown. */
+  age: number | null;
+}
+
 export interface TodayPayload {
   date: string;
   daily: Document | null;
   meetings: DocMeta[];
+  birthdays: Birthday[];
   overdue: Task[];
   due_today: Task[];
   available: Task[];
@@ -101,6 +112,30 @@ export interface ShareInfo {
 export interface RenameResult {
   document: Document;
   rewritten: string[];
+}
+
+// ---- Passkey auth (only live when QUIRE_AUTH_MODE=passkey; in mode "none"
+// every /auth/* endpoint 404s and the SPA skips all auth UI) ----
+
+export interface AuthStatus {
+  registered: boolean;
+  authenticated: boolean;
+}
+
+export interface PasskeyInfo {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface RegisterFinishResult {
+  /** Non-null ONLY for the very first passkey — show them once, full screen. */
+  recovery_codes: string[] | null;
+}
+
+export interface RecoverResult {
+  /** True = the code worked and the user should register a passkey now. */
+  register_passkey: boolean;
 }
 
 export interface AttachmentUpload {

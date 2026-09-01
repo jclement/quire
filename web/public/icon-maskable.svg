@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed background: maskable icons get cropped to arbitrary shapes,
+       so the glyph stays inside the central 80% safe zone. -->
+  <rect width="512" height="512" fill="#5b5bd6" />
+  <text x="256" y="350" font-family="Georgia, 'Times New Roman', serif" font-size="270" font-style="italic" fill="#ffffff" text-anchor="middle">q</text>
+</svg>

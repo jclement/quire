@@ -71,27 +71,33 @@ function ShareContent({ path }: { path: string }) {
       <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
         <Link2 className="size-4 shrink-0 text-muted" aria-hidden="true" />
         <h2 className="text-sm font-semibold text-heading">Share</h2>
-        <span className="truncate font-mono text-[10px] text-muted">{path}</span>
+        <span className="truncate font-mono text-[10px] text-muted">
+          {path}
+        </span>
       </header>
 
       <div className="flex min-h-11 flex-wrap items-center gap-1.5 border-b border-border px-3 py-2">
         <span className="text-xs text-muted">Expires:</span>
-        {([["never", "Never"], [7, "7 days"], [30, "30 days"]] as const).map(
-          ([value, label]) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => setExpiry(value)}
-              className={`h-7 rounded-full border px-2.5 text-xs ${
-                expiry === value
-                  ? "border-accent bg-selected text-heading"
-                  : "border-border text-muted hover:bg-hover hover:text-body"
-              }`}
-            >
-              {label}
-            </button>
-          ),
-        )}
+        {(
+          [
+            ["never", "Never"],
+            [7, "7 days"],
+            [30, "30 days"],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setExpiry(value)}
+            className={`h-7 rounded-full border px-2.5 text-xs ${
+              expiry === value
+                ? "border-accent bg-selected text-heading"
+                : "border-border text-muted hover:bg-hover hover:text-body"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
         <button
           type="button"
           onClick={() => create.mutate()}
@@ -132,7 +138,13 @@ function ShareContent({ path }: { path: string }) {
   );
 }
 
-function ShareRow({ share, onRevoke }: { share: ShareInfo; onRevoke: () => void }) {
+function ShareRow({
+  share,
+  onRevoke,
+}: {
+  share: ShareInfo;
+  onRevoke: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     void navigator.clipboard.writeText(share.url).then(() => {

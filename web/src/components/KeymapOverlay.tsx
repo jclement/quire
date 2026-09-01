@@ -16,6 +16,7 @@ const GROUPS: { title: string; bindings: KeyBinding[] }[] = [
       { keys: "⌘K", action: "Command palette" },
       { keys: "c", action: "Quick capture" },
       { keys: "/", action: "Search" },
+      { keys: "⌘[ / ⌘]", action: "History back / forward" },
       { keys: "?", action: "This cheat sheet" },
       { keys: "esc", action: "One level out" },
     ],
@@ -26,6 +27,7 @@ const GROUPS: { title: string; bindings: KeyBinding[] }[] = [
       { keys: "j / k", action: "Move selection down / up" },
       { keys: "↵", action: "Open selection" },
       { keys: "x", action: "Toggle selected task" },
+      { keys: "s", action: "Snooze selected task" },
     ],
   },
   {
@@ -43,6 +45,7 @@ const GROUPS: { title: string; bindings: KeyBinding[] }[] = [
     title: "Documents",
     bindings: [
       { keys: "e", action: "Edit" },
+      { keys: "⌘E", action: "Cycle read / edit / split" },
       { keys: "⌘↵", action: "Save and return to reading" },
       { keys: "⌘S", action: "Save" },
       { keys: "⌘L", action: "Toggle checkbox on line" },

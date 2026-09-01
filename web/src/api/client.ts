@@ -4,10 +4,14 @@
 // without string-matching messages.
 import type {
   AttachmentUpload,
+  AuthStatus,
   DocMeta,
   DocType,
   Document,
   Health,
+  PasskeyInfo,
+  RecoverResult,
+  RegisterFinishResult,
   RenameResult,
   SearchResult,
   ShareInfo,
@@ -34,6 +38,15 @@ export function isConflictError(error: unknown): error is ApiError {
   return error instanceof ApiError && error.code === "CONFLICT";
 }
 
+/** User-facing message for a failed call; rate limits get a retry-later note. */
+export function errorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.status === 429) {
+    return `${error.message} — wait a minute and try again.`;
+  }
+  if (error instanceof Error) return error.message;
+  return "Something went wrong.";
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -46,6 +59,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
+    // In passkey mode an expired session turns every call into a 401; the
+    // AuthGate listens for this event and re-checks auth status.
+    if (response.status === 401) {
+      window.dispatchEvent(new Event("quire:unauthorized"));
+    }
     const code = body?.error?.code ?? "UNKNOWN";
     const message =
       body?.error?.message ?? `Request failed (${response.status})`;
@@ -157,7 +175,11 @@ export const api = {
   rename: (path: string, newPath: string, rewriteLinks: boolean) =>
     request<RenameResult>(
       "/api/v1/rename",
-      jsonInit("POST", { path, new_path: newPath, rewrite_links: rewriteLinks }),
+      jsonInit("POST", {
+        path,
+        new_path: newPath,
+        rewrite_links: rewriteLinks,
+      }),
     ),
 
   uploadAttachment: (file: File) => {
@@ -168,4 +190,49 @@ export const api = {
       body: form,
     });
   },
+
+  /** Photo→task capture: any of file/text/due, at least one of file/text. */
+  capture: (input: { file?: File; text?: string; due?: string }) => {
+    const form = new FormData();
+    if (input.file) form.append("file", input.file);
+    if (input.text) form.append("text", input.text);
+    if (input.due) form.append("due", input.due);
+    return request<Task>("/api/v1/capture", { method: "POST", body: form });
+  },
+
+  // ---- Auth (404s wholesale when the server runs auth mode "none") ----
+
+  authStatus: () => request<AuthStatus>("/api/v1/auth/status"),
+
+  /** WebAuthn creation options in JSON form; api/auth.ts decodes and calls. */
+  authRegisterBegin: () =>
+    request<Record<string, unknown>>("/api/v1/auth/register/begin", {
+      method: "POST",
+    }),
+
+  authRegisterFinish: (name: string, credential: unknown) =>
+    request<RegisterFinishResult>(
+      `/api/v1/auth/register/finish?name=${encodeURIComponent(name)}`,
+      jsonInit("POST", credential),
+    ),
+
+  authLoginBegin: () =>
+    request<Record<string, unknown>>("/api/v1/auth/login/begin", {
+      method: "POST",
+    }),
+
+  authLoginFinish: (assertion: unknown) =>
+    request<void>("/api/v1/auth/login/finish", jsonInit("POST", assertion)),
+
+  authRecover: (code: string) =>
+    request<RecoverResult>("/api/v1/auth/recover", jsonInit("POST", { code })),
+
+  authLogout: () => request<void>("/api/v1/auth/logout", { method: "POST" }),
+
+  listPasskeys: () => request<PasskeyInfo[]>("/api/v1/auth/passkeys"),
+
+  deletePasskey: (id: string) =>
+    request<void>(`/api/v1/auth/passkeys/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
 };

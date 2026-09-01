@@ -4,11 +4,13 @@
 // The inner content mounts fresh each open (blank query, instant focus), and
 // the doc query keeps previous results while typing so the list never flashes.
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   ChevronsRight,
+  FolderPen,
   Plus,
   Search,
+  Share2,
   Sunrise,
   type LucideIcon,
 } from "lucide-react";
@@ -21,7 +23,7 @@ import { api } from "../api/client.ts";
 import { queryKeys } from "../api/queries.ts";
 import type { DocMeta, DocType } from "../api/types.ts";
 import { todayISO } from "../lib/dates.ts";
-import { DOC_TYPE_INFO, docHref } from "../lib/docs.ts";
+import { DOC_TYPE_INFO, docHref, vaultPathFromRoute } from "../lib/docs.ts";
 import { fuzzyRank } from "../lib/fuzzy.ts";
 import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
 import { useUi } from "../keys/UiContext.tsx";
@@ -79,8 +81,12 @@ function itemText(item: PaletteItem): string {
   return item.kind === "command" ? item.command.label : item.doc.title;
 }
 
-/** Commands + fetched docs, fuzzy-ranked; ">" limits to commands. */
-function usePaletteItems(query: string): PaletteItem[] {
+/** Commands (static + context) + fetched docs, fuzzy-ranked; ">" limits to
+ * commands. */
+function usePaletteItems(
+  query: string,
+  extraCommands: Command[],
+): PaletteItem[] {
   const commandsOnly = query.startsWith(">");
   const text = (commandsOnly ? query.slice(1) : query).trim();
   const debounced = useDebouncedValue(text, QUERY_DEBOUNCE_MS);
@@ -94,10 +100,9 @@ function usePaletteItems(query: string): PaletteItem[] {
   });
 
   return useMemo(() => {
-    const commands = COMMANDS.map<PaletteItem>((command) => ({
-      kind: "command",
-      command,
-    }));
+    const commands = [...COMMANDS, ...extraCommands].map<PaletteItem>(
+      (command) => ({ kind: "command", command }),
+    );
     if (commandsOnly) return fuzzyRank(text, commands, itemText);
     const docs = (docsQuery.data ?? []).map<PaletteItem>((doc) => ({
       kind: "doc",
@@ -107,7 +112,7 @@ function usePaletteItems(query: string): PaletteItem[] {
       0,
       RESULT_LIMIT,
     );
-  }, [commandsOnly, text, docsQuery.data]);
+  }, [commandsOnly, text, docsQuery.data, extraCommands]);
 }
 
 export function CommandPalette() {
@@ -131,7 +136,33 @@ function PaletteContent({ close }: { close: () => void }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
-  const items = usePaletteItems(query);
+
+  // Share/Rename only exist while a document page is open — they act on it.
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const docPath = vaultPathFromRoute(pathname);
+  const contextCommands = useMemo<Command[]>(
+    () =>
+      docPath
+        ? [
+            {
+              id: "share-doc",
+              label: "Share this document",
+              icon: Share2,
+              run: (paletteUi) => paletteUi.setShareDocPath(docPath),
+            },
+            {
+              id: "rename-doc",
+              label: "Rename this document",
+              icon: FolderPen,
+              run: (paletteUi) => paletteUi.setRenameDocPath(docPath),
+            },
+          ]
+        : [],
+    [docPath],
+  );
+  const items = usePaletteItems(query, contextCommands);
 
   // Selection resets when the query changes — adjusted during render rather
   // than in an effect (the React-endorsed pattern; avoids a double render pass).

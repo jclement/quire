@@ -8,6 +8,22 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>quire</title>
+    <!-- PWA installability (no service worker on purpose — capture should be
+         one tap from the home screen, offline can come later). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="quire" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#fbfbfa"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#17181c"
+    />
     <!-- Set the theme class before first paint so a dark-mode user never sees a
          white flash. Mirrors the logic in src/lib/theme.ts; keep them in sync. -->
     <script>

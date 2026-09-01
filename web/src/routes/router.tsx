@@ -17,12 +17,16 @@ import { CommandPalette } from "../components/CommandPalette.tsx";
 import { KeymapOverlay } from "../components/KeymapOverlay.tsx";
 import { NewDocDialog } from "../components/NewDocDialog.tsx";
 import { QuickCapture } from "../components/QuickCapture.tsx";
+import { RenameDialog } from "../components/RenameDialog.tsx";
+import { ShareDialog } from "../components/ShareDialog.tsx";
+import { Toasts } from "../components/Toasts.tsx";
 import { DocumentScreen } from "../components/DocumentScreen.tsx";
 import { GlobalKeys } from "../keys/GlobalKeys.tsx";
 import { BrowsePage } from "./BrowsePage.tsx";
 import { DailyPage } from "./DailyPage.tsx";
 import { NotFoundPage } from "./NotFoundPage.tsx";
 import { SearchPage } from "./SearchPage.tsx";
+import { SettingsPage } from "./SettingsPage.tsx";
 import { TasksPage } from "./TasksPage.tsx";
 import { TodayPage } from "./TodayPage.tsx";
 import type { TaskView } from "../api/types.ts";
@@ -41,6 +45,9 @@ function RootLayout() {
       <QuickCapture />
       <KeymapOverlay />
       <NewDocDialog />
+      <ShareDialog />
+      <RenameDialog />
+      <Toasts />
     </>
   );
 }
@@ -136,6 +143,12 @@ const searchRoute = createRoute({
   },
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: SettingsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   todayRoute,
@@ -145,6 +158,7 @@ const routeTree = rootRoute.addChildren([
   docRoute,
   dailyRoute,
   searchRoute,
+  settingsRoute,
 ]);
 
 export const router = createRouter({ routeTree });
