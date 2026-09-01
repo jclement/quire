@@ -11,7 +11,7 @@
 import { Link as RouterLink } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { DocMeta } from "../api/types.ts";
-import { docHref } from "../lib/docs.ts";
+import { DOC_TYPE_INFO, docHref, isDocType } from "../lib/docs.ts";
 import type { Heading } from "../lib/headings.ts";
 import { MIN_OUTLINE_HEADINGS } from "../lib/headings.ts";
 
@@ -84,17 +84,31 @@ export function DocumentRail({
         <nav aria-label="Backlinks">
           <RailHeading>Linked from</RailHeading>
           <ul className="border-l border-border">
-            {backlinks.map((backlink) => (
-              <li key={backlink.path}>
-                <RouterLink
-                  to={docHref(backlink.path)}
-                  title={`${backlink.title} (${backlink.type})`}
-                  className="-ml-px block border-l border-transparent py-0.5 pr-1 pl-2 text-xs leading-snug text-muted hover:border-border hover:text-body"
-                >
-                  <span className="line-clamp-2">{backlink.title}</span>
-                </RouterLink>
-              </li>
-            ))}
+            {backlinks.map((backlink) => {
+              // Lead with the document type, the way the nav and every list in
+              // the app does — a column of bare titles gives no clue whether
+              // you are looking at a person, a meeting or a note.
+              const Icon = isDocType(backlink.type)
+                ? DOC_TYPE_INFO[backlink.type].icon
+                : undefined;
+              return (
+                <li key={backlink.path}>
+                  <RouterLink
+                    to={docHref(backlink.path)}
+                    title={`${backlink.title} (${backlink.type})`}
+                    className="-ml-px flex items-start gap-1.5 border-l border-transparent py-0.5 pr-1 pl-2 text-xs leading-snug text-muted hover:border-border hover:text-body"
+                  >
+                    {Icon ? (
+                      <Icon
+                        className="mt-0.5 size-3 shrink-0"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <span className="line-clamp-2">{backlink.title}</span>
+                  </RouterLink>
+                </li>
+              );
+            })}
           </ul>
         </nav>
       ) : null}
