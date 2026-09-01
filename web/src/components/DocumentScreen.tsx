@@ -33,8 +33,9 @@ import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import type { MarkdownEditorHandle } from "../editor/MarkdownEditor.tsx";
 import { extractHeadings } from "../lib/headings.ts";
-import { DocumentOutline } from "./DocumentOutline.tsx";
+import { DocumentRail } from "./DocumentRail.tsx";
 import { EmptyState, ErrorState } from "./EmptyState.tsx";
+import { FrontmatterStrip } from "./FrontmatterStrip.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { SkeletonRows } from "./Skeleton.tsx";
 import { useDocumentSave, type SaveStatus } from "./useDocumentSave.ts";
@@ -238,14 +239,14 @@ function DocumentView({
         </p>
       ) : null}
 
-      {/* The outline is a sibling column, never an overlay: it shortens the
-          content rather than floating over it, so nothing can overlap and the
-          page can never scroll sideways. */}
+      {/* The rail (outline + backlinks) is a sibling column, never an overlay:
+          it shortens the content rather than floating over it, so nothing can
+          overlap and the page can never scroll sideways. */}
       <div className="flex min-h-0 flex-1 gap-6">
         <div className="flex min-w-0 flex-1 flex-col">
           {mode === "read" ? (
             <>
-              <FrontmatterStrip frontmatter={doc.frontmatter} />
+              <FrontmatterStrip doc={doc} />
               <Markdown
                 markdown={save.text}
                 links={doc.links}
@@ -291,11 +292,12 @@ function DocumentView({
             </div>
           )}
         </div>
-        <DocumentOutline
+        <DocumentRail
           headings={headings}
           mode={mode === "read" ? "rendered" : "source"}
           activeLine={editorTopLine}
           onScrollToLine={(line) => editorRef.current?.scrollToLine(line)}
+          backlinks={doc.backlinks}
         />
       </div>
     </article>
@@ -438,44 +440,15 @@ function ConflictBanner({
   );
 }
 
-/** Frontmatter as a compact key:value chip strip (never rendered as markdown). */
-function FrontmatterStrip({
-  frontmatter,
-}: {
-  frontmatter: Record<string, unknown>;
-}) {
-  const entries = Object.entries(frontmatter).filter(
-    ([key]) => key !== "title",
-  );
-  if (entries.length === 0) return null;
-  return (
-    <div className="mb-3 flex flex-wrap gap-1.5 border-b border-border pb-3">
-      {entries.map(([key, value]) => (
-        <span
-          key={key}
-          className="inline-flex max-w-full items-center gap-1 rounded border border-border bg-raised px-1.5 py-0.5 font-mono text-[10px]"
-        >
-          <span className="text-muted">{key}:</span>
-          <span className="truncate text-body">
-            {formatFrontmatterValue(value)}
-          </span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function formatFrontmatterValue(value: unknown): string {
-  if (Array.isArray(value)) return value.map(String).join(", ");
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-
+/**
+ * Backlinks below the document, for screens too narrow for the rail — above
+ * lg the rail shows the same list beside the content, so this hides rather
+ * than repeating it.
+ */
 function Backlinks({ doc }: { doc: Document }) {
   if (doc.backlinks.length === 0) return null;
   return (
-    <section className="mt-8 border-t border-border pt-3">
+    <section className="mt-8 border-t border-border pt-3 lg:hidden">
       <h2 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
         Linked from
       </h2>

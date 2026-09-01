@@ -215,3 +215,39 @@ func TestTodayPayload(t *testing.T) {
 		t.Errorf("daily missing")
 	}
 }
+
+// A caller-supplied body may already carry frontmatter — agents do this
+// routinely because create_document invites passing markdown. Seeding must
+// fill in only what's missing, never prepend a second `---` block (which
+// rendered as body text and shadowed the real values).
+func TestCreateDocumentRespectsSuppliedFrontmatter(t *testing.T) {
+	s := newTestService(t)
+	body := "---\ntype: meeting\ndate: 2026-09-01T14:00\n---\n# Acme Sync\n\nNotes.\n"
+	doc, err := s.CreateDocument(vault.TypeMeeting, "Acme Sync", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(doc.Markdown, "---\n") != 2 {
+		t.Errorf("expected exactly one frontmatter block:\n%s", doc.Markdown)
+	}
+	// The caller's date wins; the missing seed key is added.
+	if got := doc.Frontmatter["date"]; got != "2026-09-01T14:00" {
+		t.Errorf("date = %v, want the caller's 14:00", got)
+	}
+	if _, ok := doc.Frontmatter["people"]; !ok {
+		t.Errorf("missing seed key not added: %v", doc.Frontmatter)
+	}
+	// And the body is the body — no YAML leaked into it.
+	if strings.Contains(doc.Markdown, "---\n---") || !strings.Contains(doc.Markdown, "# Acme Sync") {
+		t.Errorf("body mangled:\n%s", doc.Markdown)
+	}
+
+	// A body with no frontmatter still gets the full seed block.
+	plain, err := s.CreateDocument(vault.TypeMeeting, "Standup", "# Standup\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.Frontmatter["date"] == nil || plain.Frontmatter["people"] == nil {
+		t.Errorf("seed missing: %v", plain.Frontmatter)
+	}
+}

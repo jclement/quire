@@ -17,6 +17,7 @@ export const queryKeys = {
   search: (q: string) => ["search", q] as const,
   tasks: (view: TaskView) => ["tasks", view] as const,
   today: ["today"] as const,
+  calendar: (month: string) => ["calendar", month] as const,
   shares: ["shares"] as const,
 };
 
@@ -62,6 +63,14 @@ export function useTasks(view: TaskView) {
 
 export function useToday() {
   return useQuery({ queryKey: queryKeys.today, queryFn: api.today });
+}
+
+/** One month of the calendar; the month key ("YYYY-MM") is the cache key. */
+export function useCalendar(month: string) {
+  return useQuery({
+    queryKey: queryKeys.calendar(month),
+    queryFn: () => api.calendar(month),
+  });
 }
 
 /** Invalidates every cache a task state change can affect. */
@@ -122,6 +131,28 @@ export function useEditTask() {
 
 export function useShares() {
   return useQuery({ queryKey: queryKeys.shares, queryFn: api.listShares });
+}
+
+/**
+ * Entity linking from the properties strip (add or remove one wikilink in a
+ * frontmatter key). The response is the rewritten document, so it seeds the
+ * cache directly; invalidation then reconciles the lists it can appear in.
+ */
+export function useLinkEntity(path: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { key: string; target: string; remove?: boolean }) =>
+      api.link(path, input.key, input.target, input.remove ?? false),
+    onSuccess: (doc) => {
+      queryClient.setQueryData(queryKeys.document(path), doc);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.document(path),
+      });
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+    },
+  });
 }
 
 /** Quick capture: new task into today's daily note. */

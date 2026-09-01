@@ -3,8 +3,10 @@
 // ApiError carrying the server's code so callers can branch on e.g. CONFLICT
 // without string-matching messages.
 import type {
+  AgentGuidanceResponse,
   AttachmentUpload,
   AuthStatus,
+  CalendarMonth,
   DocMeta,
   DocType,
   Document,
@@ -123,6 +125,17 @@ export const api = {
       method: "DELETE",
     }),
 
+  /**
+   * Adds or removes one entity link in a frontmatter key ("put this person on
+   * that meeting"). Idempotent, and the server decides whether the key holds a
+   * scalar or a list; `target` is a document title or a `[[wikilink]]`.
+   */
+  link: (path: string, key: string, target: string, remove = false) =>
+    request<Document>(
+      "/api/v1/link",
+      jsonInit("POST", { path, key, target, ...(remove ? { remove } : {}) }),
+    ),
+
   search: (q: string) =>
     request<SearchResult[]>(`/api/v1/search?q=${encodeURIComponent(q)}`),
 
@@ -155,6 +168,21 @@ export const api = {
     request<Document>(`/api/v1/daily/${date}`, { method: "POST" }),
 
   today: () => request<TodayPayload>("/api/v1/today"),
+
+  /** One month of days ("YYYY-MM"), each with its notes, meetings and tasks. */
+  calendar: (month: string) =>
+    request<CalendarMonth>(
+      `/api/v1/calendar?month=${encodeURIComponent(month)}`,
+    ),
+
+  agentGuidance: () => request<AgentGuidanceResponse>("/api/v1/agent-guidance"),
+
+  /** Empty text deletes the guidance document. */
+  setAgentGuidance: (text: string) =>
+    request<AgentGuidanceResponse>(
+      "/api/v1/agent-guidance",
+      jsonInit("PUT", { text }),
+    ),
 
   listShares: () => request<ShareInfo[]>("/api/v1/shares"),
 

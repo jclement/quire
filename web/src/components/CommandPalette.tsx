@@ -6,6 +6,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
+  CalendarRange,
   ChevronsRight,
   FolderPen,
   HelpCircle,
@@ -68,6 +69,12 @@ const COMMANDS: Command[] = [
     label: "Open Daily Note",
     icon: DOC_TYPE_INFO.daily.icon,
     run: (_ui, go) => go(`/daily/${todayISO()}`),
+  },
+  {
+    id: "open-calendar",
+    label: "Open Calendar",
+    icon: CalendarRange,
+    run: (_ui, go) => go("/calendar"),
   },
   {
     id: "search",

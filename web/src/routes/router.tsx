@@ -11,6 +11,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { useDocEvents } from "../api/useEvents.ts";
+import { currentMonthKey, isMonthKey } from "../lib/calendar.ts";
 import { isDocType } from "../lib/docs.ts";
 import { AppShell } from "../components/AppShell.tsx";
 import { CommandPalette } from "../components/CommandPalette.tsx";
@@ -25,6 +26,7 @@ import { Toasts } from "../components/Toasts.tsx";
 import { DocumentScreen } from "../components/DocumentScreen.tsx";
 import { GlobalKeys } from "../keys/GlobalKeys.tsx";
 import { BrowsePage } from "./BrowsePage.tsx";
+import { CalendarPage } from "./CalendarPage.tsx";
 import { DailyPage } from "./DailyPage.tsx";
 import { NotFoundPage } from "./NotFoundPage.tsx";
 import { SearchPage } from "./SearchPage.tsx";
@@ -135,6 +137,26 @@ const dailyRoute = createRoute({
   },
 });
 
+/** Bare /calendar is this month; the month key is a route param, not search,
+ * so a month is a link you can send someone. */
+const calendarRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/calendar",
+  component: function CalendarRouteComponent() {
+    return <CalendarPage month={currentMonthKey()} />;
+  },
+});
+
+const calendarMonthRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/calendar/$month",
+  component: function CalendarMonthRouteComponent() {
+    const { month } = calendarMonthRoute.useParams();
+    if (!isMonthKey(month)) return <NotFoundPage />;
+    return <CalendarPage month={month} />;
+  },
+});
+
 const searchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/search",
@@ -161,6 +183,8 @@ const routeTree = rootRoute.addChildren([
   browseRoute,
   docRoute,
   dailyRoute,
+  calendarRoute,
+  calendarMonthRoute,
   searchRoute,
   settingsRoute,
 ]);

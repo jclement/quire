@@ -4,6 +4,7 @@
 // status live in Settings, not in page furniture.
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
+  CalendarRange,
   CheckSquare,
   Inbox,
   Menu,
@@ -59,6 +60,13 @@ const MOBILE_NAV: NavEntry[] = [
   { to: "/browse/note", label: "Notes", icon: DOC_TYPE_INFO.note.icon },
 ];
 
+/** The month view sits with Daily: both are the vault by date, not by type. */
+const CALENDAR_NAV: NavEntry = {
+  to: "/calendar",
+  label: "Calendar",
+  icon: CalendarRange,
+};
+
 /** Daily changes at midnight, so compute the link target per render. */
 function dailyNavEntry(): NavEntry {
   return {
@@ -99,6 +107,7 @@ function NavSections({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink key={entry.to} entry={entry} onNavigate={onNavigate} />
       ))}
       <NavLink entry={dailyNavEntry()} onNavigate={onNavigate} />
+      <NavLink entry={CALENDAR_NAV} onNavigate={onNavigate} />
       <div className="mt-auto border-t border-border pt-2">
         <NavLink
           entry={{ to: "/search", label: "Search", icon: Search }}

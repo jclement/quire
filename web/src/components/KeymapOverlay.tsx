@@ -42,6 +42,10 @@ const GROUPS: { title: string; bindings: KeyBinding[] }[] = [
     ],
   },
   {
+    title: "Calendar",
+    bindings: [{ keys: "[ / ]", action: "Previous / next month" }],
+  },
+  {
     title: "Documents",
     bindings: [
       { keys: "e", action: "Edit" },

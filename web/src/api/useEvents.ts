@@ -18,12 +18,14 @@ function invalidateForDocEvent(
   void queryClient.invalidateQueries({
     queryKey: queryKeys.document(event.path),
   });
-  // Lists, search results, task views, and Today can all reference any doc;
-  // invalidation is cheap (refetch only happens for mounted queries).
+  // Lists, search results, task views, Today, and the month calendar can all
+  // reference any doc; invalidation is cheap (refetch only happens for mounted
+  // queries).
   void queryClient.invalidateQueries({ queryKey: ["documents"] });
   void queryClient.invalidateQueries({ queryKey: ["search"] });
   void queryClient.invalidateQueries({ queryKey: ["tasks"] });
   void queryClient.invalidateQueries({ queryKey: queryKeys.today });
+  void queryClient.invalidateQueries({ queryKey: ["calendar"] });
 }
 
 /** Mount once (in App). Owns the EventSource for the whole app lifetime. */

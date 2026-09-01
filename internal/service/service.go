@@ -209,15 +209,37 @@ func (s *Service) CreateDocument(docType vault.DocType, title, body string) (Doc
 
 // seedFrontmatter gives new entity documents their minimal starting block.
 // Notes get none — a plain file stays a plain file.
+//
+// When the caller supplied their own frontmatter (agents do this constantly,
+// since create_document invites passing markdown), that block is authoritative:
+// we only fill in seed keys it doesn't already set. Prepending a second block
+// produced a file with two `---` fences, the second of which rendered as body
+// text.
 func (s *Service) seedFrontmatter(docType vault.DocType, body string) []byte {
+	var seed [][2]string
 	switch docType {
 	case vault.TypeProject:
-		return vault.BuildDoc([][2]string{{"status", "active"}}, body)
+		seed = [][2]string{{"status", "active"}}
 	case vault.TypeMeeting:
-		return vault.BuildDoc([][2]string{{"date", s.Now().Format("2006-01-02T15:04")}, {"people", "[]"}}, body)
+		seed = [][2]string{{"date", s.Now().Format("2006-01-02T15:04")}, {"people", "[]"}}
 	default:
+		seed = nil
+	}
+	if seed == nil {
 		return []byte(body)
 	}
+
+	raw := []byte(body)
+	if _, _, hasFrontmatter := vault.SplitFrontmatter(raw); !hasFrontmatter {
+		return vault.BuildDoc(seed, body)
+	}
+	existing := vault.ParseFrontmatter(raw)
+	for _, kv := range seed {
+		if _, present := existing[kv[0]]; !present {
+			raw = vault.SetFrontmatterKey(raw, kv[0], kv[1])
+		}
+	}
+	return raw
 }
 
 // AppendToDocument adds markdown to the end of a document, or to the end of

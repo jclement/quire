@@ -8,6 +8,7 @@
 // What stays hand-written below: shapes the Go side returns as ad-hoc JSON
 // (the small /auth/* payloads) and types that exist only in the client.
 export type {
+  AgentGuidanceResponse,
   Attachment,
   DocType,
   Birthday,

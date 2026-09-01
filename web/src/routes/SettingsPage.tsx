@@ -1,7 +1,9 @@
 // Settings (/settings): passkey management (list, add, delete) and logout —
 // only meaningful when the server runs passkey auth; in mode "none" the
-// auth/status call 404s and a calm note renders instead. Kept deliberately
-// small; the server config itself lives in config.yaml, not here.
+// auth/status call 404s and a calm note renders instead — plus the agent
+// guidance every MCP client is told to follow. Kept deliberately small; the
+// server config itself lives in config.yaml, not here.
+import { Link as RouterLink } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Fingerprint,
@@ -12,15 +14,22 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage } from "../api/client.ts";
-import { useHealth } from "../api/queries.ts";
+import { queryKeys, useHealth } from "../api/queries.ts";
 import { AUTH_STATUS_KEY } from "../components/auth/AuthGate.tsx";
 import { RegisterPanel } from "../components/auth/AuthScreens.tsx";
 import { formatRelativeTime } from "../lib/dates.ts";
+import { docHref } from "../lib/docs.ts";
+import { noAutofill } from "../lib/noAutofill.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { SkeletonRows } from "../components/Skeleton.tsx";
 
 const PASSKEYS_KEY = ["auth", "passkeys"] as const;
+const GUIDANCE_KEY = ["agent-guidance"] as const;
+
+const GUIDANCE_PLACEHOLDER =
+  "File client work under projects/. Use British spelling. " +
+  "Never edit meeting notes older than a week.";
 
 export function SettingsPage() {
   const authStatus = useQuery({
@@ -48,8 +57,100 @@ export function SettingsPage() {
       ) : (
         <PasskeySettings />
       )}
+      <AgentGuidanceSection />
       <AboutSection />
     </div>
+  );
+}
+
+// The one piece of server behavior that is genuinely the owner's to write:
+// this text is handed to every MCP client as part of the server's
+// instructions, so it is how you tell an agent the things the API can't —
+// where work belongs, what never to touch. It is stored as a normal vault
+// document, which is why the link at the bottom opens it in the editor.
+function AgentGuidanceSection() {
+  const queryClient = useQueryClient();
+  const { toast } = useUi();
+  const guidance = useQuery({
+    queryKey: GUIDANCE_KEY,
+    queryFn: api.agentGuidance,
+  });
+  // null = untouched, so the textarea keeps following the server until edited.
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: (text: string) => api.setAgentGuidance(text),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(GUIDANCE_KEY, saved);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.document(saved.path),
+      });
+      setDraft(null);
+      toast("Agent guidance saved");
+    },
+  });
+
+  const path = guidance.data?.path;
+  const text = draft ?? guidance.data?.text ?? "";
+  return (
+    <section className="border-t border-border pt-4">
+      <h2 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+        Agent guidance
+      </h2>
+      <p className="mb-2 text-xs text-muted">
+        House rules for AI agents working in the vault. quire sends this to
+        every MCP client as part of the server's instructions, so saving it
+        reaches the next agent session — nothing needs restarting.
+      </p>
+      {guidance.isPending ? (
+        <SkeletonRows count={3} />
+      ) : guidance.isError ? (
+        <p className="text-xs text-danger">{errorMessage(guidance.error)}</p>
+      ) : (
+        <>
+          <textarea
+            rows={10}
+            value={text}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={GUIDANCE_PLACEHOLDER}
+            aria-label="Agent guidance"
+            {...noAutofill("agent-guidance")}
+            className="w-full rounded border border-border bg-raised p-2 font-mono text-xs leading-relaxed text-body outline-none placeholder:text-muted focus:border-accent"
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => save.mutate(text)}
+              disabled={draft === null || save.isPending}
+              className="flex h-8 items-center rounded border border-border px-2.5 text-xs text-body hover:bg-hover hover:text-heading disabled:opacity-50"
+            >
+              {save.isPending ? "Saving…" : "Save"}
+            </button>
+            {save.isError ? (
+              <span className="text-xs text-danger">
+                {errorMessage(save.error)}
+              </span>
+            ) : null}
+            {path ? (
+              <span className="ml-auto truncate text-xs text-muted">
+                Stored as{" "}
+                {guidance.data.text ? (
+                  <RouterLink
+                    to={docHref(path)}
+                    className="font-mono text-accent hover:underline"
+                  >
+                    {path}
+                  </RouterLink>
+                ) : (
+                  <span className="font-mono">{path}</span>
+                )}{" "}
+                in the vault. Clearing it deletes the file.
+              </span>
+            ) : null}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
