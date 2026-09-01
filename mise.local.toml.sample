@@ -1,0 +1,30 @@
+# Copy to mise.local.toml (gitignored) to make `mise run dev` serve YOUR real
+# data and join your tailnet. Everything here overrides mise.toml's [env].
+#
+# With TS_HOSTNAME set, dev runs two listeners:
+#   - http://localhost:5173      — Vite with HMR (what you develop against)
+#   - https://<host>.<tailnet>.ts.net — the tsnet node (API/MCP/share pages;
+#     the SPA there says "dev build" until you `mise run build`)
+# The auth key is only needed on the first run; the node's identity persists
+# in <data>/.quire/tsnet/. Mint keys at
+# https://login.tailscale.com/admin/settings/keys (a reusable key is handy
+# for rebuilds; tag it if your ACLs expect tags).
+
+[env]
+# Real data instead of the scratch vault (vault lives at <data>/vault):
+QUIRE_DATA_DIR = "{{env.HOME}}/.data/quire"
+
+# Join the tailnet as this hostname:
+QUIRE_TS_HOSTNAME = "quire-dev"
+QUIRE_TS_AUTHKEY = "tskey-auth-REPLACE-ME"
+
+# Publish /s/* share pages to the public internet via Funnel (requires the
+# funnel node attribute in your tailnet policy):
+QUIRE_TS_FUNNEL = "true"
+
+# Optional: only this tailnet login may use the app (default: any member):
+# QUIRE_TS_OWNER = "you@example.com"
+
+# The vault is a local git repo with debounced auto-commits by default;
+# uncomment to opt out:
+# QUIRE_GIT = "false"

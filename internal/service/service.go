@@ -5,7 +5,9 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -84,16 +86,27 @@ type SearchResult struct {
 	Snippet string `json:"snippet"`
 }
 
+// Birthday is an upcoming birthday surfaced on Today (within the next week
+// — the single-dad review's "1-week and day-of" requirement).
+type Birthday struct {
+	Path      string `json:"path"`
+	Title     string `json:"title"`
+	Date      string `json:"date"` // this year's occurrence, YYYY-MM-DD
+	DaysUntil int    `json:"days_until"`
+	Age       *int   `json:"age"` // when the birthday year is known
+}
+
 // TodayPayload is the composed home-screen (and MCP `today` tool) response.
 type TodayPayload struct {
-	Date      string    `json:"date"`
-	Daily     *Document `json:"daily"`
-	Meetings  []DocMeta `json:"meetings"`
-	Overdue   []Task    `json:"overdue"`
-	DueToday  []Task    `json:"due_today"`
-	Available []Task    `json:"available"`
-	Waiting   []Task    `json:"waiting"`
-	Recent    []DocMeta `json:"recent"`
+	Date      string     `json:"date"`
+	Daily     *Document  `json:"daily"`
+	Meetings  []DocMeta  `json:"meetings"`
+	Overdue   []Task     `json:"overdue"`
+	DueToday  []Task     `json:"due_today"`
+	Available []Task     `json:"available"`
+	Waiting   []Task     `json:"waiting"`
+	Birthdays []Birthday `json:"birthdays"`
+	Recent    []DocMeta  `json:"recent"`
 }
 
 // ---- conversions ----
@@ -346,7 +359,7 @@ func (s *Service) DeleteDocument(path string) error {
 
 // Search runs the shared query grammar.
 func (s *Service) Search(q string, limit int) ([]SearchResult, error) {
-	hits, err := s.Index.Search(q, limit)
+	hits, err := s.Index.Search(q, limit, s.today())
 	if err != nil {
 		return nil, err
 	}
@@ -436,6 +449,11 @@ func (s *Service) Today() (TodayPayload, error) {
 	}
 	payload.Waiting = tasksFromRows(waitingRows)
 
+	payload.Birthdays, err = s.upcomingBirthdays(7)
+	if err != nil {
+		return payload, err
+	}
+
 	recent, err := s.Index.ListDocuments("", "", 8)
 	if err != nil {
 		return payload, err
@@ -443,4 +461,55 @@ func (s *Service) Today() (TodayPayload, error) {
 	payload.Recent = metasFromRows(recent)
 
 	return payload, nil
+}
+
+// upcomingBirthdays scans person frontmatter for birthdays falling within
+// the next `days` days. Accepts YYYY-MM-DD (age computable) or MM-DD.
+func (s *Service) upcomingBirthdays(days int) ([]Birthday, error) {
+	people, err := s.Index.PeopleWithBirthdays()
+	if err != nil {
+		return nil, err
+	}
+	now := s.Now()
+	out := []Birthday{}
+	for _, p := range people {
+		var fm struct {
+			Birthday any `json:"birthday"`
+		}
+		if err := json.Unmarshal(p.Frontmatter, &fm); err != nil {
+			continue
+		}
+		raw, _ := fm.Birthday.(string)
+		month, day, birthYear, ok := parseBirthday(raw)
+		if !ok {
+			continue
+		}
+		next := time.Date(now.Year(), month, day, 0, 0, 0, 0, now.Location())
+		if next.Before(now.Truncate(24 * time.Hour)) {
+			next = next.AddDate(1, 0, 0)
+		}
+		until := int(next.Sub(now.Truncate(24*time.Hour)).Hours() / 24)
+		if until > days {
+			continue
+		}
+		b := Birthday{Path: p.Path, Title: p.Title, Date: next.Format("2006-01-02"), DaysUntil: until}
+		if birthYear > 0 {
+			age := next.Year() - birthYear
+			b.Age = &age
+		}
+		out = append(out, b)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].DaysUntil < out[j].DaysUntil })
+	return out, nil
+}
+
+// parseBirthday accepts "YYYY-MM-DD" or "MM-DD".
+func parseBirthday(raw string) (time.Month, int, int, bool) {
+	if t, err := time.Parse("2006-01-02", raw); err == nil {
+		return t.Month(), t.Day(), t.Year(), true
+	}
+	if t, err := time.Parse("01-02", raw); err == nil {
+		return t.Month(), t.Day(), 0, true
+	}
+	return 0, 0, 0, false
 }

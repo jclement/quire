@@ -5,6 +5,7 @@ package service
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -26,11 +27,24 @@ func (s *Service) Tasks(view string) ([]Task, error) {
 // CreateTask appends a task line to today's daily note (creating it if
 // needed) — quick capture's contract: no required fields, lands in Inbox.
 func (s *Service) CreateTask(text, due, deferDate string) (Task, error) {
+	return s.CreateTaskWithAttachment(text, due, deferDate, Attachment{})
+}
+
+// CreateTaskWithAttachment is the photo→task gesture: one call captures a
+// snapped permission slip as a dated task with the image attached inline.
+// Text may be empty when an attachment is present (the filename stands in).
+func (s *Service) CreateTaskWithAttachment(text, due, deferDate string, att Attachment) (Task, error) {
 	text = strings.TrimSpace(text)
-	if text == "" {
+	if text == "" && att.Path == "" {
 		return Task{}, fmt.Errorf("task text is required")
 	}
+	if text == "" {
+		text = strings.TrimSuffix(path.Base(att.Path), path.Ext(att.Path))
+	}
 	line := "- [ ] " + text
+	if att.Markdown != "" {
+		line += " " + att.Markdown
+	}
 	if due != "" {
 		line += " 📅 " + due
 	}

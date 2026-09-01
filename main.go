@@ -21,6 +21,7 @@ import (
 	"github.com/jclement/quire/internal/auth"
 	"github.com/jclement/quire/internal/cli"
 	"github.com/jclement/quire/internal/config"
+	"github.com/jclement/quire/internal/gitback"
 	"github.com/jclement/quire/internal/index"
 	"github.com/jclement/quire/internal/mcp"
 	"github.com/jclement/quire/internal/service"
@@ -49,6 +50,8 @@ func main() {
 		err = runDoctor()
 	case "token":
 		err = runToken(os.Args[2:])
+	case "backup":
+		err = runBackup(os.Args[2:])
 	case "task":
 		// `quire task add ...` — the subcommand shape people type.
 		if len(os.Args) < 3 {
@@ -61,7 +64,7 @@ func main() {
 	case "version", "--version", "-v":
 		fmt.Println("quire", version)
 	default:
-		fmt.Fprintf(os.Stderr, "usage: quire [serve|reindex|doctor|token|task add|search|today|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: quire [serve|reindex|doctor|backup|token|task add|search|today|version]\n")
 		os.Exit(2)
 	}
 	if err != nil {
@@ -129,6 +132,21 @@ func runServe() error {
 		}
 	}()
 
+	// Git-backed vault: every index change pokes the debounced committer.
+	var committer *gitback.Committer
+	if cfg.Git {
+		committer, err = gitback.Start(ctx, cfg.VaultDir())
+		if err != nil {
+			slog.Error("vault git backing failed; continuing without it", "err", err)
+			committer = nil
+		} else {
+			svc.Index.Notify = func(ev index.Event) {
+				events.Publish(ev)
+				committer.Poke()
+			}
+		}
+	}
+
 	shares := share.NewManager(authStore, svc, cfg.BaseURL)
 	apiServer := &api.Server{Service: svc, Events: events, Shares: shares, Version: version}
 	mux := http.NewServeMux()
@@ -169,6 +187,9 @@ func runServe() error {
 	slog.Info("quire serving", "addr", cfg.Addr, "vault", cfg.VaultDir(), "auth", string(cfg.AuthMode), "version", version)
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
+	}
+	if committer != nil {
+		committer.Wait(10 * time.Second)
 	}
 	return nil
 }
@@ -271,10 +292,37 @@ func runDoctor() error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	if dangling == 0 {
-		fmt.Println("vault healthy: no dangling links")
+	// Unreferenced attachments: files no document mentions. Reported, never
+	// deleted — a reference may live outside the vault or be coming back.
+	unreferenced := 0
+	attErr := filepath.WalkDir(filepath.Join(svc.Vault.Dir, "attachments"), func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(svc.Vault.Dir, p)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		var refs int
+		if err := svc.Index.DB.QueryRow(
+			"SELECT COUNT(*) FROM fts WHERE body LIKE '%' || ? || '%'", rel).Scan(&refs); err != nil {
+			return err
+		}
+		if refs == 0 {
+			fmt.Printf("unreferenced attachment: %s\n", rel)
+			unreferenced++
+		}
+		return nil
+	})
+	if attErr != nil && !os.IsNotExist(attErr) {
+		return attErr
+	}
+
+	if dangling == 0 && unreferenced == 0 {
+		fmt.Println("vault healthy: no dangling links, no unreferenced attachments")
 	} else {
-		fmt.Printf("%d dangling link(s)\n", dangling)
+		fmt.Printf("%d dangling link(s), %d unreferenced attachment(s)\n", dangling, unreferenced)
 	}
 	return nil
 }

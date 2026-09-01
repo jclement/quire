@@ -21,16 +21,23 @@ type HTTPConfig struct {
 	// SecureCookies marks cookies Secure — true whenever the deployment is
 	// reached over HTTPS (base URL scheme).
 	SecureCookies bool
+
+	limiter *rateLimiter
 }
 
-// Routes registers the /api/v1/auth endpoints.
+// Routes registers the /api/v1/auth endpoints. The credential-guessing
+// surfaces (finish/recover) are rate limited; begin endpoints are not (they
+// only mint challenges).
 func (h *HTTPConfig) Routes(mux *http.ServeMux) {
+	if h.limiter == nil {
+		h.limiter = newRateLimiter()
+	}
 	mux.HandleFunc("GET /api/v1/auth/status", h.handleStatus)
 	mux.HandleFunc("POST /api/v1/auth/register/begin", h.handleRegisterBegin)
-	mux.HandleFunc("POST /api/v1/auth/register/finish", h.handleRegisterFinish)
+	mux.HandleFunc("POST /api/v1/auth/register/finish", h.limited(h.handleRegisterFinish))
 	mux.HandleFunc("POST /api/v1/auth/login/begin", h.handleLoginBegin)
-	mux.HandleFunc("POST /api/v1/auth/login/finish", h.handleLoginFinish)
-	mux.HandleFunc("POST /api/v1/auth/recover", h.handleRecover)
+	mux.HandleFunc("POST /api/v1/auth/login/finish", h.limited(h.handleLoginFinish))
+	mux.HandleFunc("POST /api/v1/auth/recover", h.limited(h.handleRecover))
 	mux.HandleFunc("POST /api/v1/auth/logout", h.handleLogout)
 	mux.HandleFunc("GET /api/v1/auth/passkeys", h.handleListPasskeys)
 	mux.HandleFunc("DELETE /api/v1/auth/passkeys/{id}", h.handleDeletePasskey)

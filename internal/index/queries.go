@@ -144,6 +144,19 @@ func (ix *Index) MeetingsOn(day string) ([]DocRow, error) {
 	return collectDocs(rows)
 }
 
+// PeopleWithBirthdays returns person documents that declare a birthday in
+// frontmatter (any of YYYY-MM-DD or MM-DD; the service does the date math).
+func (ix *Index) PeopleWithBirthdays() ([]DocRow, error) {
+	rows, err := ix.DB.Query(docSelect + `
+		WHERE d.type = 'person'
+		  AND json_extract(d.frontmatter_json, '$.birthday') IS NOT NULL`)
+	if err != nil {
+		return nil, fmt.Errorf("people with birthdays: %w", err)
+	}
+	defer rows.Close()
+	return collectDocs(rows)
+}
+
 // ---- tasks ----
 
 const taskSelect = `
@@ -250,15 +263,23 @@ func (ix *Index) OpenTasksDue(day string) ([]TaskRow, error) {
 // ---- search ----
 
 // Search runs the shared query grammar: bare words go to FTS (last word as a
-// prefix); `type:x` and `tag:x` filter. Returns snippeted hits.
-func (ix *Index) Search(query string, limit int) ([]SearchHit, error) {
+// prefix); `type:x` and `tag:x` filter; `is:task` switches to task search
+// with optional `due:today|overdue|week|YYYY-MM-DD`. today anchors the date
+// filters. Returns snippeted hits.
+func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
 	var terms []string
-	var docType, tag string
+	var docType, tag, due string
+	isTask := false
 	for _, tok := range strings.Fields(query) {
 		switch {
+		case tok == "is:task":
+			isTask = true
+		case strings.HasPrefix(tok, "due:"):
+			isTask = true
+			due = strings.TrimPrefix(tok, "due:")
 		case strings.HasPrefix(tok, "type:"):
 			docType = strings.TrimPrefix(tok, "type:")
 		case strings.HasPrefix(tok, "tag:"):
@@ -266,6 +287,9 @@ func (ix *Index) Search(query string, limit int) ([]SearchHit, error) {
 		default:
 			terms = append(terms, tok)
 		}
+	}
+	if isTask {
+		return ix.searchTasks(terms, tag, due, today, limit)
 	}
 
 	where := "WHERE 1=1"
@@ -304,6 +328,56 @@ func (ix *Index) Search(query string, limit int) ([]SearchHit, error) {
 	for rows.Next() {
 		var h SearchHit
 		if err := rows.Scan(&h.Path, &h.Type, &h.Title, &h.Snippet); err != nil {
+			return nil, err
+		}
+		hits = append(hits, h)
+	}
+	return hits, rows.Err()
+}
+
+// searchTasks answers `is:task` queries against the task index: substring
+// terms over the display text, tag/due filters. Hits carry the task text as
+// the title and the source document as the snippet.
+func (ix *Index) searchTasks(terms []string, tag, due, today string, limit int) ([]SearchHit, error) {
+	where := "t.done = 0"
+	args := []any{}
+	for _, term := range terms {
+		where += " AND t.text LIKE ? COLLATE NOCASE"
+		args = append(args, "%"+term+"%")
+	}
+	if tag != "" {
+		where += ` AND EXISTS (SELECT 1 FROM json_each(t.tags_json) WHERE json_each.value = ?)`
+		args = append(args, tag)
+	}
+	switch due {
+	case "":
+	case "today":
+		where += " AND t.due != '' AND t.due <= ?"
+		args = append(args, today)
+	case "overdue":
+		where += " AND t.due != '' AND t.due < ?"
+		args = append(args, today)
+	case "week":
+		where += " AND t.due != '' AND t.due <= date(?, '+7 days')"
+		args = append(args, today)
+	default:
+		where += " AND t.due = ?"
+		args = append(args, due)
+	}
+
+	rows, err := ix.DB.Query(fmt.Sprintf(`
+		SELECT t.doc_path, t.text, COALESCE(d.title, t.doc_path)
+		FROM tasks t LEFT JOIN documents d ON d.path = t.doc_path
+		WHERE %s ORDER BY t.due = '', t.due LIMIT %d`, where, limit), args...)
+	if err != nil {
+		return nil, fmt.Errorf("task search: %w", err)
+	}
+	defer rows.Close()
+	var hits []SearchHit
+	for rows.Next() {
+		var h SearchHit
+		h.Type = "task"
+		if err := rows.Scan(&h.Path, &h.Title, &h.Snippet); err != nil {
 			return nil, err
 		}
 		hits = append(hits, h)

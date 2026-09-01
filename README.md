@@ -72,6 +72,27 @@ funnel enabled the link works from anywhere; revoking it kills it instantly.
   exact hostname. On a tailnet you rarely need this: tailnet identity already
   authenticates you.
 
+### Git-backed vault
+
+The vault is a local git repository by default: auto-initialized, with debounced
+auto-commits after edits settle and a flush on shutdown. quire never pushes or merges
+— add your own remote and push whenever you like. `QUIRE_GIT=false` opts out.
+
+### Life admin
+
+Tasks recur with real semantics: `- [ ] Renew registration 🔁 every year 🛫 2026-08-10
+📅 2026-08-31` — completing it mints next year's line, and the 🛫→📅 gap (your lead
+time) carries forward. `🔁 every 3 months when done` repeats from the completion day
+instead. Person pages with a `birthday:` field feed a birthdays section on Today.
+Mobile capture is one gesture: photo → dated task with the image attached
+(`POST /api/v1/capture`).
+
+### Search
+
+One grammar everywhere (UI, API, MCP, CLI): full-text terms, `type:meeting`,
+`tag:x`, and task search with `is:task`, `due:today`, `due:overdue`, `due:week`,
+`due:2026-09-15`.
+
 ## CLI
 
 The same binary talks to a running quire (`QUIRE_URL`, `QUIRE_TOKEN` env):
@@ -115,13 +136,16 @@ claude mcp add quire --transport http https://<host>/mcp --header "Authorization
 | Task | Does |
 |---|---|
 | `mise run setup` | Zero → runnable: Go deps, frontend deps, dev vault |
-| `mise run dev` | Dev instance with HMR (no auth, localhost) |
+| `mise run dev` | Dev instance with HMR (no auth, localhost) — copy `mise.local.toml.sample` to `mise.local.toml` to point it at real data and your tailnet |
 | `mise run test` | Go (`-race`) + frontend tests |
 | `mise run lint` | vet + format-check + typecheck (never mutates) |
 | `mise run fmt` | Format everything |
 | `mise run check` | lint + test — the done gate |
 | `mise run build` | Frontend build → embedded → `bin/quire` |
 | `mise run dev:reset` | Wipe local dev state |
+
+`quire backup [file]` writes a tar.gz of the vault + auth.db (snapshotted safely) +
+config; restore by extracting into an empty data dir and running `quire reindex`.
 
 ## License
 

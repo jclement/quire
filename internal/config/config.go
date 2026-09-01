@@ -45,6 +45,11 @@ type Config struct {
 	// TSOwner, when set, restricts tailnet access to this login (e.g.
 	// "jeff@example.com"); empty accepts any member of the tailnet.
 	TSOwner string `yaml:"ts_owner"`
+
+	// Git keeps the vault in a local git repository with debounced
+	// auto-commits (commit-only; quire never pushes or merges). On by
+	// default — QUIRE_GIT=false to opt out.
+	Git bool `yaml:"git"`
 }
 
 // TailscaleEnabled reports whether the tsnet listener should run.
@@ -68,6 +73,7 @@ func Load() (Config, error) {
 		BaseURL:  "http://localhost:8321",
 		AuthMode: AuthNone,
 		LogLevel: "info",
+		Git:      true,
 	}
 
 	if v := os.Getenv("QUIRE_DATA_DIR"); v != "" {
@@ -129,6 +135,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("QUIRE_TS_OWNER"); v != "" {
 		cfg.TSOwner = v
+	}
+	if v := os.Getenv("QUIRE_GIT"); v != "" {
+		cfg.Git = v != "false" && v != "0"
 	}
 }
 

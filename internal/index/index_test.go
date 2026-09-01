@@ -138,7 +138,7 @@ func TestMeetingTaskProjectRollup(t *testing.T) {
 func TestSearch(t *testing.T) {
 	ix := newTestIndex(t)
 
-	hits, err := ix.Search("infra", 10)
+	hits, err := ix.Search("infra", 10, "2026-09-01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestSearch(t *testing.T) {
 		t.Errorf("search infra = %+v", hits)
 	}
 
-	hits, err = ix.Search("type:meeting sync", 10)
+	hits, err = ix.Search("type:meeting sync", 10, "2026-09-01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestSearch(t *testing.T) {
 		t.Errorf("filtered search = %+v", hits)
 	}
 
-	hits, err = ix.Search("tag:customer", 10)
+	hits, err = ix.Search("tag:customer", 10, "2026-09-01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,8 +163,31 @@ func TestSearch(t *testing.T) {
 	}
 
 	// FTS syntax injection must not error.
-	if _, err := ix.Search(`"unclosed AND (`, 10); err != nil {
+	if _, err := ix.Search(`"unclosed AND (`, 10, "2026-09-01"); err != nil {
 		t.Errorf("hostile query errored: %v", err)
+	}
+
+	// is:task searches the task index, due: filters by date.
+	hits, err = ix.Search("is:task diagram", 10, "2026-09-02")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].Type != "task" || hits[0].Path != "meetings/2026-09-01-acme-sync.md" {
+		t.Errorf("task search = %+v", hits)
+	}
+	hits, err = ix.Search("due:today", 10, "2026-09-02")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].Title != "Send [[Sarah Chen]] the diagram" {
+		t.Errorf("due:today = %+v", hits)
+	}
+	hits, err = ix.Search("due:week", 10, "2026-09-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 2 {
+		t.Errorf("due:week = %+v", hits)
 	}
 }
 

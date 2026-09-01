@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"path"
 	"strings"
+
+	"github.com/jclement/quire/internal/service"
 )
 
 func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
@@ -27,6 +29,33 @@ func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeData(w, http.StatusCreated, att)
+}
+
+// handleCapture is the one-gesture mobile capture: multipart form with an
+// optional "file" (photo of the permission slip) and optional "text", "due",
+// "defer" fields → an inbox task in today's daily note with the image
+// attached inline. Either text or file must be present.
+func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid multipart form")
+		return
+	}
+	var att service.Attachment
+	if file, header, err := r.FormFile("file"); err == nil {
+		defer file.Close()
+		att, err = s.Service.SaveAttachment(header.Filename, file)
+		if err != nil {
+			writeServiceError(w, err)
+			return
+		}
+	}
+	task, err := s.Service.CreateTaskWithAttachment(
+		r.FormValue("text"), r.FormValue("due"), r.FormValue("defer"), att)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusCreated, task)
 }
 
 func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {

@@ -271,10 +271,12 @@ cosign signing — per the house `shipping` pattern.
 2. **Two databases** — index.db is disposable by construction (`quire reindex` proves
    it); auth.db holds the only state that can't be rebuilt. Backup = vault + auth.db
    + config.
-3. **No git integration in v0.1** — the layout is already git-friendly; the user can
-   `git init` the vault today. Later: go-git, commit-only (debounced auto-commit +
-   history view), never merge/push — keeps us in go-git's reliable subset and git out
-   of the Docker image.
+3. **Git-backed vault, commit-only** — the vault is a local git repository (go-git;
+   auto-init, debounced 60s auto-commit, flush on shutdown, `QUIRE_GIT=false` opts
+   out). quire never merges, never pushes, never touches remotes: it is the vault's
+   time machine, not a sync system. Add a remote yourself and push whenever; quire
+   won't interfere. Staying in go-git's commit-only subset keeps git out of the
+   Docker image.
 4. **`auth: none` bound to loopback instead of a magic cookie** — a real invariant
    beats a decorative secret.
 5. **One service layer under REST and MCP** — transports cannot drift on permissions.
