@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/jclement/quire/internal/service"
+	"github.com/jclement/quire/internal/share"
 	"github.com/jclement/quire/internal/vault"
 )
 
@@ -21,6 +22,7 @@ var openAPISpec []byte
 type Server struct {
 	Service *service.Service
 	Events  *Broadcaster
+	Shares  *share.Manager
 	Version string
 }
 
@@ -38,11 +40,14 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/v1/documents/{path...}", s.handleUpdateDocument)
 	mux.HandleFunc("DELETE /api/v1/documents/{path...}", s.handleDeleteDocument)
 
+	mux.HandleFunc("POST /api/v1/rename", s.handleRenameDocument)
+
 	mux.HandleFunc("GET /api/v1/search", s.handleSearch)
 
 	mux.HandleFunc("GET /api/v1/tasks", s.handleListTasks)
 	mux.HandleFunc("POST /api/v1/tasks", s.handleCreateTask)
 	mux.HandleFunc("POST /api/v1/tasks/{id}/toggle", s.handleToggleTask)
+	mux.HandleFunc("PATCH /api/v1/tasks/{id}", s.handleEditTask)
 
 	mux.HandleFunc("GET /api/v1/daily/{date}", s.handleGetDaily)
 	mux.HandleFunc("POST /api/v1/daily/{date}", s.handleEnsureDaily)
@@ -52,6 +57,12 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/files/{path...}", s.handleServeFile)
 
 	mux.HandleFunc("GET /api/v1/events", s.handleEvents)
+
+	if s.Shares != nil {
+		mux.HandleFunc("GET /api/v1/shares", s.handleListShares)
+		mux.HandleFunc("POST /api/v1/shares", s.handleCreateShare)
+		mux.HandleFunc("DELETE /api/v1/shares/{token}", s.handleRevokeShare)
+	}
 }
 
 // ---- envelope ----

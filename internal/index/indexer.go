@@ -245,10 +245,10 @@ func insertTasks(tx *sql.Tx, rel string, fm map[string]any, tasks []markdown.Tas
 
 		tagsJSON, _ := json.Marshal(orEmptyList(t.Tags))
 		_, err := tx.Exec(`INSERT INTO tasks
-			(id, doc_path, line, text, raw_text, done, due, defer_date, completed_on, priority, waiting, project_norm, tags_json)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(id, doc_path, line, text, raw_text, done, due, defer_date, completed_on, priority, waiting, recur, project_norm, tags_json)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			id, rel, t.Line, t.Text, t.RawText, t.Done, t.Due, t.Defer, t.CompletedOn,
-			t.Priority, t.Waiting, docProject, string(tagsJSON))
+			t.Priority, t.Waiting, t.Recur, docProject, string(tagsJSON))
 		if err != nil {
 			return fmt.Errorf("inserting task in %s: %w", rel, err)
 		}

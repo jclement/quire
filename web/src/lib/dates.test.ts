@@ -7,6 +7,7 @@ import {
   dueInfo,
   formatDayHeading,
   groupByDate,
+  nextMondayISO,
   nextSaturdayISO,
   parseISODate,
   todayISO,
@@ -43,6 +44,17 @@ describe("nextSaturdayISO", () => {
 
   test("from a Saturday returns the following Saturday, not the same day", () => {
     expect(nextSaturdayISO("2026-09-05")).toBe("2026-09-12");
+  });
+});
+
+describe("nextMondayISO", () => {
+  test("finds the coming Monday", () => {
+    // 2026-09-01 is a Tuesday; the next Monday is the 7th.
+    expect(nextMondayISO("2026-09-01")).toBe("2026-09-07");
+  });
+
+  test("from a Monday returns the following Monday, not the same day", () => {
+    expect(nextMondayISO("2026-09-07")).toBe("2026-09-14");
   });
 });
 

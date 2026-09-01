@@ -41,3 +41,18 @@ export function docHref(path: string): string {
 export function dailyPath(date: string): string {
   return `daily/${date}.md`;
 }
+
+/**
+ * The vault path a route is showing, or null when the route isn't a document
+ * page — how context-sensitive palette commands (share, rename) find their
+ * subject.
+ */
+export function vaultPathFromRoute(pathname: string): string | null {
+  const decoded = decodeURIComponent(pathname);
+  if (decoded.startsWith("/doc/")) return decoded.slice("/doc/".length) || null;
+  if (decoded.startsWith("/daily/")) {
+    const date = decoded.slice("/daily/".length);
+    return date ? dailyPath(date) : null;
+  }
+  return null;
+}

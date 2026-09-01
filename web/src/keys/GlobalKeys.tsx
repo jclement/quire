@@ -37,6 +37,10 @@ export function GlobalKeys() {
     setOverlay,
     newDocType,
     setNewDocType,
+    shareDocPath,
+    setShareDocPath,
+    renameDocPath,
+    setRenameDocPath,
     listNavRef,
     escapeStackRef,
     keyActionsRef,
@@ -95,6 +99,10 @@ export function GlobalKeys() {
           if (!listNavRef.current?.toggle) return false;
           listNavRef.current.toggle();
           return true;
+        case "s":
+          if (!listNavRef.current?.snooze) return false;
+          listNavRef.current.snooze();
+          return true;
         case "Escape": {
           const handler = escapeStackRef.current.at(-1);
           if (!handler) return false;
@@ -103,6 +111,25 @@ export function GlobalKeys() {
         }
         default: {
           const action = keyActionsRef.current.get(event.key);
+          if (!action) return false;
+          action();
+          return true;
+        }
+      }
+    };
+
+    /** Cmd/Ctrl combos that work even while typing (palette excluded). */
+    const handleModKey = (event: KeyboardEvent): boolean => {
+      switch (event.key) {
+        case "[":
+          window.history.back();
+          return true;
+        case "]":
+          window.history.forward();
+          return true;
+        default: {
+          // Page-registered combos like "mod+e" (view cycling on documents).
+          const action = keyActionsRef.current.get(`mod+${event.key.toLowerCase()}`);
           if (!action) return false;
           action();
           return true;
@@ -124,15 +151,26 @@ export function GlobalKeys() {
         overlays.palette ||
         overlays.capture ||
         overlays.keymap ||
-        newDocType !== null;
+        newDocType !== null ||
+        shareDocPath !== null ||
+        renameDocPath !== null;
       if (overlayOpen) {
         if (event.key === "Escape") {
           setOverlay("palette", false);
           setOverlay("capture", false);
           setOverlay("keymap", false);
           setNewDocType(null);
+          setShareDocPath(null);
+          setRenameDocPath(null);
         }
         return;
+      }
+      // Mod combos (history, Cmd+E) run even from inside the editor.
+      if ((event.metaKey || event.ctrlKey) && !event.altKey) {
+        if (handleModKey(event)) {
+          event.preventDefault();
+          return;
+        }
       }
       if (modified || isEditableTarget(event.target)) return;
 
@@ -156,6 +194,10 @@ export function GlobalKeys() {
     setOverlay,
     newDocType,
     setNewDocType,
+    shareDocPath,
+    setShareDocPath,
+    renameDocPath,
+    setRenameDocPath,
     listNavRef,
     escapeStackRef,
     keyActionsRef,

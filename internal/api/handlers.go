@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/vault"
 )
 
@@ -89,6 +90,23 @@ func (s *Server) handleDeleteDocument(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) handleRenameDocument(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Path         string `json:"path"`
+		NewPath      string `json:"new_path"`
+		RewriteLinks bool   `json:"rewrite_links"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	result, err := s.Service.RenameDocument(body.Path, body.NewPath, body.RewriteLinks)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, result)
+}
+
 // ---- search ----
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +149,19 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeData(w, http.StatusCreated, task)
+}
+
+func (s *Server) handleEditTask(w http.ResponseWriter, r *http.Request) {
+	var edit service.TaskEdit
+	if !decodeBody(w, r, &edit) {
+		return
+	}
+	task, err := s.Service.EditTask(r.PathValue("id"), edit)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, task)
 }
 
 func (s *Server) handleToggleTask(w http.ResponseWriter, r *http.Request) {

@@ -70,6 +70,7 @@ type Task struct {
 	Defer       *string  `json:"defer"`
 	Priority    int      `json:"priority"`
 	Waiting     bool     `json:"waiting"`
+	Recur       *string  `json:"recur"`
 	Project     *string  `json:"project"`
 	Tags        []string `json:"tags"`
 	CompletedOn *string  `json:"completed_on"`
@@ -135,6 +136,7 @@ func taskFromRow(t index.TaskRow) Task {
 		Defer:       optStr(t.Defer),
 		Priority:    t.Priority,
 		Waiting:     t.Waiting,
+		Recur:       optStr(t.Recur),
 		Project:     optStr(t.ProjectPath),
 		Tags:        t.Tags,
 		CompletedOn: optStr(t.CompletedOn),

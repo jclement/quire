@@ -35,6 +35,8 @@ type TaskRow struct {
 	CompletedOn string
 	Priority    int
 	Waiting     bool
+	Recur       string
+	RawText     string
 	ProjectPath string
 	Tags        []string
 }
@@ -146,7 +148,7 @@ func (ix *Index) MeetingsOn(day string) ([]DocRow, error) {
 
 const taskSelect = `
 	SELECT t.id, t.doc_path, COALESCE(d.title, t.doc_path), t.line, t.text, t.done,
-	       t.due, t.defer_date, t.completed_on, t.priority, t.waiting, t.tags_json,
+	       t.due, t.defer_date, t.completed_on, t.priority, t.waiting, t.recur, t.raw_text, t.tags_json,
 	       COALESCE((
 	           SELECT MIN(n.path) FROM docnames n
 	           WHERE n.name IN (SELECT tl.target_norm FROM task_links tl WHERE tl.task_id = t.id UNION SELECT t.project_norm)
@@ -341,7 +343,7 @@ func collectTasks(rows *sql.Rows) ([]TaskRow, error) {
 		var t TaskRow
 		var tagsJSON string
 		if err := rows.Scan(&t.ID, &t.DocPath, &t.DocTitle, &t.Line, &t.Text, &t.Done,
-			&t.Due, &t.Defer, &t.CompletedOn, &t.Priority, &t.Waiting, &tagsJSON, &t.ProjectPath); err != nil {
+			&t.Due, &t.Defer, &t.CompletedOn, &t.Priority, &t.Waiting, &t.Recur, &t.RawText, &tagsJSON, &t.ProjectPath); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(tagsJSON), &t.Tags); err != nil {

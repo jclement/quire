@@ -29,6 +29,19 @@ export interface Task {
   project: string | null;
   tags: string[];
   completed_on: string | null;
+  /** Recurrence spec, e.g. "every year" / "every 3 months when done". */
+  recur: string | null;
+}
+
+/**
+ * PATCH /tasks/<id> body. Omitted field = unchanged; empty string = clear.
+ * NOTE: task IDs are content-derived, so an edit (or toggle) can change the
+ * id — always adopt the returned Task and invalidate task lists.
+ */
+export interface TaskEdit {
+  due?: string;
+  defer?: string;
+  priority?: 0 | 1 | 2 | 3;
 }
 
 export interface Link {
@@ -69,6 +82,25 @@ export interface Health {
   status: string;
   version: string;
   update_available: boolean;
+}
+
+/** A public share link for one document (served at /s/<token>). */
+export interface ShareInfo {
+  token: string;
+  doc_path: string;
+  created_at: string;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  view_count: number;
+  last_viewed_at?: string | null;
+  /** Absolute URL (tailnet/funnel hostname when configured). */
+  url: string;
+}
+
+/** POST /rename result: the moved document + paths whose links were rewritten. */
+export interface RenameResult {
+  document: Document;
+  rewritten: string[];
 }
 
 export interface AttachmentUpload {

@@ -35,9 +35,19 @@ export function addDaysISO(iso: string, days: number): string {
 
 /** The next Saturday strictly after `fromISO` — the quick-capture "Weekend" chip. */
 export function nextSaturdayISO(fromISO: string): string {
+  return nextWeekdayISO(fromISO, 6);
+}
+
+/** The next Monday strictly after `fromISO` — the snooze "Next week" chip. */
+export function nextMondayISO(fromISO: string): string {
+  return nextWeekdayISO(fromISO, 1);
+}
+
+/** Next occurrence of `weekday` (0 Sun … 6 Sat) strictly after `fromISO`. */
+function nextWeekdayISO(fromISO: string, weekday: number): string {
   const date = parseISODate(fromISO);
   if (!date) return fromISO;
-  const daysUntil = (6 - date.getDay() + 7) % 7 || 7;
+  const daysUntil = (weekday - date.getDay() + 7) % 7 || 7;
   date.setDate(date.getDate() + daysUntil);
   return toISODate(date);
 }

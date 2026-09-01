@@ -35,6 +35,7 @@ type Task struct {
 	CompletedOn string
 	Priority    int // 0 none, 1 high, 2 medium, 3 low
 	Waiting     bool
+	Recur       string // recurrence spec, e.g. "every year" / "every 3 months when done"
 	Tags        []string
 	Links       []Link // wikilinks inside the task text
 }
@@ -54,9 +55,12 @@ var (
 	// deliberately misses tags inside inline code — an accepted edge.
 	tagRe  = regexp.MustCompile(`(?:^|\s)#([\p{L}][\p{L}\p{N}_/-]*)`)
 	taskRe = regexp.MustCompile(`^\s*[-*+] \[([ xX])\] (.+)$`)
-	h1Re   = regexp.MustCompile(`^# (.+)$`)
-	dateRe = regexp.MustCompile(`^\s*(\d{4}-\d{2}-\d{2})`)
-	fence  = regexp.MustCompile("^\\s*(```|~~~)")
+	// Recurrence: "🔁 every year", "🔁 every 3 months when done". The spec
+	// vocabulary is deliberately tiny — see DESIGN.md "Tasks".
+	recurRe = regexp.MustCompile(`🔁\s*(every(?:\s+\d+)?\s+(?:day|week|month|year)s?(?:\s+when\s+done)?)`)
+	h1Re    = regexp.MustCompile(`^# (.+)$`)
+	dateRe  = regexp.MustCompile(`^\s*(\d{4}-\d{2}-\d{2})`)
+	fence   = regexp.MustCompile("^\\s*(```|~~~)")
 )
 
 // Scan parses a document's raw bytes. docPath seeds task IDs; bodyOffset
@@ -122,6 +126,10 @@ func parseTask(docPath string, line int, done bool, rawText string) Task {
 	t := Task{Line: line, Done: done, RawText: rawText}
 
 	text := rawText
+	if m := recurRe.FindStringSubmatch(text); m != nil {
+		t.Recur = strings.Join(strings.Fields(m[1]), " ")
+		text = strings.Replace(text, m[0], "", 1)
+	}
 	text = extractDated(text, markDue, &t.Due)
 	text = extractDated(text, markDefer, &t.Defer)
 	text = extractDated(text, markDone, &t.CompletedOn)

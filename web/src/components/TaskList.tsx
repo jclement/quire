@@ -1,16 +1,19 @@
 // Dense task rows (~32px) shared by the task views and Today: checkbox,
-// lightly-rendered text, due badge, project chip, source-doc link. Rendered as
-// grouped sections (Upcoming's date buckets, Today's overdue/due/available)
-// with ONE roving selection across all groups, so j/k, Enter, and x behave as
-// a single list per page.
+// lightly-rendered text, due badge, recur badge, project chip, source-doc
+// link, and a snooze popover (`s` key or the hover calendar button). Rendered
+// as grouped sections (Upcoming's date buckets, Today's overdue/due/available)
+// with ONE roving selection across all groups, so j/k, Enter, x, and s behave
+// as a single list per page.
 import { Link as RouterLink, useNavigate } from "@tanstack/react-router";
-import { Fragment, useMemo } from "react";
+import { CalendarClock, Repeat } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
 import { useToggleTask } from "../api/queries.ts";
 import type { Task } from "../api/types.ts";
 import { dueInfo, formatShortDate, todayISO } from "../lib/dates.ts";
 import { docHref } from "../lib/docs.ts";
 import { splitWikilinks } from "../lib/wikilinks.ts";
 import { useListNav } from "../keys/useListNav.ts";
+import { SnoozePopover } from "./SnoozePopover.tsx";
 
 export interface TaskGroup {
   key: string;
@@ -41,6 +44,8 @@ export function GroupedTaskList({
 }: GroupedTaskListProps) {
   const navigate = useNavigate();
   const toggleTask = useToggleTask();
+  // Which task's snooze popover is open (by id; ids are unique per list).
+  const [snoozeId, setSnoozeId] = useState<string | null>(null);
   const allTasks = useMemo(
     () => groups.flatMap((group) => group.tasks),
     [groups],
@@ -60,6 +65,8 @@ export function GroupedTaskList({
     enabled: navEnabled,
     onOpen: (task) => void navigate({ to: docHref(task.doc_path) }),
     onToggle: (task) => toggleTask.mutate(task),
+    onSnooze: (task) =>
+      setSnoozeId((current) => (current === task.id ? null : task.id)),
   });
 
   return (
@@ -91,6 +98,12 @@ export function GroupedTaskList({
                   onSelect={() => nav.setIndex(start + at)}
                   onToggle={() => toggleTask.mutate(task)}
                   showCompletedOn={showCompletedOn}
+                  snoozeOpen={snoozeId === task.id}
+                  onSnoozeOpen={() => {
+                    nav.setIndex(start + at);
+                    setSnoozeId(task.id);
+                  }}
+                  onSnoozeClose={() => setSnoozeId(null)}
                 />
               ))}
             </ul>
@@ -138,6 +151,9 @@ interface TaskRowProps {
   onSelect: () => void;
   onToggle: () => void;
   showCompletedOn: boolean;
+  snoozeOpen: boolean;
+  onSnoozeOpen: () => void;
+  onSnoozeClose: () => void;
 }
 
 function TaskRow({
@@ -147,6 +163,9 @@ function TaskRow({
   onSelect,
   onToggle,
   showCompletedOn,
+  snoozeOpen,
+  onSnoozeOpen,
+  onSnoozeClose,
 }: TaskRowProps) {
   const due = task.due ? dueInfo(task.due, todayISO()) : null;
   return (
@@ -154,7 +173,7 @@ function TaskRow({
       ref={rowRef}
       tabIndex={-1}
       onClick={onSelect}
-      className={`flex min-h-8 items-center gap-2.5 px-2 py-1 outline-none ${
+      className={`group relative flex min-h-8 items-center gap-2.5 px-2 py-1 outline-none ${
         selected ? "bg-selected" : "hover:bg-hover"
       }`}
     >
@@ -183,6 +202,29 @@ function TaskRow({
       >
         <InlineTaskText text={task.text} />
       </span>
+      {task.recur ? (
+        <Repeat
+          className="size-3 shrink-0 text-muted"
+          aria-label={`Repeats: ${task.recur}`}
+        >
+          <title>{task.recur}</title>
+        </Repeat>
+      ) : null}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          if (snoozeOpen) onSnoozeClose();
+          else onSnoozeOpen();
+        }}
+        aria-label={`Snooze: ${task.text}`}
+        className={`hidden size-6 shrink-0 items-center justify-center rounded text-muted hover:bg-border hover:text-heading md:flex ${
+          snoozeOpen ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        }`}
+      >
+        <CalendarClock className="size-3.5" aria-hidden="true" />
+      </button>
+      {snoozeOpen ? <SnoozePopover task={task} onClose={onSnoozeClose} /> : null}
       {showCompletedOn && task.completed_on ? (
         <span className="shrink-0 font-mono text-[10px] text-muted">
           ✓ {formatShortDate(task.completed_on, todayISO())}

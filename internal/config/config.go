@@ -32,7 +32,23 @@ type Config struct {
 	BaseURL  string   `yaml:"base_url"`
 	AuthMode AuthMode `yaml:"auth_mode"`
 	LogLevel string   `yaml:"log_level"`
+
+	// Tailscale (tsnet): setting ts_hostname makes quire join the tailnet as
+	// its own node, serving HTTPS at https://<hostname>.<tailnet>.ts.net with
+	// requests authenticated by tailnet identity. The auth key is only needed
+	// until the node registers; state persists under .quire/tsnet.
+	TSHostname string `yaml:"ts_hostname"`
+	TSAuthKey  string `yaml:"ts_authkey"`
+	// TSFunnel exposes ONLY the /s/* share pages to the public internet via
+	// Tailscale Funnel (the tailnet must allow funnel in its ACLs).
+	TSFunnel bool `yaml:"ts_funnel"`
+	// TSOwner, when set, restricts tailnet access to this login (e.g.
+	// "jeff@example.com"); empty accepts any member of the tailnet.
+	TSOwner string `yaml:"ts_owner"`
 }
+
+// TailscaleEnabled reports whether the tsnet listener should run.
+func (c Config) TailscaleEnabled() bool { return c.TSHostname != "" }
 
 // VaultDir is where the user's markdown lives — the only tree quire treats as
 // user-owned content.
@@ -101,6 +117,18 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("QUIRE_LOG_LEVEL"); v != "" {
 		cfg.LogLevel = v
+	}
+	if v := os.Getenv("QUIRE_TS_HOSTNAME"); v != "" {
+		cfg.TSHostname = v
+	}
+	if v := os.Getenv("QUIRE_TS_AUTHKEY"); v != "" {
+		cfg.TSAuthKey = v
+	}
+	if v := os.Getenv("QUIRE_TS_FUNNEL"); v != "" {
+		cfg.TSFunnel = v == "true" || v == "1"
+	}
+	if v := os.Getenv("QUIRE_TS_OWNER"); v != "" {
+		cfg.TSOwner = v
 	}
 }
 

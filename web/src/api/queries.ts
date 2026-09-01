@@ -8,7 +8,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { api, type ListDocumentsParams } from "./client.ts";
-import type { Task, TaskView } from "./types.ts";
+import type { Task, TaskEdit, TaskView } from "./types.ts";
 
 export const queryKeys = {
   health: ["health"] as const,
@@ -17,6 +17,7 @@ export const queryKeys = {
   search: (q: string) => ["search", q] as const,
   tasks: (view: TaskView) => ["tasks", view] as const,
   today: ["today"] as const,
+  shares: ["shares"] as const,
 };
 
 /** Fetched once for the footer version — never polled (per the API contract). */
@@ -103,6 +104,24 @@ export function useToggleTask() {
     },
     onSettled: () => invalidateTaskCaches(queryClient),
   });
+}
+
+/**
+ * Task field edits (snooze, priority). Not optimistic: an edit can change the
+ * content-derived task id, so we adopt the server's answer via invalidation
+ * rather than patching caches under a stale id.
+ */
+export function useEditTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; edit: TaskEdit }) =>
+      api.editTask(input.id, input.edit),
+    onSettled: () => invalidateTaskCaches(queryClient),
+  });
+}
+
+export function useShares() {
+  return useQuery({ queryKey: queryKeys.shares, queryFn: api.listShares });
 }
 
 /** Quick capture: new task into today's daily note. */

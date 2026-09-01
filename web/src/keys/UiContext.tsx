@@ -19,9 +19,16 @@ export interface ListNavHandlers {
   move: (delta: number) => void;
   open: () => void;
   toggle?: () => void;
+  /** `s`: open the snooze popover for the selected task. */
+  snooze?: () => void;
 }
 
 export type OverlayName = "palette" | "capture" | "keymap";
+
+export interface Toast {
+  id: number;
+  message: string;
+}
 
 interface UiContextValue {
   overlays: Record<OverlayName, boolean>;
@@ -29,6 +36,15 @@ interface UiContextValue {
   /** Non-null while the "New <type>" dialog is open (palette or browse pages). */
   newDocType: DocType | null;
   setNewDocType: (type: DocType | null) => void;
+  /** Non-null while the share dialog is open, holding the doc's vault path. */
+  shareDocPath: string | null;
+  setShareDocPath: (path: string | null) => void;
+  /** Non-null while the rename dialog is open, holding the doc's vault path. */
+  renameDocPath: string | null;
+  setRenameDocPath: (path: string | null) => void;
+  /** Transient confirmations ("Link copied"); auto-dismissed. */
+  toasts: Toast[];
+  toast: (message: string) => void;
   /** The list currently receiving j/k/Enter/x — set by useListNav. */
   listNavRef: RefObject<ListNavHandlers | null>;
   /** Escape pops the most recently pushed handler (one level out). */
@@ -39,6 +55,9 @@ interface UiContextValue {
   registerKey: (key: string, action: () => void) => () => void;
 }
 
+/** How long a toast stays up. */
+const TOAST_MS = 3_000;
+
 const UiContext = createContext<UiContextValue | null>(null);
 
 export function UiProvider({ children }: { children: ReactNode }) {
@@ -48,6 +67,10 @@ export function UiProvider({ children }: { children: ReactNode }) {
     keymap: false,
   });
   const [newDocType, setNewDocType] = useState<DocType | null>(null);
+  const [shareDocPath, setShareDocPath] = useState<string | null>(null);
+  const [renameDocPath, setRenameDocPath] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const nextToastId = useRef(0);
   const listNavRef = useRef<ListNavHandlers | null>(null);
   const escapeStackRef = useRef<(() => void)[]>([]);
   const keyActionsRef = useRef(new Map<string, () => void>());
@@ -67,6 +90,15 @@ export function UiProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const toast = useCallback((message: string) => {
+    nextToastId.current += 1;
+    const id = nextToastId.current;
+    setToasts((current) => [...current, { id, message }]);
+    setTimeout(() => {
+      setToasts((current) => current.filter((entry) => entry.id !== id));
+    }, TOAST_MS);
+  }, []);
+
   const registerKey = useCallback((key: string, action: () => void) => {
     keyActionsRef.current.set(key, action);
     return () => {
@@ -82,13 +114,29 @@ export function UiProvider({ children }: { children: ReactNode }) {
       setOverlay,
       newDocType,
       setNewDocType,
+      shareDocPath,
+      setShareDocPath,
+      renameDocPath,
+      setRenameDocPath,
+      toasts,
+      toast,
       listNavRef,
       escapeStackRef,
       pushEscape,
       keyActionsRef,
       registerKey,
     }),
-    [overlays, setOverlay, newDocType, pushEscape, registerKey],
+    [
+      overlays,
+      setOverlay,
+      newDocType,
+      shareDocPath,
+      renameDocPath,
+      toasts,
+      toast,
+      pushEscape,
+      registerKey,
+    ],
   );
 
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>;

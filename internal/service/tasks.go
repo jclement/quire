@@ -5,7 +5,9 @@ package service
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jclement/quire/internal/index"
 	"github.com/jclement/quire/internal/markdown"
@@ -84,8 +86,18 @@ func (s *Service) ToggleTask(id string) (Task, error) {
 		return Task{}, fmt.Errorf("task %s: source line not found (file changed); reindex and retry", id)
 	}
 
-	newLine, nowDone := toggleTaskLine(lines[lineIdx], s.today())
+	original := lines[lineIdx]
+	newLine, nowDone := toggleTaskLine(original, s.today())
 	lines[lineIdx] = newLine
+
+	// Completing a recurring task spawns its next occurrence on the line
+	// below. If the spec is malformed we complete anyway — losing a
+	// checkbox-tick to a typo'd recurrence would be worse.
+	if nowDone && row.Recur != "" {
+		if next, err := nextOccurrenceLine(original, row, s.today()); err == nil {
+			lines = append(lines[:lineIdx+1], append([]string{next}, lines[lineIdx+1:]...)...)
+		}
+	}
 
 	if _, err := s.UpdateDocument(row.DocPath, strings.Join(lines, "\n"), f.SHA256); err != nil {
 		return Task{}, err
@@ -110,6 +122,93 @@ func (s *Service) ToggleTask(id string) (Task, error) {
 		}
 	}
 	return Task{}, fmt.Errorf("task vanished after toggle")
+}
+
+// TaskEdit is a partial task update; nil fields are untouched, empty strings
+// clear (a snooze is due:"2026-09-05"; un-scheduling is due:"").
+type TaskEdit struct {
+	Due      *string `json:"due"`
+	Defer    *string `json:"defer"`
+	Priority *int    `json:"priority"` // 0 none, 1 high, 2 medium, 3 low
+}
+
+// EditTask rewrites a task's metadata markers on its source line — the
+// snooze/reschedule path. Only that one line changes.
+func (s *Service) EditTask(id string, edit TaskEdit) (Task, error) {
+	row, err := s.Index.TaskByID(id)
+	if err != nil {
+		return Task{}, fmt.Errorf("task %s: %w", id, vault.ErrNotFound)
+	}
+	for _, d := range []*string{edit.Due, edit.Defer} {
+		if d != nil && *d != "" {
+			if _, err := time.Parse("2006-01-02", *d); err != nil {
+				return Task{}, fmt.Errorf("invalid date %q (want YYYY-MM-DD)", *d)
+			}
+		}
+	}
+
+	f, err := s.Vault.Read(row.DocPath)
+	if err != nil {
+		return Task{}, err
+	}
+	lines := strings.Split(string(f.Raw), "\n")
+	lineIdx := findTaskLine(lines, row)
+	if lineIdx < 0 {
+		return Task{}, fmt.Errorf("task %s: source line not found (file changed); reindex and retry", id)
+	}
+
+	line := lines[lineIdx]
+	if edit.Due != nil {
+		line = setMarkerDate(line, "📅", row.Due, *edit.Due)
+	}
+	if edit.Defer != nil {
+		line = setMarkerDate(line, "🛫", row.Defer, *edit.Defer)
+	}
+	if edit.Priority != nil {
+		line = setPriority(line, *edit.Priority)
+	}
+	lines[lineIdx] = line
+
+	if _, err := s.UpdateDocument(row.DocPath, strings.Join(lines, "\n"), f.SHA256); err != nil {
+		return Task{}, err
+	}
+	newScan := markdown.Scan(row.DocPath, []byte(strings.Join(lines, "\n")))
+	for _, t := range newScan.Tasks {
+		if t.Line == lineIdx+1 {
+			if updated, err := s.Index.TaskByID(t.ID); err == nil {
+				return taskFromRow(updated), nil
+			}
+		}
+	}
+	return Task{}, fmt.Errorf("task vanished after edit")
+}
+
+// setMarkerDate sets, replaces, or removes an emoji-dated marker on a line.
+func setMarkerDate(line, marker, oldDate, newDate string) string {
+	switch {
+	case oldDate != "" && newDate != "":
+		return replaceMarkerDate(line, marker, oldDate, newDate)
+	case oldDate != "" && newDate == "":
+		re := regexp.MustCompile(`\s*` + regexp.QuoteMeta(marker) + `\s*` + regexp.QuoteMeta(oldDate))
+		return re.ReplaceAllString(line, "")
+	case newDate != "":
+		return line + " " + marker + " " + newDate
+	default:
+		return line
+	}
+}
+
+var prioritySymbols = map[int]string{1: "⏫", 2: "🔼", 3: "🔽"}
+
+func setPriority(line string, priority int) string {
+	for _, sym := range prioritySymbols {
+		line = strings.ReplaceAll(line, " "+sym, "")
+		line = strings.ReplaceAll(line, sym, "")
+	}
+	if sym, ok := prioritySymbols[priority]; ok {
+		line += " " + sym
+	}
+	return line
 }
 
 // findTaskLine locates the task's line: trust the line hint when it still

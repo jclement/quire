@@ -8,8 +8,11 @@ import type {
   DocType,
   Document,
   Health,
+  RenameResult,
   SearchResult,
+  ShareInfo,
   Task,
+  TaskEdit,
   TaskView,
   TodayPayload,
 } from "./types.ts";
@@ -122,12 +125,40 @@ export const api = {
       method: "POST",
     }),
 
+  editTask: (id: string, edit: TaskEdit) =>
+    request<Task>(
+      `/api/v1/tasks/${encodeURIComponent(id)}`,
+      jsonInit("PATCH", edit),
+    ),
+
   getDaily: (date: string) => request<Document>(`/api/v1/daily/${date}`),
 
   createDaily: (date: string) =>
     request<Document>(`/api/v1/daily/${date}`, { method: "POST" }),
 
   today: () => request<TodayPayload>("/api/v1/today"),
+
+  listShares: () => request<ShareInfo[]>("/api/v1/shares"),
+
+  createShare: (path: string, expiresInDays?: number) =>
+    request<ShareInfo>(
+      "/api/v1/shares",
+      jsonInit("POST", {
+        path,
+        ...(expiresInDays ? { expires_in_days: expiresInDays } : {}),
+      }),
+    ),
+
+  revokeShare: (token: string) =>
+    request<void>(`/api/v1/shares/${encodeURIComponent(token)}`, {
+      method: "DELETE",
+    }),
+
+  rename: (path: string, newPath: string, rewriteLinks: boolean) =>
+    request<RenameResult>(
+      "/api/v1/rename",
+      jsonInit("POST", { path, new_path: newPath, rewrite_links: rewriteLinks }),
+    ),
 
   uploadAttachment: (file: File) => {
     const form = new FormData();

@@ -169,6 +169,34 @@ candidates, never guesses), `complete_task`, `today` (the flagship composed call
 Agent guardrails: read-only tokens are the default posture; no delete tool; every
 API/MCP write is audit-logged (principal, tool, path, when).
 
+## Tailscale (tsnet) — first-class
+
+Setting `ts_hostname` makes quire join the tailnet as its own node (tsnet, state in
+`.quire/tsnet/`, auth key needed only until registered). It serves
+`https://<hostname>.<tailnet>.ts.net` with Tailscale-managed TLS, and requests are
+authenticated by **tailnet identity**: WhoIs on the connection resolves a tailnet peer
+to the owner principal — no passkeys or tokens needed on-tailnet. `ts_owner` optionally
+pins access to one login. A bearer token presented over the tailnet is still honored
+*with its scopes* — a deliberately read-only agent token keeps its reduced blast
+radius.
+
+With `ts_funnel: true`, the same `:443` listener also accepts public internet traffic
+(Tailscale Funnel). The per-request gate is the whole public story: WhoIs succeeds →
+tailnet peer, full app; WhoIs fails → public visitor, `/s/*` share pages only, and
+every other path (including `/api/v1/health`) 404s so the internet can't even learn
+quire exists. Rejected alternative: a separate funnel port — one listener with an
+identity gate has fewer moving parts and can't be misconfigured into exposing the app.
+
+## Sharing
+
+Shares live in auth.db (grants, not derivable from the vault): 16-char random token →
+one document, optional expiry, soft revocation, view counts. `/s/<token>` renders a
+standalone server-side page (goldmark, raw HTML escaped, wikilinks flattened to styled
+text — their targets are private, callout markers become bold titles). Attachments are
+served through the share only if the shared document references them; markdown never
+serves through the file route. Revoked/expired/nonexistent are indistinguishable 404s.
+Share URLs advertise the tailnet/funnel hostname automatically when tsnet is up.
+
 ## Auth modes
 
 ```yaml
@@ -181,7 +209,7 @@ auth:
   magic-cookie-URL idea is rejected (no real boundary on a single-user machine; URL
   secrets leak into history/screenshots). `mise run dev` and bare `quire serve` with no
   config default to this, print the URL.
-- `passkey` — the tailnet deployment. `go-webauthn/webauthn`; server-side sessions
+- `passkey` — for non-tailnet HTTPS deployments. `go-webauthn/webauthn`; server-side sessions
   (32-byte token, HttpOnly, SameSite=Lax, Secure off-localhost, 30-day sliding).
   Bootstrap: first visit registers the first passkey and prints 8 single-use recovery
   codes (argon2id-hashed). Recovery login forces new passkey registration and burns the
@@ -267,17 +295,20 @@ cosign signing — per the house `shipping` pattern.
 
 ## v0.1 — in / out
 
-**In:** serve/reindex/doctor; vault CRUD + watcher + FTS5 search; notes, daily notes,
-meetings, tasks fully; person/project/company as typed stubs with backlink+task
-rollups; editor (edit/read) with the details above; palette; Today; Inbox; quick
+**In:** serve/reindex/doctor/token; vault CRUD + watcher + FTS5 search; notes, daily
+notes, meetings, tasks fully; person/project/company as typed stubs with backlink+task
+rollups; editor (edit/read/split) with the details above; palette; Today; Inbox; quick
 capture; image paste; Mermaid + callouts + highlighting; MCP over bearer tokens;
-Docker + compose; responsive mobile.
+Docker + compose; responsive mobile; **Tailscale/tsnet with funnel**; **sharing
+links** (the "sitter link"); **recurrence with lead time** (`🔁 every N unit [when
+done]`; the due−defer gap is the lead time and carries forward);
+**rename-with-link-rewriting** (only links that stop resolving get rewritten; the old
+name becomes the alias so prose reads unchanged); **task edit/snooze** (surgical
+marker rewrites); **CLI verbs** (`quire task add/search/today` over the HTTP API);
+**passkeys + recovery codes** (bootstrap-claimable, then session-gated).
 
-**Out (v0.2+):** passkeys UI polish beyond bootstrap, sharing links (the "sitter
-link"), email digest (promoted high for life-admin — first v0.2 item with recurrence),
-recurrence with lead time, split editor, rename-link-rewriting, OAuth for MCP, CLI
-verbs (`quire task add` — early v0.2, it's a few hundred lines against our own API),
-go-git history, import wizard, multi-user (indefinitely deferred).
+**Out (v0.2+):** email digest (needs SMTP decisions), OAuth for MCP, go-git history,
+import wizard, photo→task capture gesture, multi-user (indefinitely deferred).
 
 ## Performance budgets (10k docs / 50k tasks)
 

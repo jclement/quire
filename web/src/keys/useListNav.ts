@@ -10,6 +10,8 @@ export interface UseListNavOptions<T> {
   items: T[];
   onOpen: (item: T) => void;
   onToggle?: (item: T) => void;
+  /** `s` on the selected row (task lists open their snooze popover). */
+  onSnooze?: (item: T) => void;
   /** Set false while another list on the same page should own the keys. */
   enabled?: boolean;
 }
@@ -25,6 +27,7 @@ export function useListNav<T>({
   items,
   onOpen,
   onToggle,
+  onSnooze,
   enabled = true,
 }: UseListNavOptions<T>): ListNav {
   const { listNavRef } = useUi();
@@ -35,9 +38,9 @@ export function useListNav<T>({
   const rowsRef = useRef(new Map<number, HTMLElement>());
   // Latest values live in a ref (written post-render) so the handlers
   // registered with the key context never go stale.
-  const stateRef = useRef({ items, index, onOpen, onToggle });
+  const stateRef = useRef({ items, index, onOpen, onToggle, onSnooze });
   useEffect(() => {
-    stateRef.current = { items, index, onOpen, onToggle };
+    stateRef.current = { items, index, onOpen, onToggle, onSnooze };
   });
 
   const move = useCallback((delta: number) => {
@@ -51,6 +54,7 @@ export function useListNav<T>({
   }, []);
 
   const hasToggle = onToggle !== undefined;
+  const hasSnooze = onSnooze !== undefined;
   useEffect(() => {
     if (!enabled) return;
     const handlers = {
@@ -71,12 +75,23 @@ export function useListNav<T>({
             if (item !== undefined) toggle?.(item);
           }
         : undefined,
+      snooze: hasSnooze
+        ? () => {
+            const {
+              items: current,
+              index: at,
+              onSnooze: snooze,
+            } = stateRef.current;
+            const item = current[at];
+            if (item !== undefined) snooze?.(item);
+          }
+        : undefined,
     };
     listNavRef.current = handlers;
     return () => {
       if (listNavRef.current === handlers) listNavRef.current = null;
     };
-  }, [enabled, move, hasToggle, listNavRef]);
+  }, [enabled, move, hasToggle, hasSnooze, listNavRef]);
 
   const rowRef = useCallback(
     (rowIndex: number) => (el: HTMLElement | null) => {

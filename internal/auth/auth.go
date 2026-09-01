@@ -44,23 +44,51 @@ type Store struct {
 	DB *sql.DB
 }
 
-// authSchemaVersion tracks additive migrations. auth.db is precious: schema
-// changes must migrate, never drop (unlike index.db).
-const authSchemaVersion = 1
-
-const authSchema = `
-CREATE TABLE IF NOT EXISTS api_tokens (
-	id           INTEGER PRIMARY KEY,
-	name         TEXT NOT NULL,
-	prefix       TEXT NOT NULL,             -- first 8 chars after sk_, for display
-	hash         TEXT NOT NULL UNIQUE,      -- sha256 of the full token
-	scopes       TEXT NOT NULL,             -- comma-separated
-	created_at   TEXT NOT NULL,
-	expires_at   TEXT NOT NULL DEFAULT '',  -- RFC3339 or '' for never
-	revoked_at   TEXT NOT NULL DEFAULT '',
-	last_used_at TEXT NOT NULL DEFAULT ''
-);
-`
+// migrations are additive and applied in order; PRAGMA user_version records
+// how far this database has migrated. auth.db is precious: schema changes
+// must migrate, never drop (unlike index.db).
+var migrations = []string{
+	// v1: API tokens
+	`CREATE TABLE IF NOT EXISTS api_tokens (
+		id           INTEGER PRIMARY KEY,
+		name         TEXT NOT NULL,
+		prefix       TEXT NOT NULL,             -- first 8 chars after sk_, for display
+		hash         TEXT NOT NULL UNIQUE,      -- sha256 of the full token
+		scopes       TEXT NOT NULL,             -- comma-separated
+		created_at   TEXT NOT NULL,
+		expires_at   TEXT NOT NULL DEFAULT '',  -- RFC3339 or '' for never
+		revoked_at   TEXT NOT NULL DEFAULT '',
+		last_used_at TEXT NOT NULL DEFAULT ''
+	);`,
+	// v2: share links
+	`CREATE TABLE IF NOT EXISTS shares (
+		token          TEXT PRIMARY KEY,
+		doc_path       TEXT NOT NULL,
+		created_at     TEXT NOT NULL,
+		expires_at     TEXT NOT NULL DEFAULT '',
+		revoked_at     TEXT NOT NULL DEFAULT '',
+		view_count     INTEGER NOT NULL DEFAULT 0,
+		last_viewed_at TEXT NOT NULL DEFAULT ''
+	);`,
+	// v3: passkeys, recovery codes, sessions
+	`CREATE TABLE IF NOT EXISTS passkeys (
+		id              TEXT PRIMARY KEY, -- hex credential id
+		name            TEXT NOT NULL DEFAULT '',
+		credential_json TEXT NOT NULL,
+		created_at      TEXT NOT NULL,
+		last_used_at    TEXT NOT NULL DEFAULT ''
+	);
+	CREATE TABLE IF NOT EXISTS recovery_codes (
+		hash    TEXT PRIMARY KEY, -- argon2id
+		used_at TEXT NOT NULL DEFAULT ''
+	);
+	CREATE TABLE IF NOT EXISTS sessions (
+		token_hash   TEXT PRIMARY KEY, -- sha256
+		created_at   TEXT NOT NULL,
+		expires_at   TEXT NOT NULL,
+		last_seen_at TEXT NOT NULL DEFAULT ''
+	);`,
+}
 
 // Open opens (creating if needed) auth.db at path.
 func Open(path string) (*Store, error) {
@@ -74,15 +102,40 @@ func Open(path string) (*Store, error) {
 	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return nil, fmt.Errorf("auth schema version: %w", err)
 	}
-	if version < authSchemaVersion {
-		if _, err := db.Exec(authSchema); err != nil {
-			return nil, fmt.Errorf("migrating auth db: %w", err)
+	for v := version; v < len(migrations); v++ {
+		if _, err := db.Exec(migrations[v]); err != nil {
+			return nil, fmt.Errorf("auth migration %d: %w", v+1, err)
 		}
-		if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", authSchemaVersion)); err != nil {
+		if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", v+1)); err != nil {
 			return nil, err
 		}
 	}
 	return &Store{DB: db}, nil
+}
+
+// OwnerPrincipal is the vault owner with every scope — auth mode "none" and
+// tailnet-identified requests act as this.
+func OwnerPrincipal() Principal {
+	return Principal{Name: "owner", Scopes: map[string]bool{ScopeRead: true, ScopeWrite: true, ScopeTasks: true}}
+}
+
+// BearerPrincipal resolves the request's Authorization header to a token
+// principal (exported for the tailnet listener, which does its own gating).
+func (s *Store) BearerPrincipal(r *http.Request) (Principal, error) {
+	return s.authenticateBearer(r)
+}
+
+// RequiredScope maps a request to the scope it needs (see requiredScope).
+func RequiredScope(r *http.Request) string { return requiredScope(r) }
+
+// Protected reports whether a path is subject to authentication at all.
+// The SPA shell and share pages are not; neither are the auth endpoints
+// themselves (they gate their own flows) or health.
+func Protected(path string) bool {
+	if path == "/api/v1/health" || strings.HasPrefix(path, "/api/v1/auth/") {
+		return false
+	}
+	return strings.HasPrefix(path, "/api/") || path == "/mcp"
 }
 
 // Middleware authenticates requests according to mode and enforces scopes.
@@ -90,8 +143,7 @@ func Open(path string) (*Store, error) {
 // /api and /mcp — the SPA itself holds no data; its API calls are checked).
 func (s *Store) Middleware(mode config.AuthMode, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		protected := strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/mcp"
-		if !protected || r.URL.Path == "/api/v1/health" {
+		if !Protected(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -99,12 +151,36 @@ func (s *Store) Middleware(mode config.AuthMode, next http.Handler) http.Handler
 		var principal Principal
 		switch mode {
 		case config.AuthNone:
-			principal = Principal{Name: "owner", Scopes: map[string]bool{ScopeRead: true, ScopeWrite: true, ScopeTasks: true}}
+			principal = OwnerPrincipal()
 		case config.AuthTokenOnly:
 			p, err := s.authenticateBearer(r)
 			if err != nil {
 				w.Header().Set("WWW-Authenticate", `Bearer realm="quire"`)
 				http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"valid bearer token required"}}`, http.StatusUnauthorized)
+				return
+			}
+			principal = p
+		case config.AuthPasskey:
+			// Bearer tokens (agents, scripts) and session cookies (humans)
+			// both work; an explicit-but-invalid bearer is rejected rather
+			// than falling through to the cookie.
+			if r.Header.Get("Authorization") != "" {
+				p, err := s.authenticateBearer(r)
+				if err != nil {
+					http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"invalid bearer token"}}`, http.StatusUnauthorized)
+					return
+				}
+				principal = p
+				break
+			}
+			cookie, err := r.Cookie(SessionCookie)
+			if err != nil {
+				http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"login required"}}`, http.StatusUnauthorized)
+				return
+			}
+			p, err := s.SessionPrincipal(cookie.Value)
+			if err != nil {
+				http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"session expired — log in again"}}`, http.StatusUnauthorized)
 				return
 			}
 			principal = p

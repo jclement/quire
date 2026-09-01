@@ -12,7 +12,7 @@ import (
 )
 
 // schemaVersion is stored in PRAGMA user_version. Bump on any schema change.
-const schemaVersion = 1
+const schemaVersion = 2
 
 const schema = `
 CREATE TABLE documents (
@@ -65,6 +65,7 @@ CREATE TABLE tasks (
 	completed_on TEXT NOT NULL DEFAULT '',
 	priority     INTEGER NOT NULL DEFAULT 0,
 	waiting      INTEGER NOT NULL DEFAULT 0,
+	recur        TEXT NOT NULL DEFAULT '',
 	project_norm TEXT NOT NULL DEFAULT '', -- joins docnames for the project
 	tags_json    TEXT NOT NULL DEFAULT '[]'
 );
