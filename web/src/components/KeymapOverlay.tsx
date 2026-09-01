@@ -60,7 +60,9 @@ export function KeymapOverlay() {
       label="Keyboard shortcuts"
     >
       <div className="max-h-[70vh] overflow-y-auto p-4">
-        <h2 className="mb-3 text-sm font-semibold text-heading">Keyboard shortcuts</h2>
+        <h2 className="mb-3 text-sm font-semibold text-heading">
+          Keyboard shortcuts
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           {GROUPS.map((group) => (
             <section key={group.title}>

@@ -80,7 +80,9 @@ export function useToggleTask() {
     mutationFn: (task: Task) => api.toggleTask(task.id),
     onMutate: async (task) => {
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
-      const snapshots = queryClient.getQueriesData<Task[]>({ queryKey: ["tasks"] });
+      const snapshots = queryClient.getQueriesData<Task[]>({
+        queryKey: ["tasks"],
+      });
       for (const [key, tasks] of snapshots) {
         if (!tasks) continue;
         queryClient.setQueryData(

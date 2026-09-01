@@ -20,7 +20,7 @@ export interface WikilinkLinkSegment {
 
 export type WikilinkSegment = WikilinkTextSegment | WikilinkLinkSegment;
 
-const WIKILINK_PATTERN = /\[\[([^\[\]|]+)(?:\|([^\[\]]+))?\]\]/g;
+const WIKILINK_PATTERN = /\[\[([^[\]|]+)(?:\|([^[\]]+))?\]\]/g;
 
 /** Splits text into literal runs and wikilinks, in order. */
 export function splitWikilinks(text: string): WikilinkSegment[] {

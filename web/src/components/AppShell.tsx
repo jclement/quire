@@ -34,9 +34,21 @@ const PRIMARY_NAV: NavEntry[] = [
 const LIBRARY_NAV: NavEntry[] = [
   { to: "/browse/note", label: "Notes", icon: DOC_TYPE_INFO.note.icon },
   { to: "/browse/person", label: "People", icon: DOC_TYPE_INFO.person.icon },
-  { to: "/browse/company", label: "Companies", icon: DOC_TYPE_INFO.company.icon },
-  { to: "/browse/project", label: "Projects", icon: DOC_TYPE_INFO.project.icon },
-  { to: "/browse/meeting", label: "Meetings", icon: DOC_TYPE_INFO.meeting.icon },
+  {
+    to: "/browse/company",
+    label: "Companies",
+    icon: DOC_TYPE_INFO.company.icon,
+  },
+  {
+    to: "/browse/project",
+    label: "Projects",
+    icon: DOC_TYPE_INFO.project.icon,
+  },
+  {
+    to: "/browse/meeting",
+    label: "Meetings",
+    icon: DOC_TYPE_INFO.meeting.icon,
+  },
 ];
 
 const MOBILE_NAV: NavEntry[] = [
@@ -55,7 +67,13 @@ function dailyNavEntry(): NavEntry {
   };
 }
 
-function NavLink({ entry, onNavigate }: { entry: NavEntry; onNavigate?: () => void }) {
+function NavLink({
+  entry,
+  onNavigate,
+}: {
+  entry: NavEntry;
+  onNavigate?: () => void;
+}) {
   return (
     <Link
       to={entry.to}
@@ -98,7 +116,9 @@ function breadcrumb(pathname: string): string {
 }
 
 function Header({ onMenu }: { onMenu: () => void }) {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   return (
     <header className="flex h-10 shrink-0 items-center gap-3 border-b border-border bg-raised px-3">
       <button
@@ -109,7 +129,10 @@ function Header({ onMenu }: { onMenu: () => void }) {
       >
         <Menu className="size-4" aria-hidden="true" />
       </button>
-      <Link to="/today" className="font-serif text-base italic font-semibold text-heading">
+      <Link
+        to="/today"
+        className="font-serif text-base italic font-semibold text-heading"
+      >
         quire
       </Link>
       <span className="truncate font-mono text-xs text-muted">
@@ -133,14 +156,26 @@ function Footer() {
   );
 }
 
-function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+function MobileDrawer({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 md:hidden">
-      <div className="absolute inset-0 bg-black/40" aria-hidden="true" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/40"
+        aria-hidden="true"
+        onClick={onClose}
+      />
       <div className="absolute inset-y-0 left-0 w-64 border-r border-border bg-raised pt-[env(safe-area-inset-top)]">
         <div className="flex h-10 items-center justify-between border-b border-border px-3">
-          <span className="font-serif text-base font-semibold italic text-heading">quire</span>
+          <span className="font-serif text-base font-semibold italic text-heading">
+            quire
+          </span>
           <button
             type="button"
             onClick={onClose}

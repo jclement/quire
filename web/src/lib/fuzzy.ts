@@ -30,7 +30,8 @@ export function fuzzyScore(query: string, target: string): number {
   for (const char of q) {
     const found = t.indexOf(char, tIndex);
     if (found === -1) return -1;
-    if (found === 0 || !isWordChar(t[found - 1] ?? " ")) score += BOUNDARY_BONUS;
+    if (found === 0 || !isWordChar(t[found - 1] ?? " "))
+      score += BOUNDARY_BONUS;
     if (found === lastMatch + 1) score += CONSECUTIVE_BONUS;
     score += 1;
     lastMatch = found;
@@ -54,7 +55,11 @@ export function fuzzyRank<T>(
   getText: (item: T) => string,
 ): T[] {
   const scored = items
-    .map((item, order) => ({ item, order, score: fuzzyScore(query, getText(item)) }))
+    .map((item, order) => ({
+      item,
+      order,
+      score: fuzzyScore(query, getText(item)),
+    }))
     .filter((entry) => entry.score >= 0);
   scored.sort((a, b) => b.score - a.score || a.order - b.order);
   return scored.map((entry) => entry.item);

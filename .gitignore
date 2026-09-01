@@ -12,3 +12,6 @@ web/dist/
 
 # OS noise
 .DS_Store
+
+# Embedded SPA build output (rebuilt by mise run build)
+internal/webui/dist/

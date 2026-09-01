@@ -6,6 +6,12 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    // The Go binary embeds the built SPA from internal/webui/dist
+    // (webui_prod.go's go:embed), so the production build lands there.
+    outDir: "../internal/webui/dist",
+    emptyOutDir: true,
+  },
   server: {
     proxy: {
       "/api": "http://127.0.0.1:8321",

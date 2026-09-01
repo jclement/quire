@@ -28,27 +28,29 @@ export function useListNav<T>({
   enabled = true,
 }: UseListNavOptions<T>): ListNav {
   const { listNavRef } = useUi();
-  const [index, setIndex] = useState(0);
+  // Selection is clamped at read time rather than synced by effect, so a
+  // shrinking list never leaves a dangling index.
+  const [rawIndex, setRawIndex] = useState(0);
+  const index = Math.min(rawIndex, Math.max(0, items.length - 1));
   const rowsRef = useRef(new Map<number, HTMLElement>());
-  // Latest values in refs so the registered handlers never go stale.
+  // Latest values live in a ref (written post-render) so the handlers
+  // registered with the key context never go stale.
   const stateRef = useRef({ items, index, onOpen, onToggle });
-  stateRef.current = { items, index, onOpen, onToggle };
-
-  // Keep the selection in range as items load/change.
   useEffect(() => {
-    if (index >= items.length) setIndex(Math.max(0, items.length - 1));
-  }, [items.length, index]);
+    stateRef.current = { items, index, onOpen, onToggle };
+  });
 
   const move = useCallback((delta: number) => {
     const { items: current, index: at } = stateRef.current;
     if (current.length === 0) return;
     const next = Math.min(current.length - 1, Math.max(0, at + delta));
-    setIndex(next);
+    setRawIndex(next);
     const row = rowsRef.current.get(next);
     row?.focus({ preventScroll: true });
     row?.scrollIntoView({ block: "nearest" });
   }, []);
 
+  const hasToggle = onToggle !== undefined;
   useEffect(() => {
     if (!enabled) return;
     const handlers = {
@@ -58,9 +60,13 @@ export function useListNav<T>({
         const item = current[at];
         if (item !== undefined) open(item);
       },
-      toggle: onToggle
+      toggle: hasToggle
         ? () => {
-            const { items: current, index: at, onToggle: toggle } = stateRef.current;
+            const {
+              items: current,
+              index: at,
+              onToggle: toggle,
+            } = stateRef.current;
             const item = current[at];
             if (item !== undefined) toggle?.(item);
           }
@@ -70,7 +76,7 @@ export function useListNav<T>({
     return () => {
       if (listNavRef.current === handlers) listNavRef.current = null;
     };
-  }, [enabled, move, onToggle !== undefined, listNavRef]);
+  }, [enabled, move, hasToggle, listNavRef]);
 
   const rowRef = useCallback(
     (rowIndex: number) => (el: HTMLElement | null) => {
@@ -80,5 +86,5 @@ export function useListNav<T>({
     [],
   );
 
-  return { index, setIndex, rowRef };
+  return { index, setIndex: setRawIndex, rowRef };
 }

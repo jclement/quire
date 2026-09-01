@@ -26,7 +26,9 @@ export function ErrorState({ error }: { error: unknown }) {
   return (
     <EmptyState
       icon={CloudOff}
-      title={unreachable ? "Can't reach the quire server" : "Something went wrong"}
+      title={
+        unreachable ? "Can't reach the quire server" : "Something went wrong"
+      }
       hint={
         unreachable
           ? "Start the server, then this page will load itself."

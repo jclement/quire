@@ -1,14 +1,19 @@
 // Cmd/Ctrl+K palette: fuzzy document search (server-side match, client-side
 // re-rank so exact titles win) merged with static commands. A leading ">"
 // restricts to commands. Full-screen on mobile, top-anchored panel on desktop.
-// The doc query keeps previous results while typing so the list never flashes.
+// The inner content mounts fresh each open (blank query, instant focus), and
+// the doc query keeps previous results while typing so the list never flashes.
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronsRight, Plus, Search, Sunrise, type LucideIcon } from "lucide-react";
 import {
-  useEffect,
+  ChevronsRight,
+  Plus,
+  Search,
+  Sunrise,
+  type LucideIcon,
+} from "lucide-react";
+import {
   useMemo,
-  useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
@@ -32,7 +37,13 @@ interface Command {
   run: (ui: ReturnType<typeof useUi>, go: (to: string) => void) => void;
 }
 
-const NEW_DOC_TYPES: DocType[] = ["note", "person", "company", "project", "meeting"];
+const NEW_DOC_TYPES: DocType[] = [
+  "note",
+  "person",
+  "company",
+  "project",
+  "meeting",
+];
 
 const COMMANDS: Command[] = [
   ...NEW_DOC_TYPES.map<Command>((type) => ({
@@ -62,8 +73,7 @@ const COMMANDS: Command[] = [
 ];
 
 type PaletteItem =
-  | { kind: "command"; command: Command }
-  | { kind: "doc"; doc: DocMeta };
+  { kind: "command"; command: Command } | { kind: "doc"; doc: DocMeta };
 
 function itemText(item: PaletteItem): string {
   return item.kind === "command" ? item.command.label : item.doc.title;
@@ -84,36 +94,54 @@ function usePaletteItems(query: string): PaletteItem[] {
   });
 
   return useMemo(() => {
-    const commands = COMMANDS.map<PaletteItem>((command) => ({ kind: "command", command }));
+    const commands = COMMANDS.map<PaletteItem>((command) => ({
+      kind: "command",
+      command,
+    }));
     if (commandsOnly) return fuzzyRank(text, commands, itemText);
-    const docs = (docsQuery.data ?? []).map<PaletteItem>((doc) => ({ kind: "doc", doc }));
-    return fuzzyRank(text, [...docs, ...commands], itemText).slice(0, RESULT_LIMIT);
+    const docs = (docsQuery.data ?? []).map<PaletteItem>((doc) => ({
+      kind: "doc",
+      doc,
+    }));
+    return fuzzyRank(text, [...docs, ...commands], itemText).slice(
+      0,
+      RESULT_LIMIT,
+    );
   }, [commandsOnly, text, docsQuery.data]);
 }
 
 export function CommandPalette() {
+  const { overlays, setOverlay } = useUi();
+  const open = overlays.palette;
+  const close = () => setOverlay("palette", false);
+  return (
+    <Modal
+      open={open}
+      onClose={close}
+      variant="palette"
+      label="Command palette"
+    >
+      <PaletteContent close={close} />
+    </Modal>
+  );
+}
+
+function PaletteContent({ close }: { close: () => void }) {
   const ui = useUi();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const open = ui.overlays.palette;
   const items = usePaletteItems(query);
 
-  // Fresh state every time it opens; focus is instant (no data wait).
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      setIndex(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, [open]);
+  // Selection resets when the query changes — adjusted during render rather
+  // than in an effect (the React-endorsed pattern; avoids a double render pass).
+  const [lastQuery, setLastQuery] = useState(query);
+  if (lastQuery !== query) {
+    setLastQuery(query);
+    setIndex(0);
+  }
 
-  useEffect(() => setIndex(0), [query]);
-
-  const close = () => ui.setOverlay("palette", false);
   const go = (to: string) => void navigate({ to });
-
   const pick = (item: PaletteItem) => {
     close();
     if (item.kind === "doc") go(docHref(item.doc.path));
@@ -133,11 +161,11 @@ export function CommandPalette() {
   };
 
   return (
-    <Modal open={open} onClose={close} variant="palette" label="Command palette">
+    <>
       <div className="flex items-center gap-2 border-b border-border px-3">
         <Search className="size-4 shrink-0 text-muted" aria-hidden="true" />
         <input
-          ref={inputRef}
+          autoFocus
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onKeyDown}
@@ -162,7 +190,7 @@ export function CommandPalette() {
           </li>
         ) : null}
       </ul>
-    </Modal>
+    </>
   );
 }
 
@@ -178,7 +206,9 @@ function PaletteRow({
   onHover: () => void;
 }) {
   const Icon =
-    item.kind === "command" ? item.command.icon : DOC_TYPE_INFO[item.doc.type].icon;
+    item.kind === "command"
+      ? item.command.icon
+      : DOC_TYPE_INFO[item.doc.type].icon;
   return (
     <li role="option" aria-selected={selected}>
       <button

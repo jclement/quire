@@ -49,7 +49,8 @@ function transformCallouts(tree: Root): void {
     if (firstText?.type !== "text") return;
 
     const newline = firstText.value.indexOf("\n");
-    const firstLine = newline === -1 ? firstText.value : firstText.value.slice(0, newline);
+    const firstLine =
+      newline === -1 ? firstText.value : firstText.value.slice(0, newline);
     const marker = parseCalloutMarker(firstLine);
     if (!marker) return;
 
@@ -65,7 +66,11 @@ function transformCallouts(tree: Root): void {
 }
 
 /** Removes the `[!type] title` line, leaving the callout body. */
-function stripMarkerLine(paragraph: Paragraph, firstText: Text, newline: number): void {
+function stripMarkerLine(
+  paragraph: Paragraph,
+  firstText: Text,
+  newline: number,
+): void {
   if (newline === -1) {
     paragraph.children.shift();
     // The title line may be the whole paragraph; drop trailing break nodes so

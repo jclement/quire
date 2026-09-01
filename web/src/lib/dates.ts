@@ -37,7 +37,7 @@ export function addDaysISO(iso: string, days: number): string {
 export function nextSaturdayISO(fromISO: string): string {
   const date = parseISODate(fromISO);
   if (!date) return fromISO;
-  const daysUntil = ((6 - date.getDay() + 7) % 7) || 7;
+  const daysUntil = (6 - date.getDay() + 7) % 7 || 7;
   date.setDate(date.getDate() + daysUntil);
   return toISODate(date);
 }
@@ -112,13 +112,19 @@ export function groupByDate<T>(
   const dated = [...byDate.entries()]
     .filter((entry): entry is [string, T[]] => entry[0] !== null)
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([date, grouped]) => ({ date: date as string | null, items: grouped }));
+    .map(([date, grouped]) => ({
+      date: date as string | null,
+      items: grouped,
+    }));
   const undated = byDate.get(null);
   return undated ? [...dated, { date: null, items: undated }] : dated;
 }
 
 /** Relative timestamp for mtimes: "just now", "5m ago", "2h ago", "3d ago", "Aug 12". */
-export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+export function formatRelativeTime(
+  iso: string,
+  now: Date = new Date(),
+): string {
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return iso;
   const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);

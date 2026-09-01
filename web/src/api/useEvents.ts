@@ -11,8 +11,13 @@ import { queryKeys } from "./queries.ts";
 const INITIAL_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;
 
-function invalidateForDocEvent(queryClient: QueryClient, event: DocEvent): void {
-  void queryClient.invalidateQueries({ queryKey: queryKeys.document(event.path) });
+function invalidateForDocEvent(
+  queryClient: QueryClient,
+  event: DocEvent,
+): void {
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.document(event.path),
+  });
   // Lists, search results, task views, and Today can all reference any doc;
   // invalidation is cheap (refetch only happens for mounted queries).
   void queryClient.invalidateQueries({ queryKey: ["documents"] });

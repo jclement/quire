@@ -3,12 +3,7 @@
 // logic on purpose.
 
 export type DocType =
-  | "note"
-  | "person"
-  | "company"
-  | "project"
-  | "meeting"
-  | "daily";
+  "note" | "person" | "company" | "project" | "meeting" | "daily";
 
 export interface DocMeta {
   path: string;

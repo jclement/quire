@@ -13,7 +13,12 @@ describe("splitWikilinks", () => {
   test("extracts links with surrounding text", () => {
     expect(splitWikilinks("see [[Sarah Chen]] today")).toEqual([
       { kind: "text", text: "see " },
-      { kind: "link", target: "Sarah Chen", display: "Sarah Chen", inner: "Sarah Chen" },
+      {
+        kind: "link",
+        target: "Sarah Chen",
+        display: "Sarah Chen",
+        inner: "Sarah Chen",
+      },
       { kind: "text", text: " today" },
     ]);
   });

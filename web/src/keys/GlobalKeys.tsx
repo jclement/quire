@@ -36,6 +36,7 @@ export function GlobalKeys() {
     overlays,
     setOverlay,
     newDocType,
+    setNewDocType,
     listNavRef,
     escapeStackRef,
     keyActionsRef,
@@ -59,7 +60,10 @@ export function GlobalKeys() {
         case "g":
           chordPending = true;
           clearTimeout(chordTimer);
-          chordTimer = setTimeout(() => (chordPending = false), CHORD_TIMEOUT_MS);
+          chordTimer = setTimeout(
+            () => (chordPending = false),
+            CHORD_TIMEOUT_MS,
+          );
           return true;
         case "?":
           setOverlay("keymap", true);
@@ -113,9 +117,23 @@ export function GlobalKeys() {
         setOverlay("palette", !overlays.palette);
         return;
       }
-      // Overlays own their keyboard handling while open.
-      if (overlays.palette || overlays.capture || overlays.keymap) return;
-      if (newDocType !== null) return;
+      // Overlays own their keyboard handling while open. Escape here is the
+      // fallback for overlays holding no focus (e.g. the keymap sheet) — when
+      // focus IS inside a modal, its own handler stops propagation first.
+      const overlayOpen =
+        overlays.palette ||
+        overlays.capture ||
+        overlays.keymap ||
+        newDocType !== null;
+      if (overlayOpen) {
+        if (event.key === "Escape") {
+          setOverlay("palette", false);
+          setOverlay("capture", false);
+          setOverlay("keymap", false);
+          setNewDocType(null);
+        }
+        return;
+      }
       if (modified || isEditableTarget(event.target)) return;
 
       if (chordPending && event.key !== "g") {
@@ -137,6 +155,7 @@ export function GlobalKeys() {
     overlays,
     setOverlay,
     newDocType,
+    setNewDocType,
     listNavRef,
     escapeStackRef,
     keyActionsRef,

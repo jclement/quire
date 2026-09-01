@@ -15,13 +15,14 @@ import type {
 } from "./types.ts";
 
 export class ApiError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-    public readonly status: number,
-  ) {
+  readonly code: string;
+  readonly status: number;
+
+  constructor(code: string, message: string, status: number) {
     super(message);
     this.name = "ApiError";
+    this.code = code;
+    this.status = status;
   }
 }
 
@@ -43,7 +44,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const code = body?.error?.code ?? "UNKNOWN";
-    const message = body?.error?.message ?? `Request failed (${response.status})`;
+    const message =
+      body?.error?.message ?? `Request failed (${response.status})`;
     throw new ApiError(code, message, response.status);
   }
   return body.data as T;
@@ -108,7 +110,11 @@ export const api = {
   createTask: (text: string, due?: string, defer?: string) =>
     request<Task>(
       "/api/v1/tasks",
-      jsonInit("POST", { text, ...(due ? { due } : {}), ...(defer ? { defer } : {}) }),
+      jsonInit("POST", {
+        text,
+        ...(due ? { due } : {}),
+        ...(defer ? { defer } : {}),
+      }),
     ),
 
   toggleTask: (id: string) =>

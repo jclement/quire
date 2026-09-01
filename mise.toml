@@ -37,7 +37,7 @@ run = "go test -race ./..."
 [tasks.lint]
 description = "Lint + typecheck + format-check (never mutates)"
 run = [
-  "gofmt -l . | (! grep .)",
+  "test -z \"$(gofmt -l main.go internal)\" || { gofmt -l main.go internal; exit 1; }",
   "go vet ./...",
   "bun run --cwd web typecheck",
   "bun run --cwd web lint",
@@ -58,7 +58,7 @@ depends = ["lint", "test"]
 description = "Production build: frontend → embedded assets → single binary"
 run = [
   "bun run --cwd web build",
-  "go build -o bin/quire .",
+  "go build -tags prod -o bin/quire .",
 ]
 
 [tasks."dev:reset"]
