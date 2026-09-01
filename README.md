@@ -25,7 +25,16 @@ The dev instance runs with `QUIRE_AUTH_MODE=none` against a scratch vault in
 
 ## Running for real
 
-See [docker-compose.example.yml](docker-compose.example.yml). Create API tokens with:
+See [docker-compose.example.yml](docker-compose.example.yml). Images are published
+to ghcr:
+
+| Tag | What it is |
+|---|---|
+| `:edge` | Every push to `main` — what to run if you want today's work |
+| `:main-<sha>` | One specific commit, to pin or roll back to |
+| `:latest`, `:x.y.z` | Tagged releases (also published as signed binaries) |
+
+Create API tokens with:
 
 ```sh
 docker compose exec quire quire token create claude read write tasks

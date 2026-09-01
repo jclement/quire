@@ -1,0 +1,19 @@
+# Image for the branch builds (see .github/workflows/edge.yml). The binaries
+# are cross-compiled natively on the runner and copied in per architecture —
+# building Go inside an emulated arm64 container would take an order of
+# magnitude longer for an identical result.
+#
+# Kept separate from ./Dockerfile because GoReleaser supplies exactly one
+# binary named `quire` in its build context, while a multi-platform buildx
+# build has to choose one via TARGETARCH.
+FROM alpine:3.22
+ARG TARGETARCH
+RUN apk add --no-cache ca-certificates tzdata
+COPY dist/quire_linux_${TARGETARCH} /usr/local/bin/quire
+ENV QUIRE_DATA_DIR=/data \
+    QUIRE_ADDR=0.0.0.0:8321 \
+    QUIRE_AUTH_MODE=token-only
+VOLUME /data
+EXPOSE 8321
+ENTRYPOINT ["quire"]
+CMD ["serve"]

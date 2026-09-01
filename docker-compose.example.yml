@@ -3,6 +3,8 @@
 #   docker compose exec quire quire token create claude read write tasks
 services:
   quire:
+    # :latest is the newest tagged release; :edge tracks main if you would
+    # rather run today's work, and :main-<sha> pins one commit.
     image: ghcr.io/jclement/quire:latest
     restart: unless-stopped
     ports:
