@@ -156,6 +156,17 @@ paths:
         move untouched. Returns {document, rewritten: [paths]}. 409 when
         new_path exists.
       responses: { "200": { description: "data: RenameResult" }, "409": { description: target exists } }
+  /api/v1/agent-guidance:
+    get:
+      summary: The owner's guidance for AI agents
+      description: >
+        Stored as an ordinary vault document (AGENTS.md) and composed into the
+        MCP server's `instructions`, so every connecting agent is told the
+        house rules. Returns {path, text}.
+      responses: { "200": { description: "data: AgentGuidanceResponse" } }
+    put:
+      summary: Replace the agent guidance (empty text removes it)
+      responses: { "200": { description: "data: AgentGuidanceResponse" } }
   /api/v1/link:
     post:
       summary: Add or remove a wikilink in a list-valued frontmatter key

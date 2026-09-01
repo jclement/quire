@@ -247,6 +247,33 @@ func (s *Server) handleCalendar(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, payload)
 }
 
+// Agent guidance is stored as a vault document (AGENTS.md); these endpoints
+// hide that filename from the Settings UI and are what MCP composes its
+// instructions from.
+func (s *Server) handleGetGuidance(w http.ResponseWriter, r *http.Request) {
+	writeData(w, http.StatusOK, service.AgentGuidanceResponse{
+		Path: service.GuidancePath,
+		Text: s.Service.AgentGuidance(),
+	})
+}
+
+func (s *Server) handleSetGuidance(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Text string `json:"text"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	if _, err := s.Service.SetAgentGuidance(body.Text); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, service.AgentGuidanceResponse{
+		Path: service.GuidancePath,
+		Text: s.Service.AgentGuidance(),
+	})
+}
+
 func (s *Server) handleToday(w http.ResponseWriter, r *http.Request) {
 	payload, err := s.Service.Today()
 	if err != nil {

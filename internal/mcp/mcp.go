@@ -16,14 +16,39 @@ import (
 	"github.com/jclement/quire/internal/vault"
 )
 
-// Handler returns the Streamable HTTP handler for /mcp.
+// Handler returns the Streamable HTTP handler for /mcp. A server is built
+// per session rather than once at startup so that guidance the owner edits
+// in Settings reaches the next client that connects, with no restart.
 func Handler(svc *service.Service, version string) http.Handler {
-	server := newServer(svc, version)
-	return sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, nil)
+	return sdk.NewStreamableHTTPHandler(
+		func(*http.Request) *sdk.Server { return newServer(svc, version) }, nil)
 }
 
+// baseInstructions are the cross-cutting rules every agent gets. The owner's
+// own guidance (AGENTS.md in the vault, edited in Settings) is appended.
+const baseInstructions = `quire is a personal knowledge and work vault: markdown files on disk with
+first-class people, companies, projects, meetings, daily notes and tasks.
+
+Working rules:
+- Prefer append_to_document over update_document. update_document replaces the
+  whole file, so it must carry the base_sha256 from a get_document you just
+  made; a stale hash is rejected rather than clobbering concurrent edits.
+- Relationships are wikilinks: [[Sarah Chen]] in prose, or frontmatter keys
+  (company, people, project). Both are indexed, so either creates a backlink.
+- Tasks are markdown checkboxes with an emoji grammar: 📅 due, 🛫 defer,
+  ⏫/🔼/🔽 priority, ⏳ waiting, 🔁 recurrence, ✅ completion. Toggle them with
+  complete_task rather than rewriting the line.
+- Start with today for "what should I work on", and person_context before a
+  meeting — each answers in one call what would otherwise take several.
+- Never invent a document path; find it with search first.`
+
 func newServer(svc *service.Service, version string) *sdk.Server {
-	s := sdk.NewServer(&sdk.Implementation{Name: "quire", Version: version}, nil)
+	instructions := baseInstructions
+	if guidance := svc.AgentGuidance(); guidance != "" {
+		instructions += "\n\n---\n\nThe vault owner's own guidance (authoritative where it conflicts\nwith the above):\n\n" + guidance
+	}
+	s := sdk.NewServer(&sdk.Implementation{Name: "quire", Version: version},
+		&sdk.ServerOptions{Instructions: instructions})
 	t := &tools{svc: svc}
 
 	sdk.AddTool(s, &sdk.Tool{Name: "search",

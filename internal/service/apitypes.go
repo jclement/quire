@@ -147,3 +147,10 @@ type CalendarMonth struct {
 	Next  string        `json:"next"`
 	Days  []CalendarDay `json:"days"` // every day of the month, in order
 }
+
+// AgentGuidanceResponse is the owner's MCP guidance and where it is stored.
+type AgentGuidanceResponse struct {
+	// Path is the vault document holding it, so the UI can link to it.
+	Path string `json:"path"`
+	Text string `json:"text"`
+}

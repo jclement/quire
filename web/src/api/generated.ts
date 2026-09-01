@@ -185,3 +185,13 @@ export interface CalendarMonth {
   next: string;
   days: CalendarDay[]; // every day of the month, in order
 }
+/**
+ * AgentGuidanceResponse is the owner's MCP guidance and where it is stored.
+ */
+export interface AgentGuidanceResponse {
+  /**
+   * Path is the vault document holding it, so the UI can link to it.
+   */
+  path: string;
+  text: string;
+}

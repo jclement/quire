@@ -138,3 +138,69 @@ func TestStaleWriteRejected(t *testing.T) {
 		t.Fatalf("stale agent write should be a tool error")
 	}
 }
+
+// The owner's guidance (AGENTS.md in the vault, edited in Settings) must
+// reach agents through the server's MCP instructions — that is the whole
+// point of the feature.
+func TestOwnerGuidanceReachesInstructions(t *testing.T) {
+	v, err := vault.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, _, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	svc := service.New(v, &index.Index{DB: db, Vault: v})
+
+	connect := func() *sdk.InitializeResult {
+		t.Helper()
+		server := newServer(svc, "test")
+		clientTransport, serverTransport := sdk.NewInMemoryTransports()
+		ctx := context.Background()
+		if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
+			t.Fatal(err)
+		}
+		client := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "0"}, nil)
+		session, err := client.Connect(ctx, clientTransport, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { session.Close() })
+		return session.InitializeResult()
+	}
+
+	// With no guidance written, agents still get the built-in rules.
+	before := connect()
+	if !strings.Contains(before.Instructions, "append_to_document") {
+		t.Fatalf("base instructions missing: %q", before.Instructions)
+	}
+	if strings.Contains(before.Instructions, "owner's own guidance") {
+		t.Errorf("guidance section present with no guidance written")
+	}
+
+	// Writing guidance reaches the NEXT session without a restart.
+	if _, err := svc.SetAgentGuidance("Always file client work under projects/.\nUse British spelling."); err != nil {
+		t.Fatal(err)
+	}
+	after := connect()
+	if !strings.Contains(after.Instructions, "Always file client work under projects/.") ||
+		!strings.Contains(after.Instructions, "British spelling") {
+		t.Errorf("guidance not delivered:\n%s", after.Instructions)
+	}
+	if !strings.Contains(after.Instructions, "append_to_document") {
+		t.Errorf("guidance replaced the base instructions instead of extending them")
+	}
+
+	// Clearing it removes the section (and the file).
+	if _, err := svc.SetAgentGuidance("  "); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.AgentGuidance(); got != "" {
+		t.Errorf("guidance after clear = %q", got)
+	}
+	if strings.Contains(connect().Instructions, "British spelling") {
+		t.Errorf("cleared guidance still delivered")
+	}
+}
