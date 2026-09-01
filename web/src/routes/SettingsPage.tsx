@@ -115,7 +115,7 @@ function AgentGuidanceSection() {
             placeholder={GUIDANCE_PLACEHOLDER}
             aria-label="Agent guidance"
             {...noAutofill("agent-guidance")}
-            className="w-full rounded border border-border bg-raised p-2 font-mono text-xs leading-relaxed text-body outline-none placeholder:text-muted focus:border-accent"
+            className="field-bare w-full rounded border border-border bg-raised p-2 font-mono text-xs leading-relaxed text-body outline-none placeholder:text-muted focus:border-accent"
           />
           <div className="mt-2 flex items-center gap-2">
             <button

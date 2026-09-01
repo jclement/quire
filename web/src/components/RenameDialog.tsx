@@ -71,7 +71,7 @@ function RenameForm({ path, close }: { path: string; close: () => void }) {
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center gap-2 border-b border-border px-3">
+      <div className="flex items-center gap-2 border-b border-border px-3 focus-within:border-accent">
         <FolderPen className="size-4 shrink-0 text-muted" aria-hidden="true" />
         <input
           autoFocus
@@ -85,7 +85,7 @@ function RenameForm({ path, close }: { path: string; close: () => void }) {
           }}
           aria-label="New path"
           {...noAutofill("rename-path")}
-          className="h-11 w-full bg-transparent font-mono text-xs text-heading outline-none placeholder:text-muted"
+          className="field-bare h-11 w-full bg-transparent font-mono text-xs text-heading outline-none placeholder:text-muted"
         />
       </div>
       <div className="flex items-center gap-2 px-3 py-2">

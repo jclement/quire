@@ -48,7 +48,7 @@ function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
   const info = DOC_TYPE_INFO[type];
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-border px-3">
+      <div className="flex items-center gap-2 border-b border-border px-3 focus-within:border-accent">
         <info.icon className="size-4 shrink-0 text-muted" aria-hidden="true" />
         <input
           autoFocus
@@ -63,7 +63,7 @@ function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
           placeholder={`${info.label} title…`}
           aria-label={`New ${info.label} title`}
           {...noAutofill("new-doc-title")}
-          className="h-11 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
+          className="field-bare h-11 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
       </div>
       <p className="px-3 py-2 text-xs text-muted">

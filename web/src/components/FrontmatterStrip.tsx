@@ -253,7 +253,7 @@ function AddLinkPopover({
         }}
         className="absolute top-full left-0 z-20 mt-1 w-56 rounded border border-border bg-raised py-1 font-sans shadow-lg"
       >
-        <div className="border-b border-border px-2 pb-1">
+        <div className="border-b border-border px-2 pb-1 focus-within:border-accent">
           <input
             autoFocus
             value={text}
@@ -261,7 +261,7 @@ function AddLinkPopover({
             placeholder={`${info.label} name…`}
             aria-label={`Search ${info.plural.toLowerCase()}`}
             {...noAutofill(`link-${linkKey.key}`)}
-            className="h-7 w-full bg-transparent text-xs text-heading outline-none placeholder:text-muted"
+            className="field-bare h-7 w-full bg-transparent text-xs text-heading outline-none placeholder:text-muted"
           />
         </div>
         <ul className="max-h-48 overflow-y-auto">
