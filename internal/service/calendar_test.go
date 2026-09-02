@@ -21,6 +21,18 @@ func TestCalendarMonth(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// "Touched" comes from the indexed mtime, which is a real wall-clock
+	// time, while the service clock is pinned to 2026-09-01. Left alone the
+	// two agree only when the suite happens to run on that date in the
+	// runner's timezone — green in MDT, red in UTC. Reindexing cannot fix it
+	// either: IndexFile short-circuits on an unchanged sha256, so touching
+	// the files would never reach the index. Stamp the index directly, which
+	// is the thing the calendar actually reads.
+	stamp := time.Date(2026, 9, 1, 12, 0, 0, 0, time.Local).Unix()
+	if _, err := s.Index.DB.Exec("UPDATE documents SET mtime = ?", stamp); err != nil {
+		t.Fatal(err)
+	}
+
 	month, err := s.Calendar("")
 	if err != nil {
 		t.Fatal(err)
