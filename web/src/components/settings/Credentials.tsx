@@ -541,3 +541,63 @@ export function AgentActivity() {
     </section>
   );
 }
+
+// ---- templates ----
+
+/**
+ * The starter templates. Installed only on request — quire never drops
+ * files into a vault unasked — and never over a template that already
+ * exists, so re-running is safe and your edits survive.
+ */
+export function TemplateSettings() {
+  const queryClient = useQueryClient();
+  const { toast } = useUi();
+  const templates = useQuery({
+    queryKey: ["templates"],
+    queryFn: api.listTemplates,
+  });
+  const install = useMutation({
+    mutationFn: api.installStarterTemplates,
+    onSuccess: ({ written }) => {
+      void queryClient.invalidateQueries({ queryKey: ["templates"] });
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      toast(
+        written.length === 0
+          ? "Starter templates already installed"
+          : `Installed ${written.length} templates`,
+      );
+    },
+    onError: (error) => toast(errorMessage(error)),
+  });
+  return (
+    <section className="border-t border-border pt-4">
+      <SectionHeading>Templates</SectionHeading>
+      <p className="mb-2 text-xs text-muted">
+        Ordinary markdown under{" "}
+        <span className="font-mono text-body">templates/</span>.{" "}
+        <span className="font-mono text-body">templates/meeting.md</span> shapes
+        every new meeting; a file with{" "}
+        <span className="font-mono text-body">for: note</span> is offered by
+        name. The starter set covers 1:1s, decision records, project briefs,
+        incident reviews and weekly reviews.
+      </p>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => install.mutate()}
+          disabled={install.isPending}
+          className="flex h-8 items-center gap-1.5 rounded border border-border px-2.5 text-xs text-body hover:bg-hover hover:text-heading disabled:opacity-50"
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+          {install.isPending ? "Installing…" : "Install starter templates"}
+        </button>
+        <RouterLink
+          to="/browse/template"
+          className="text-xs text-accent hover:underline"
+        >
+          {templates.data ? `${templates.data.length} installed` : "…"}
+        </RouterLink>
+      </div>
+    </section>
+  );
+}

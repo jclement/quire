@@ -134,3 +134,23 @@ func SetFrontmatterKey(raw []byte, key, value string) []byte {
 	b.Write(body)
 	return b.Bytes()
 }
+
+// FrontmatterPairs walks a frontmatter block as ordered (key, raw value)
+// pairs — only top-level scalar or inline-list lines, which is quire's own
+// schema. Comments, blank lines and nested structure are skipped. Used to
+// copy a template's frontmatter into a new document in the order it was
+// written, which a map would lose.
+func FrontmatterPairs(block []byte) [][2]string {
+	var out [][2]string
+	for _, line := range strings.Split(string(block), "\n") {
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			continue
+		}
+		key, value, found := strings.Cut(line, ":")
+		if !found || strings.ContainsAny(key, " \t") {
+			continue
+		}
+		out = append(out, [2]string{key, strings.TrimSpace(value)})
+	}
+	return out
+}

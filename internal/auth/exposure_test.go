@@ -66,7 +66,9 @@ var dataRoutes = []struct{ method, path string }{
 	{"GET", "/api/v1/daily/2026-09-01"},
 	{"GET", "/api/v1/tags"},
 	{"GET", "/api/v1/areas"},
-	{"GET", "/api/v1/audit"}, // what agents did, by name
+	{"GET", "/api/v1/templates"},
+	{"POST", "/api/v1/templates/starter"}, // writes into the vault
+	{"GET", "/api/v1/audit"},              // what agents did, by name
 	{"POST", "/api/v1/daily/2026-09-01"},
 	{"GET", "/api/v1/events"},                  // SSE: streams every vault change
 	{"GET", "/api/v1/files/attachments/x.png"}, // raw vault files

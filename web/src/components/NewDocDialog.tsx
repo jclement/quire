@@ -8,6 +8,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../api/client.ts";
+import { useTemplates } from "../api/queries.ts";
 import type { DocType } from "../api/types.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import { noAutofill } from "../lib/noAutofill.ts";
@@ -36,6 +37,13 @@ function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
   const { area } = useUi();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
+  // Named templates for this type. The type's default (templates/<type>.md)
+  // needs no choosing — it applies on its own — so it is not listed.
+  const templates = useTemplates();
+  const choices = (templates.data ?? []).filter(
+    (t) => t.for === type && !t.default,
+  );
+  const [template, setTemplate] = useState("");
 
   const create = useMutation({
     // A document made while looking at Work is a Work document.
@@ -45,6 +53,7 @@ function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
         input.title,
         undefined,
         isRealArea(area) ? area : undefined,
+        template || undefined,
       ),
     onSuccess: (doc) => {
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
@@ -74,6 +83,25 @@ function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
           className="field-bare h-11 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
       </div>
+      {choices.length > 0 ? (
+        <label className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-xs text-muted">
+          Template
+          <select
+            aria-label="Template"
+            value={template}
+            onChange={(event) => setTemplate(event.target.value)}
+            className="field-bare h-8 flex-1 rounded border border-border bg-raised px-1.5 text-sm text-heading outline-none focus:border-accent"
+          >
+            <option value="">Default</option>
+            {choices.map((t) => (
+              <option key={t.path} value={t.name} title={t.description}>
+                {t.name}
+                {t.description ? ` — ${t.description}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <p className="px-3 py-2 text-xs text-muted">
         {create.isError
           ? `Couldn't create — ${create.error.message}`

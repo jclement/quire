@@ -29,6 +29,7 @@ import {
   AgentActivity,
   ConnectedAppSettings,
   ShareSettings,
+  TemplateSettings,
   TokenSettings,
 } from "../components/settings/Credentials.tsx";
 import { SkeletonRows } from "../components/Skeleton.tsx";
@@ -69,6 +70,7 @@ export function SettingsPage() {
       <TokenSettings />
       <ConnectedAppSettings />
       <ShareSettings />
+      <TemplateSettings />
       <AgentGuidanceSection />
       <AgentActivity />
       <AboutSection />

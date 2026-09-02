@@ -220,3 +220,14 @@ type AuditEntry struct {
 	Detail string `json:"detail"`
 	OK     bool   `json:"ok"`
 }
+
+// TemplateInfo describes one template for pickers.
+type TemplateInfo struct {
+	Path        string `json:"path"`
+	Name        string `json:"name"`
+	For         string `json:"for" tstype:"DocType"`
+	Description string `json:"description"`
+	// Default reports that this is the type's automatic template
+	// (templates/<type>.md) rather than a named alternative.
+	Default bool `json:"default"`
+}

@@ -114,7 +114,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 	// Creating and rewriting documents.
 	if allows(auth.ScopeWrite) {
 		sdk.AddTool(s, &sdk.Tool{Name: "create_document", Annotations: additive,
-			Description: "Create a new document of a given type (note, person, company, project, meeting). The server picks the path from the title and seeds type-appropriate frontmatter. Body is optional markdown; wikilinks like [[Sarah Chen]] create relationships. Search first — a duplicate title gets a numeric suffix, not an error."},
+			Description: "Create a new document of a given type (note, person, company, project, meeting). The server picks the path from the title and seeds type-appropriate frontmatter. With no body, the type's default template (templates/<type>.md) applies if one exists, or name one with template; list_documents type=template shows what is available. Body is optional markdown; wikilinks like [[Sarah Chen]] create relationships. Search first — a duplicate title gets a numeric suffix, not an error."},
 			t.createDocument)
 		sdk.AddTool(s, &sdk.Tool{Name: "update_document", Annotations: destructive,
 			Description: "Replace a document's full markdown. Requires base_sha256 from a get_document made just before; a stale hash is rejected so you can never clobber a concurrent edit — on that error, re-read and reapply. Prefer append_to_document for additions and set_frontmatter/link_entity for metadata; use this only for real rewrites."},
@@ -191,10 +191,11 @@ type pathIn struct {
 }
 
 type createDocIn struct {
-	Type  string `json:"type" jsonschema:"one of: note, person, company, project, meeting"`
-	Title string `json:"title" jsonschema:"document title, e.g. 'Sarah Chen'"`
-	Body  string `json:"body,omitempty" jsonschema:"optional markdown body; defaults to a heading"`
-	Area  string `json:"area,omitempty" jsonschema:"area to file it under (work, personal, …); omit for unclassified"`
+	Type     string `json:"type" jsonschema:"one of: note, person, company, project, meeting"`
+	Title    string `json:"title" jsonschema:"document title, e.g. 'Sarah Chen'"`
+	Body     string `json:"body,omitempty" jsonschema:"optional markdown body; defaults to a heading"`
+	Area     string `json:"area,omitempty" jsonschema:"area to file it under (work, personal, …); omit for unclassified"`
+	Template string `json:"template,omitempty" jsonschema:"template name to start from (see list_documents type=template); omit to use the type's default template if one exists"`
 }
 
 type updateDocIn struct {
@@ -240,7 +241,7 @@ type areaIn struct {
 
 type listDocsIn struct {
 	Area  string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; omit for all"`
-	Type  string `json:"type,omitempty" jsonschema:"filter by type: note, person, company, project, meeting, daily; omit for all"`
+	Type  string `json:"type,omitempty" jsonschema:"filter by type: note, person, company, project, meeting, daily, template; omit for all (templates are only listed when asked for by type)"`
 	Title string `json:"title,omitempty" jsonschema:"optional title substring, case-insensitive"`
 	Limit int    `json:"limit,omitempty" jsonschema:"max results (default 50)"`
 }
@@ -313,7 +314,7 @@ func (t *tools) createDocument(_ context.Context, _ *sdk.CallToolRequest, in cre
 	default:
 		return nil, service.Document{}, fmt.Errorf("invalid type %q (want note|person|company|project|meeting)", in.Type)
 	}
-	doc, err := t.svc.CreateDocumentIn(docType, in.Title, in.Body, in.Area)
+	doc, err := t.svc.CreateDocumentWith(docType, in.Title, in.Body, service.CreateOptions{Area: in.Area, Template: in.Template})
 	t.record("create_document", doc.Path, in.Type+": "+in.Title, err)
 	return nil, doc, err
 }

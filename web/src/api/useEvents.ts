@@ -32,6 +32,7 @@ function invalidateForDocEvent(
   void queryClient.invalidateQueries({ queryKey: ["journal"] });
   void queryClient.invalidateQueries({ queryKey: ["tags"] });
   void queryClient.invalidateQueries({ queryKey: ["areas"] });
+  void queryClient.invalidateQueries({ queryKey: ["templates"] });
 }
 
 /** Mount once (in App). Owns the EventSource for the whole app lifetime. */

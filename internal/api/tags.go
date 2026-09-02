@@ -19,6 +19,27 @@ func (s *Server) handleListAreas(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, areas)
 }
 
+func (s *Server) handleListTemplates(w http.ResponseWriter, r *http.Request) {
+	templates, err := s.Service.Templates()
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, templates)
+}
+
+// handleInstallStarterTemplates writes the starter set into templates/,
+// skipping any that already exist. Explicitly requested, never automatic:
+// quire does not drop files into a vault unasked.
+func (s *Server) handleInstallStarterTemplates(w http.ResponseWriter, r *http.Request) {
+	written, err := s.Service.InstallStarterTemplates()
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, map[string]any{"written": written})
+}
+
 func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 	tags, err := s.Service.Tags()
 	if err != nil {

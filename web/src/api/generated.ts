@@ -14,7 +14,7 @@
  * directory the file lives in.
  */
 export type DocType =
-  "note" | "person" | "company" | "project" | "meeting" | "daily";
+  "note" | "person" | "company" | "project" | "meeting" | "daily" | "template";
 
 //////////
 // source: apitypes.go
@@ -278,4 +278,18 @@ export interface AuditEntry {
    */
   detail: string;
   ok: boolean;
+}
+/**
+ * TemplateInfo describes one template for pickers.
+ */
+export interface TemplateInfo {
+  path: string;
+  name: string;
+  for: DocType;
+  description: string;
+  /**
+   * Default reports that this is the type's automatic template
+   * (templates/<type>.md) rather than a named alternative.
+   */
+  default: boolean;
 }

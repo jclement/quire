@@ -225,6 +225,36 @@ func (s *Service) CreateDocument(docType vault.DocType, title, body string) (Doc
 
 // CreateDocumentIn creates a document filed under an area ("" for none).
 func (s *Service) CreateDocumentIn(docType vault.DocType, title, body, area string) (Document, error) {
+	return s.CreateDocumentWith(docType, title, body, CreateOptions{Area: area})
+}
+
+// CreateOptions are the optional parts of creating a document.
+type CreateOptions struct {
+	// Area files the document (frontmatter area:). "" or "none" for none.
+	Area string
+	// Template names a template (path or bare name) to start from. When
+	// empty and Body is empty, the type's default template applies if one
+	// exists. Ignored when a body is supplied — the caller knows better.
+	Template string
+}
+
+// CreateDocumentWith creates a document from a body, a template, or the
+// type's default template, in that order of precedence.
+func (s *Service) CreateDocumentWith(docType vault.DocType, title, body string, opts CreateOptions) (Document, error) {
+	var templateSeed [][2]string
+	if body == "" {
+		if path, ok := s.resolveTemplate(docType, opts.Template); ok {
+			seed, rendered, err := s.renderTemplate(path, title, s.Now())
+			if err != nil {
+				return Document{}, err
+			}
+			templateSeed, body = seed, rendered
+		} else if opts.Template != "" {
+			return Document{}, fmt.Errorf("%w: no template named %q", ErrValidation, opts.Template)
+		}
+	}
+	area := opts.Area
+	_ = templateSeed // applied below once the path is known
 	if title == "" {
 		return Document{}, fmt.Errorf("title is required")
 	}
@@ -241,6 +271,9 @@ func (s *Service) CreateDocumentIn(docType vault.DocType, title, body, area stri
 		body = "# " + title + "\n\n"
 	}
 	content := s.seedFrontmatter(docType, body, area)
+	for _, kv := range templateSeed {
+		content = vault.SetFrontmatterKey(content, kv[0], kv[1])
+	}
 
 	f, err := s.Vault.Write(path, content, "")
 	if err != nil {
@@ -385,7 +418,20 @@ func (s *Service) EnsureDaily(date string) (Document, error) {
 	if s.Vault.Exists(path) {
 		return s.GetDocument(path)
 	}
-	f, err := s.Vault.Write(path, []byte("# "+date+"\n\n"), "")
+	// templates/daily.md, if present, shapes every new day.
+	content := []byte("# " + date + "\n\n")
+	if tpl, ok := s.resolveTemplate(vault.TypeDaily, ""); ok {
+		// Placeholders describe the note's day, at this instant's time.
+		day, _ := time.ParseInLocation("2006-01-02", date, s.Now().Location())
+		at := time.Date(day.Year(), day.Month(), day.Day(), s.Now().Hour(), s.Now().Minute(), 0, 0, s.Now().Location())
+		if seed, body, err := s.renderTemplate(tpl, date, at); err == nil {
+			content = []byte(body)
+			for _, kv := range seed {
+				content = vault.SetFrontmatterKey(content, kv[0], kv[1])
+			}
+		}
+	}
+	f, err := s.Vault.Write(path, content, "")
 	if err != nil {
 		return Document{}, err
 	}
@@ -453,7 +499,7 @@ func (s *Service) TodayIn(area string) (TodayPayload, error) {
 		return payload, err
 	}
 
-	recent, err := s.Index.ListDocuments("", "", area, 8)
+	recent, err := s.Index.ListDocuments("", "", area, 8) // "" excludes templates
 	if err != nil {
 		return payload, err
 	}

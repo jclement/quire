@@ -45,6 +45,10 @@ export function useDocumentList(params: ListDocumentsParams, enabled = true) {
   });
 }
 
+export function useTemplates() {
+  return useQuery({ queryKey: ["templates"], queryFn: api.listTemplates });
+}
+
 export function useAreas() {
   return useQuery({ queryKey: queryKeys.areas, queryFn: api.listAreas });
 }

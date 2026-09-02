@@ -64,6 +64,7 @@ func (s *Server) handleCreateDocument(w http.ResponseWriter, r *http.Request) {
 		Title    string `json:"title"`
 		Markdown string `json:"markdown"`
 		Area     string `json:"area"`
+		Template string `json:"template"`
 	}
 	if !decodeBody(w, r, &body) {
 		return
@@ -79,7 +80,7 @@ func (s *Server) handleCreateDocument(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "title is required")
 		return
 	}
-	doc, err := s.Service.CreateDocumentIn(docType, body.Title, body.Markdown, body.Area)
+	doc, err := s.Service.CreateDocumentWith(docType, body.Title, body.Markdown, service.CreateOptions{Area: body.Area, Template: body.Template})
 	if err != nil {
 		writeServiceError(w, err)
 		return

@@ -78,3 +78,14 @@ func paths(rows []DocRow) []string {
 	}
 	return out
 }
+
+// TestTemplateTitlesFallBackToFilename: "# {{title}}" is a placeholder, and
+// a Templates list full of rows called "{{title}}" is useless.
+func TestTemplateTitlesFallBackToFilename(t *testing.T) {
+	if got := effectiveTitle("templates/decision.md", "{{title}}", nil); got != "decision" {
+		t.Errorf("effectiveTitle = %q, want decision", got)
+	}
+	if got := effectiveTitle("notes/x.md", "Real Title", nil); got != "Real Title" {
+		t.Errorf("effectiveTitle = %q", got)
+	}
+}

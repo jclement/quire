@@ -118,6 +118,9 @@ func scanDocRow(rows interface{ Scan(...any) error }) (DocRow, error) {
 func (ix *Index) ListDocuments(docType, titleQuery, area string, limit int) ([]DocRow, error) {
 	where := "WHERE 1=1"
 	args := []any{}
+	if docType == "" {
+		where += " AND d.type != 'template'" // templates are asked for by type, never browsed into
+	}
 	if clause, a := areaClause(area); clause != "" {
 		where += clause
 		args = append(args, a...)
@@ -405,6 +408,8 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 	if docType != "" {
 		where += " AND d.type = ?"
 		args = append(args, docType)
+	} else {
+		where += " AND d.type != 'template'"
 	}
 	if tag != "" {
 		where += " AND d.path IN (SELECT path FROM tags WHERE tag = ?)"

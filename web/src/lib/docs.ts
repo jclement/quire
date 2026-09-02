@@ -5,6 +5,7 @@ import {
   CalendarDays,
   FileText,
   FolderKanban,
+  LayoutTemplate,
   NotebookPen,
   Users,
   type LucideIcon,
@@ -24,6 +25,7 @@ export const DOC_TYPE_INFO: Record<DocType, DocTypeInfo> = {
   project: { label: "Project", plural: "Projects", icon: FolderKanban },
   meeting: { label: "Meeting", plural: "Meetings", icon: CalendarDays },
   daily: { label: "Daily", plural: "Daily", icon: NotebookPen },
+  template: { label: "Template", plural: "Templates", icon: LayoutTemplate },
 };
 
 export const DOC_TYPES = Object.keys(DOC_TYPE_INFO) as DocType[];

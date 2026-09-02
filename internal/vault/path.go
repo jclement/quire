@@ -21,6 +21,9 @@ const (
 	TypeProject DocType = "project"
 	TypeMeeting DocType = "meeting"
 	TypeDaily   DocType = "daily"
+	// TypeTemplate is a document under templates/: the shape new documents
+	// start from. Kept out of everyday listings and search.
+	TypeTemplate DocType = "template"
 )
 
 // typeDirs maps top-level vault directories to types; anything else is a note.
@@ -30,16 +33,18 @@ var typeDirs = map[string]DocType{
 	"projects":  TypeProject,
 	"meetings":  TypeMeeting,
 	"daily":     TypeDaily,
+	"templates": TypeTemplate,
 }
 
 // dirForType is the inverse: where new documents of each type are created.
 var dirForType = map[DocType]string{
-	TypeNote:    "notes",
-	TypePerson:  "people",
-	TypeCompany: "companies",
-	TypeProject: "projects",
-	TypeMeeting: "meetings",
-	TypeDaily:   "daily",
+	TypeNote:     "notes",
+	TypePerson:   "people",
+	TypeCompany:  "companies",
+	TypeProject:  "projects",
+	TypeMeeting:  "meetings",
+	TypeDaily:    "daily",
+	TypeTemplate: "templates",
 }
 
 // ValidatePath rejects anything that could escape the vault or touch app

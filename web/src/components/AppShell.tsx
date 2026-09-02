@@ -161,6 +161,14 @@ function NavSections({ onNavigate }: { onNavigate?: () => void }) {
           onNavigate={onNavigate}
         />
         <NavLink
+          entry={{
+            to: "/browse/template",
+            label: "Templates",
+            icon: DOC_TYPE_INFO.template.icon,
+          }}
+          onNavigate={onNavigate}
+        />
+        <NavLink
           entry={{ to: "/settings", label: "Settings", icon: Settings }}
           onNavigate={onNavigate}
         />

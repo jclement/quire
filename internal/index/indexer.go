@@ -380,7 +380,9 @@ func effectiveTitle(rel, scannedTitle string, fm map[string]any) string {
 	if t := stringValue(fm["title"]); t != "" {
 		return t
 	}
-	if scannedTitle != "" {
+	// A template's H1 is usually "# {{title}}" — a placeholder, not a name.
+	// Listing it as "{{title}}" helps nobody; the filename is the name.
+	if scannedTitle != "" && !strings.Contains(scannedTitle, "{{") {
 		return scannedTitle
 	}
 	// Filename fallback: "sarah-chen" → "Sarah Chen" is too presumptuous;

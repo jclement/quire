@@ -28,6 +28,7 @@ export type {
   ShareInfo,
   TagCount,
   Task,
+  TemplateInfo,
   TodayPayload,
   TokenInfo,
 } from "./generated.ts";

@@ -23,6 +23,7 @@ import type {
   ShareInfo,
   TagCount,
   Task,
+  TemplateInfo,
   TaskEdit,
   TaskView,
   TodayPayload,
@@ -135,6 +136,7 @@ export const api = {
     title: string,
     markdown?: string,
     area?: string,
+    template?: string,
   ) =>
     request<Document>(
       "/api/v1/documents",
@@ -143,8 +145,16 @@ export const api = {
         title,
         ...(markdown ? { markdown } : {}),
         ...(area ? { area } : {}),
+        ...(template ? { template } : {}),
       }),
     ),
+
+  listTemplates: () => request<TemplateInfo[]>("/api/v1/templates"),
+
+  installStarterTemplates: () =>
+    request<{ written: string[] }>("/api/v1/templates/starter", {
+      method: "POST",
+    }),
 
   /** Sets frontmatter keys surgically; a null value removes the key. */
   setFrontmatter: (path: string, values: Record<string, unknown>) =>

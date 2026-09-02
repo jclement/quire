@@ -39,4 +39,5 @@ packages:
         | "company"
         | "project"
         | "meeting"
-        | "daily";
+        | "daily"
+        | "template";
