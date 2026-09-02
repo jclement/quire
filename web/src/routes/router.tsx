@@ -20,6 +20,7 @@ import { NewDocDialog } from "../components/NewDocDialog.tsx";
 import { QuickCapture } from "../components/QuickCapture.tsx";
 import { DeleteDocDialog } from "../components/DeleteDocDialog.tsx";
 import { MarkdownHelp } from "../components/MarkdownHelp.tsx";
+import { TableEditorDialog } from "../components/TableEditorDialog.tsx";
 import { RenameDialog } from "../components/RenameDialog.tsx";
 import { ShareDialog } from "../components/ShareDialog.tsx";
 import { Toasts } from "../components/Toasts.tsx";
@@ -55,6 +56,7 @@ function RootLayout() {
       <RenameDialog />
       <DeleteDocDialog />
       <MarkdownHelp />
+      <TableEditorDialog />
       <Toasts />
     </>
   );

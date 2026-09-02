@@ -222,25 +222,146 @@ export function findTableAt(text: string, offset: number): TableRange | null {
   return { from, to };
 }
 
-/** Reformats every table in a document. */
+/** Reformats every table in a document (fenced code is left alone). */
 export function formatAllTables(text: string): string {
+  let out = "";
+  let last = 0;
+  for (const t of findTables(text)) {
+    out += text.slice(last, t.from) + formatTable(text.slice(t.from, t.to));
+    last = t.to;
+  }
+  return out + text.slice(last);
+}
+
+// ---- grid model (the visual editor) ----
+
+export interface TableModel {
+  /** Per column. Length is the column count. */
+  aligns: Alignment[];
+  /** rows[0] is the header. Cells are unescaped: `\|` → `|`. */
+  rows: string[][];
+}
+
+/** Turns `\|` back into `|` for editing. */
+export function unescapeCell(cell: string): string {
+  return cell.replace(/\\\|/g, "|");
+}
+
+/**
+ * Escapes a pipe that is not inside a code span, and folds a newline into
+ * `<br>` — GFM cells are single-line, so a pasted paragraph would otherwise
+ * split the table.
+ */
+export function escapeCell(cell: string): string {
+  let out = "";
+  let inCode = false;
+  let fence = 0;
+  for (let i = 0; i < cell.length; i++) {
+    const ch = cell[i]!;
+    if (ch === "`") {
+      let run = 0;
+      while (cell[i + run] === "`") run++;
+      if (!inCode) {
+        inCode = true;
+        fence = run;
+      } else if (run === fence) inCode = false;
+      out += cell.slice(i, i + run);
+      i += run - 1;
+      continue;
+    }
+    if (ch === "|" && !inCode) {
+      out += "\\|";
+      continue;
+    }
+    out += ch;
+  }
+  return out.replace(/\r?\n/g, "<br>");
+}
+
+/** Parses a table block into a grid. Null when it is not a table. */
+export function parseTable(block: string): TableModel | null {
+  const lines = block.replace(/\n$/, "").split("\n");
+  if (lines.length < 2 || !isDelimiterLine(lines[1]!)) return null;
+  const raw = lines.map(splitCells);
+  const columns = Math.max(...raw.map((r) => r.length));
+  const aligns: Alignment[] = raw[1]!.map((c) => {
+    const t = c.trim();
+    const l = t.startsWith(":");
+    const r = t.endsWith(":");
+    return l && r ? "center" : l ? "left" : r ? "right" : "none";
+  });
+  while (aligns.length < columns) aligns.push("none");
+  const rows = raw
+    .filter((_, i) => i !== 1)
+    .map((cells) =>
+      Array.from({ length: columns }, (_, c) => unescapeCell(cells[c] ?? "")),
+    );
+  return { aligns, rows };
+}
+
+/** Serializes a grid to formatted markdown. */
+export function serializeTable(model: TableModel): string {
+  const columns = model.aligns.length;
+  const row = (cells: string[]) =>
+    "| " +
+    Array.from({ length: columns }, (_, c) => escapeCell(cells[c] ?? "")).join(
+      " | ",
+    ) +
+    " |";
+  const delim =
+    "| " +
+    model.aligns
+      .map((a) =>
+        a === "left"
+          ? ":--"
+          : a === "right"
+            ? "--:"
+            : a === "center"
+              ? ":-:"
+              : "---",
+      )
+      .join(" | ") +
+    " |";
+  const [header = [], ...body] = model.rows;
+  return formatTable([row(header), delim, ...body.map(row)].join("\n"));
+}
+
+export interface LocatedTable extends TableRange {
+  /** 1-based line the table starts on, for matching rendered tables. */
+  line: number;
+}
+
+/**
+ * Every table in a document, in order, with fenced code blocks skipped —
+ * a pipe-shaped line inside ``` is code, and treating it as a table would
+ * make the editor "fix" someone's example.
+ */
+export function findTables(text: string): LocatedTable[] {
   const lines = text.split("\n");
-  const out: string[] = [];
+  const out: LocatedTable[] = [];
+  let offset = 0;
+  let inFence = false;
   let i = 0;
   while (i < lines.length) {
+    const line = lines[i]!;
+    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
     if (
-      isRowLine(lines[i]!) &&
+      !inFence &&
+      isRowLine(line) &&
       i + 1 < lines.length &&
       isDelimiterLine(lines[i + 1]!)
     ) {
       let j = i + 1;
       while (j + 1 < lines.length && isRowLine(lines[j + 1]!)) j++;
-      out.push(formatTable(lines.slice(i, j + 1).join("\n")));
+      const from = offset;
+      const to = from + lines.slice(i, j + 1).join("\n").length;
+      out.push({ from, to, line: i + 1 });
+      for (let k = i; k <= j; k++) offset += lines[k]!.length + 1;
       i = j + 1;
       continue;
     }
-    out.push(lines[i]!);
+    offset += line.length + 1;
     i++;
   }
-  return out.join("\n");
+  return out;
 }

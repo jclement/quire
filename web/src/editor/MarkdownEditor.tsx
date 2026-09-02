@@ -120,7 +120,11 @@ export function MarkdownEditor({
     },
   }));
 
-  return <div ref={hostRef} className="min-h-64 flex-1 overflow-y-auto" />;
+  // `isolate`: CodeMirror's sticky table panel sits at z-index 300, which
+  // without its own stacking context paints over every modal in the app.
+  return (
+    <div ref={hostRef} className="isolate min-h-64 flex-1 overflow-y-auto" />
+  );
 }
 
 type CallbacksRef = RefObject<{

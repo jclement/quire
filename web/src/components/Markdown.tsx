@@ -16,6 +16,7 @@ import {
   Info,
   Lightbulb,
   StickyNote,
+  Table2,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -39,6 +40,7 @@ import type { Link, Task } from "../api/types.ts";
 import type { CalloutType } from "../lib/callouts.ts";
 import { docHref } from "../lib/docs.ts";
 import { extractHeadings } from "../lib/headings.ts";
+import { findTables } from "../lib/tables.ts";
 import {
   remarkQuire,
   TAG_HREF_PREFIX,
@@ -57,12 +59,20 @@ interface MarkdownProps {
   /** Indexed tasks for this document; enables clickable checkboxes. */
   tasks?: Task[];
   onToggleTask?: (task: Task) => void;
+  /**
+   * Offers "Edit table" on each rendered table; called with the table's
+   * index in document order (matching lib/tables.ts findTables).
+   */
+  onEditTable?: (index: number) => void;
 }
 
 interface MarkdownContextValue {
   links: Link[];
   tasks: Task[];
   onToggleTask?: (task: Task) => void;
+  onEditTable?: (index: number) => void;
+  /** Source line a table starts on → its index, for the edit affordance. */
+  tableIndexByLine: Map<number, number>;
   /** Source line → anchor id, shared with the outline (see lib/headings.ts). */
   headingIdsByLine: Map<number, string>;
 }
@@ -71,6 +81,7 @@ const MarkdownContext = createContext<MarkdownContextValue>({
   links: [],
   tasks: [],
   headingIdsByLine: new Map(),
+  tableIndexByLine: new Map(),
 });
 
 /** Source line of the enclosing list item, for checkbox → task matching. */
@@ -81,17 +92,22 @@ export function Markdown({
   links = [],
   tasks = [],
   onToggleTask,
+  onEditTable,
 }: MarkdownProps) {
   const context = useMemo(
     () => ({
       links,
       tasks,
       onToggleTask,
+      onEditTable,
       headingIdsByLine: new Map(
         extractHeadings(markdown).map((heading) => [heading.line, heading.id]),
       ),
+      tableIndexByLine: new Map(
+        onEditTable ? findTables(markdown).map((t, i) => [t.line, i]) : [],
+      ),
     }),
-    [links, tasks, onToggleTask, markdown],
+    [links, tasks, onToggleTask, onEditTable, markdown],
   );
   return (
     <MarkdownContext.Provider value={context}>
@@ -346,8 +362,39 @@ function Img(props: ComponentProps<"img"> & ExtraProps) {
   return <img {...rest} src={resolved} loading="lazy" />;
 }
 
+// ---- Tables ----
+
+/**
+ * A rendered table with an "Edit table" button in its corner when the host
+ * offers editing. Only tables findTables can locate get the button: one
+ * nested in a blockquote or list renders fine but has no clean source range
+ * to write back into.
+ */
+function Table(props: ComponentProps<"table"> & ExtraProps) {
+  const { node, ...rest } = props;
+  const { onEditTable, tableIndexByLine } = useContext(MarkdownContext);
+  const line = node?.position?.start.line;
+  const index = line === undefined ? undefined : tableIndexByLine.get(line);
+  if (!onEditTable || index === undefined) return <table {...rest} />;
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={() => onEditTable(index)}
+        className="absolute -top-2.5 right-0 flex h-6 items-center gap-1 rounded border border-border bg-raised px-1.5 text-[11px] text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-heading focus-visible:opacity-100 print:hidden [@media(hover:none)]:opacity-100"
+        aria-label="Edit table"
+      >
+        <Table2 className="size-3.5" aria-hidden="true" />
+        Edit table
+      </button>
+      <table {...rest} />
+    </div>
+  );
+}
+
 const COMPONENTS: Components = {
   a: Anchor,
+  table: Table,
   li: ListItem,
   input: Checkbox,
   pre: Pre,

@@ -4,9 +4,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   displayWidth,
+  escapeCell,
   findTableAt,
+  findTables,
   formatAllTables,
   formatTable,
+  parseTable,
+  serializeTable,
   splitCells,
 } from "./tables.ts";
 
@@ -177,5 +181,46 @@ describe("formatAllTables", () => {
     expect(out).toContain("| long value |");
     expect(out).toContain("Some prose with a | pipe in it.");
     expect(out.split("\n").length).toBe(text.split("\n").length);
+  });
+});
+
+describe("grid model", () => {
+  test("parse and serialize round-trip a table, escaping pipes", () => {
+    const src = "| a | b |\n|:--|--:|\n| x \\| y | `p|q` |";
+    const model = parseTable(src)!;
+    expect(model.aligns).toEqual(["left", "right"]);
+    expect(model.rows).toEqual([
+      ["a", "b"],
+      ["x | y", "`p|q`"],
+    ]);
+    const out = serializeTable(model);
+    expect(out).toContain("x \\| y");
+    expect(out).toContain("`p|q`");
+    expect(parseTable(out)).toEqual(model);
+  });
+
+  test("a newline in a cell becomes <br>", () => {
+    expect(escapeCell("two\nlines")).toBe("two<br>lines");
+  });
+
+  test("findTables skips fenced code and reports lines", () => {
+    const text = [
+      "intro",
+      "```",
+      "| not | a table |",
+      "|---|---|",
+      "```",
+      "| real | one |",
+      "|---|---|",
+      "| 1 | 2 |",
+    ].join("\n");
+    const found = findTables(text);
+    expect(found.length).toBe(1);
+    expect(found[0]!.line).toBe(6);
+    expect(text.slice(found[0]!.from, found[0]!.to)).toBe(
+      "| real | one |\n|---|---|\n| 1 | 2 |",
+    );
+    // And formatAllTables leaves the fenced one byte-identical.
+    expect(formatAllTables(text)).toContain("| not | a table |\n|---|---|");
   });
 });

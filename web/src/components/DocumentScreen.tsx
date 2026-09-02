@@ -24,6 +24,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  useCallback,
 } from "react";
 import { flushSync } from "react-dom";
 import { ApiError } from "../api/client.ts";
@@ -35,6 +36,8 @@ import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import type { MarkdownEditorHandle } from "../editor/MarkdownEditor.tsx";
 import { extractHeadings } from "../lib/headings.ts";
+import { requestTableEdit } from "../lib/tableEditor.ts";
+import { findTables } from "../lib/tables.ts";
 import { printPage, registerPrintHook } from "../lib/printing.ts";
 import { DocumentRail } from "./DocumentRail.tsx";
 import { EmptyState, ErrorState } from "./EmptyState.tsx";
@@ -132,6 +135,30 @@ function DocumentView({
     void save.save();
     setMode("read");
   };
+
+  // Read mode's "Edit table": open the grid on the nth table and, on save,
+  // splice the result into the buffer and flush it through the same
+  // conflict-checked path an editor save takes.
+  const editTable = useCallback(
+    (index: number) => {
+      const text = save.currentText();
+      const range = findTables(text)[index];
+      if (!range) return;
+      requestTableEdit({
+        block: text.slice(range.from, range.to),
+        apply: (next) => {
+          const now = save.currentText();
+          const again = findTables(now)[index];
+          if (!again) return;
+          save.onEditorChange(
+            now.slice(0, again.from) + next + now.slice(again.to),
+          );
+          void save.save();
+        },
+      });
+    },
+    [save],
+  );
 
   // `e` enters edit mode; Escape (outside the editor's focus) backs out of it.
   useEffect(() => {
@@ -269,6 +296,7 @@ function DocumentView({
                 links={doc.links}
                 tasks={doc.tasks}
                 onToggleTask={(task) => toggleTask.mutate(task)}
+                onEditTable={editTable}
               />
               <Backlinks doc={doc} />
             </>

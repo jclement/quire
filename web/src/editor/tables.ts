@@ -13,6 +13,32 @@ import {
   formatTable,
   splitCells,
 } from "../lib/tables.ts";
+import { requestTableEdit } from "../lib/tableEditor.ts";
+
+/** Opens the grid editor on the table under the cursor. False when not in one. */
+export function editTableAtCursor(view: EditorView): boolean {
+  const { from } = view.state.selection.main;
+  const text = view.state.doc.toString();
+  const range = findTableAt(text, from);
+  if (!range) return false;
+  requestTableEdit({
+    block: text.slice(range.from, range.to),
+    apply: (next) => {
+      // The document may have moved on while the dialog was open (a save
+      // rewrote it, say), so relocate the table rather than trusting the
+      // range we started with.
+      const now = view.state.doc.toString();
+      const again = findTableAt(now, Math.min(from, now.length));
+      if (!again) return;
+      view.dispatch({
+        changes: { from: again.from, to: again.to, insert: next },
+        selection: { anchor: again.from },
+      });
+      view.focus();
+    },
+  });
+  return true;
+}
 
 /** Reformats the table under the cursor. False when not in one. */
 export function formatTableAtCursor(view: EditorView): boolean {
@@ -158,11 +184,19 @@ function tablePanel(view: EditorView): Panel {
   button.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus
   button.addEventListener("click", () => formatTableAtCursor(view));
 
+  const grid = document.createElement("button");
+  grid.type = "button";
+  grid.textContent = "Edit as grid";
+  grid.title = "Edit the cells in a visual grid";
+  grid.className = "cm-table-panel-button";
+  grid.addEventListener("mousedown", (e) => e.preventDefault());
+  grid.addEventListener("click", () => editTableAtCursor(view));
+
   const hint = document.createElement("span");
   hint.textContent = "Tab moves between cells";
   hint.className = "cm-table-panel-hint";
 
-  dom.append(label, button, hint);
+  dom.append(label, button, grid, hint);
   return { dom, top: true };
 }
 

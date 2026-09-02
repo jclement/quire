@@ -187,6 +187,15 @@ you already have.
 loading as you scroll. Checkboxes toggle in place; each day's heading opens it
 for editing. The Daily page has a Journal toggle and the sidebar links both.
 
+### Tables
+
+Hover a rendered table and click **Edit table** to work on it as a grid: type
+into cells, add or remove rows and columns, click a column header to cycle its
+alignment, and save. Pipes and line breaks typed into a cell are escaped for
+you. In the editor, a "Table" panel appears while the cursor is inside one,
+with **Reformat table** (⌘⌥T, pads every column to its widest cell), **Edit as
+grid**, and Tab moving between cells. Tables inside fenced code are left alone.
+
 ### Tags
 
 `#tags` in prose and `tags:` in frontmatter are the same thing. `/tags` lists

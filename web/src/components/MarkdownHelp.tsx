@@ -75,7 +75,7 @@ const SECTIONS: HelpSection[] = [
       {
         syntax: "| a | b |\n|---|---|\n| 1 | 2 |",
         meaning:
-          "Table — ⌘⌥T reformats the one under the cursor, Tab moves between cells",
+          'Table — ⌘⌥T reformats the one under the cursor, Tab moves between cells, and "Edit as grid" opens a visual editor',
       },
       {
         syntax: "```go\ncode\n```",
