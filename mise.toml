@@ -51,7 +51,7 @@ description = "Browser end-to-end tests (Playwright) against a real built binary
 run = [
   "bun run --cwd web build",
   "go build -tags prod -o tmp/quire-e2e .",
-  "rm -rf tmp/e2e-data tmp/e2e-server.log",
+  "rm -rf tmp/e2e-data tmp/e2e-auth-data tmp/e2e-auth.log",
   "bun run --cwd web e2e",
 ]
 

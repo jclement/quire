@@ -272,8 +272,13 @@ Three layers, each for what only it can see:
   Protected(), and a new route that is not listed fails the suite rather than
   being assumed safe.
 - **Frontend unit tests** (bun) — pure logic in `web/src/lib`.
-- **Browser end-to-end** (Playwright, `mise run test:e2e`) — runs against a
-  real built binary serving the embedded SPA, in auth-none mode. This layer
+- **Browser end-to-end** (Playwright, `mise run test:e2e`) — runs against
+  real built binaries serving the embedded SPA. Two instances, because they
+  need incompatible configurations: one with auth off, so every spec is one
+  navigation from the thing it tests, and one in passkey mode on a
+  non-loopback address for the WebAuthn ceremonies and the bootstrap
+  enrollment gate. The ceremonies use Chromium's virtual authenticator, so
+  they need no test-only bypass in the product. This layer
   exists for the seam between browser, SPA and Go, which is where several of
   this project's real bugs have lived: a document rendering two frontmatter
   blocks, a checkbox that updated the file but not the view, a CSP that

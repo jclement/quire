@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -211,6 +212,16 @@ func runServe() error {
 		baseURL, err := url.Parse(cfg.BaseURL)
 		if err != nil || baseURL.Hostname() == "" {
 			return fmt.Errorf("auth mode \"passkey\" needs a valid QUIRE_BASE_URL (passkeys bind to its hostname), got %q", cfg.BaseURL)
+		}
+		// WebAuthn's relying-party ID must be a domain; the spec does not
+		// allow a bare IP. The library says so too, but obscurely enough
+		// ("field 'RPID' is not a valid domain string") that it is worth
+		// catching here with the fix in it.
+		if net.ParseIP(baseURL.Hostname()) != nil {
+			return fmt.Errorf(
+				"auth mode \"passkey\" needs a hostname in QUIRE_BASE_URL, not an IP address (got %q) — "+
+					"WebAuthn binds credentials to a domain. Use a DNS name (localhost works for local testing), "+
+					"or QUIRE_AUTH_MODE=token-only", cfg.BaseURL)
 		}
 		passkeys, err := auth.NewPasskeys(authStore, "quire", baseURL.Hostname(), []string{cfg.BaseURL})
 		if err != nil {

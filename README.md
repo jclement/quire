@@ -110,8 +110,10 @@ instantly.
   manageable once logged in. On a non-loopback listener that first registration
   needs the **enrollment code** printed in the server log at startup, so a
   publicly-reachable instance cannot be claimed by whoever finds it first. `QUIRE_BASE_URL`'s hostname is the RP ID — passkeys only work at that
-  exact hostname. This is the mode to use for anything a human logs into, and the
-  only mode in which OAuth consent can be approved.
+  exact hostname — and it must be a **hostname, not an IP**: WebAuthn binds
+  credentials to a domain, so quire refuses to start in passkey mode with an
+  IP in `QUIRE_BASE_URL`. This is the mode to use for anything a human logs
+  into, and the only mode in which OAuth consent can be approved.
 
 ### Bringing an existing vault
 
