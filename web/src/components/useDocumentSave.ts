@@ -14,32 +14,6 @@ const IDLE_SAVE_MS = 2_000;
 
 export type SaveStatus = "saved" | "dirty" | "saving" | "conflict" | "error";
 
-export interface BufferSyncInput {
-  /** Markdown the server most recently returned for this path. */
-  serverMarkdown: string;
-  /** What the buffer holds right now. */
-  bufferText: string;
-  /** False when the buffer holds edits that have not reached the server. */
-  bufferIsClean: boolean;
-  /** True while a 409 is awaiting the user's keep-mine / take-disk choice. */
-  inConflict: boolean;
-}
-
-/**
- * Whether to replace the buffer with the server's newer markdown.
- *
- * The server changes a file under us routinely — toggling a rendered task
- * checkbox rewrites one line, and SSE/refetch brings it back. Read mode renders
- * this buffer, so without adopting those changes the checkbox never appears to
- * flip. Unsaved local edits always win: they are never clobbered, and a genuine
- * divergence surfaces as a 409 on the next save instead.
- */
-export function shouldAdoptServerVersion(input: BufferSyncInput): boolean {
-  if (input.inConflict) return false;
-  if (!input.bufferIsClean) return false;
-  return input.serverMarkdown !== input.bufferText;
-}
-
 export interface DocumentSave {
   status: SaveStatus;
   /** The server's version of the file when a 409 hit; null otherwise. */
@@ -55,9 +29,9 @@ export interface DocumentSave {
   takeDisk: () => string | null;
   /**
    * The current buffer: what read mode renders and what the next save sends.
-   * Tracks the server when there is nothing unsaved (see
-   * shouldAdoptServerVersion), so server-side edits like a task toggle appear
-   * immediately.
+   * While nothing is unsaved this IS the server's version, so a file changed
+   * underneath — a task toggle, or vim in another window — shows up without
+   * any syncing step.
    */
   text: string;
   /** Latest buffer text, readable from callbacks without a stale closure. */
@@ -69,7 +43,8 @@ export function useDocumentSave(path: string, doc: Document): DocumentSave {
   const [status, setStatus] = useState<SaveStatus>("saved");
   const [conflictDoc, setConflictDoc] = useState<Document | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [text, setText] = useState(doc.markdown);
+  // publishedText only matters while the buffer is dirty; see `text` below.
+  const [publishedText, setPublishedText] = useState(doc.markdown);
 
   const textRef = useRef(doc.markdown);
   const savedTextRef = useRef(doc.markdown);
@@ -81,30 +56,28 @@ export function useDocumentSave(path: string, doc: Document): DocumentSave {
     undefined,
   );
 
-  // Adopt server-side changes during render (React's "adjust state when a prop
-  // changes" pattern) so the very first frame after a refetch already shows
-  // them — an effect would render one stale frame first.
-  const [syncedSha, setSyncedSha] = useState(doc.sha256);
-  if (doc.sha256 !== syncedSha) {
-    setSyncedSha(doc.sha256);
-    // "saved" is precisely the state where the buffer matches the last write
-    // and nothing is in flight or conflicted — so it is the clean signal, and
-    // reading it (rather than the refs) keeps this check pure state.
-    const adopt = shouldAdoptServerVersion({
-      serverMarkdown: doc.markdown,
-      bufferText: text,
-      bufferIsClean: status === "saved",
-      inConflict: status === "conflict",
-    });
-    if (adopt) {
-      setText(doc.markdown);
-      // Mirror into the save machinery's refs so the next write carries the
-      // right base sha. Idempotent: guarded by the sha comparison above.
-      textRef.current = doc.markdown;
-      savedTextRef.current = doc.markdown;
-      baseShaRef.current = doc.sha256;
-    }
-  }
+  // "saved" is precisely the state where the buffer matches the last write
+  // with nothing in flight or conflicted.
+  const clean = status === "saved";
+
+  // While the buffer is clean it *is* the server's version — derived, not a
+  // copy kept in sync. The previous design stored a copy and refreshed it
+  // with a render-phase setState; that update was silently lost on a later
+  // render, so an edit made outside the app (or a task toggle) refetched
+  // correctly and still showed the old text on screen. Deriving makes the
+  // invariant structural: there is no second copy to go stale.
+  const text = clean ? doc.markdown : publishedText;
+
+  // The save machinery works from refs so typing does not re-render. Point
+  // them at the server's version whenever the buffer is clean, so the next
+  // write carries the right base sha.
+  useEffect(() => {
+    if (!clean) return;
+    textRef.current = doc.markdown;
+    savedTextRef.current = doc.markdown;
+    baseShaRef.current = doc.sha256;
+    setPublishedText(doc.markdown);
+  }, [clean, doc.markdown, doc.sha256]);
 
   useEffect(() => () => clearTimeout(idleTimerRef.current), []);
 
@@ -131,9 +104,6 @@ export function useDocumentSave(path: string, doc: Document): DocumentSave {
         savedTextRef.current = text;
         conflictRef.current = false;
         setConflictDoc(null);
-        // Our own write is already in the buffer; record its sha so the
-        // render-phase sync doesn't treat it as an incoming server change.
-        setSyncedSha(saved.sha256);
         queryClient.setQueryData(queryKeys.document(path), saved);
         setStatus(textRef.current === text ? "saved" : "dirty");
       } catch (error) {
@@ -175,7 +145,7 @@ export function useDocumentSave(path: string, doc: Document): DocumentSave {
     clearTimeout(idleTimerRef.current);
     // Publish the buffer for read mode now rather than after the round-trip;
     // per-keystroke setState would re-render the whole page for nothing.
-    setText(textRef.current);
+    setPublishedText(textRef.current);
     return doSave();
   }, [doSave]);
 
@@ -195,8 +165,7 @@ export function useDocumentSave(path: string, doc: Document): DocumentSave {
     conflictRef.current = false;
     queryClient.setQueryData(queryKeys.document(path), conflictDoc);
     setConflictDoc(null);
-    setText(conflictDoc.markdown);
-    setSyncedSha(conflictDoc.sha256);
+    setPublishedText(conflictDoc.markdown);
     setStatus("saved");
     return conflictDoc.markdown;
   }, [conflictDoc, path, queryClient]);

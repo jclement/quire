@@ -236,6 +236,25 @@ rather than merely survive:
   for link resolution only — document *names* keep their `#`, or a page titled
   "C# Notes" would become unlinkable.
 
+## The editor buffer
+
+Read mode and the editor render one buffer, and while nothing is unsaved that
+buffer *is* the server's version — `text = clean ? doc.markdown : publishedText`,
+derived rather than stored. That matters more than it looks: the file changes
+underneath the app routinely (a rendered task checkbox rewrites one line; vim
+or Obsidian rewrites the whole thing and the watcher pushes an SSE event), and
+a second copy of the text is a second thing that can go stale.
+
+It previously *was* a stored copy, refreshed by a setState during render. The
+helper deciding whether to refresh had unit tests and they passed; the update
+was nonetheless dropped on a subsequent render, so an external edit refetched
+correctly and still showed the old text on screen. Deriving removes the class
+of bug rather than the instance — there is no copy left to lose.
+
+Unsaved edits are never overwritten: while the buffer is dirty it holds the
+user's text, and a genuine divergence surfaces as a 409 on the next save with
+an explicit keep-mine / take-disk choice.
+
 ## Testing
 
 Three layers, each for what only it can see:

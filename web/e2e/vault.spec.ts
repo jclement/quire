@@ -7,6 +7,15 @@
 // toggle that updated the file but not the view — and neither was visible to
 // a Go test or a component test.
 import { expect, test } from "@playwright/test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+/** Writes straight into the vault on disk, the way vim or Obsidian would. */
+function writeOutsideTheApp(rel: string, body: string) {
+  const full = join("../tmp/e2e-data/vault", rel);
+  mkdirSync(dirname(full), { recursive: true });
+  writeFileSync(full, body);
+}
 
 test.describe.configure({ mode: "serial" });
 
@@ -186,6 +195,35 @@ test("an imported document with spaces in its path opens from a link", async ({
   await page.goto("/browse/note");
   await page.getByRole("link", { name: /spaced out note/i }).first().click();
   await expect(page.getByRole("heading", { name: "Spaced Out Note" }).first()).toBeVisible();
+});
+
+// "You should be able to edit the same Markdown files outside the
+// application without breaking the system" is an explicit MVP criterion, and
+// it is the whole chain: fsnotify → reindex → SSE → the open page updating.
+// Nothing else in the suite exercises it.
+test("an edit made outside the app reaches an open page", async ({ page }) => {
+  writeOutsideTheApp("notes/external-edit.md", "# External Edit\n\nOriginal body.\n");
+
+  await page.goto("/doc/notes/external-edit.md");
+  await expect(page.getByText("Original body.")).toBeVisible();
+
+  // Edit the file underneath the open page — no reload, no interaction.
+  writeOutsideTheApp(
+    "notes/external-edit.md",
+    "# External Edit\n\nRewritten by vim while the page was open.\n",
+  );
+
+  await expect(page.getByText("Rewritten by vim while the page was open.")).toBeVisible();
+  await expect(page.getByText("Original body.")).toHaveCount(0);
+});
+
+test("a document created outside the app appears in browse", async ({ page }) => {
+  await page.goto("/browse/note");
+  writeOutsideTheApp("notes/appeared-from-nowhere.md", "# Appeared From Nowhere\n\nHello.\n");
+
+  await expect(
+    page.getByRole("link", { name: /appeared from nowhere/i }),
+  ).toBeVisible();
 });
 
 test("wikilinks produce a backlink on the target", async ({ page }) => {
