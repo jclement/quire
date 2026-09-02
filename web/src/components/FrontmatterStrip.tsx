@@ -348,8 +348,10 @@ function AreaChip({ doc }: { doc: Document }) {
       ? [...list, { area: doc.area, count: 1, color: "slate", defined: false }]
       : list;
   const current = list.find((a) => a.area === doc.area);
+  // A flex wrapper (not a block around an inline button) so no baseline gap
+  // pushes the badge below its neighbours; h-[22px] is the chips' height.
   return (
-    <div className="relative">
+    <div className="relative flex">
       <button
         type="button"
         aria-label="Document area"
@@ -358,7 +360,7 @@ function AreaChip({ doc }: { doc: Document }) {
         title="Change which area this document files under"
         disabled={setArea.isPending}
         onClick={() => setOpen(!open)}
-        className={`${CHIP_CLASSES} cursor-pointer hover:bg-hover disabled:opacity-60 print:hidden`}
+        className={`${CHIP_CLASSES} h-[22px] cursor-pointer hover:bg-hover disabled:opacity-60 print:hidden`}
         style={{
           borderColor: doc.area ? areaColorVar(current?.color) : undefined,
         }}
