@@ -6,7 +6,6 @@ version: 2
 builds:
   - id: quire
     main: .
-    binary: quire
     flags:
       - -tags=prod
     env:
@@ -42,6 +41,36 @@ docker_manifests:
     image_templates:
       - "ghcr.io/jclement/quire:{{ .Version }}-amd64"
       - "ghcr.io/jclement/quire:{{ .Version }}-arm64"
+
+# The same binary is the CLI (`quire task add`, `quire search`, `quire today`)
+# pointed at QUIRE_URL, so it is worth having on a laptop even when the server
+# runs in Docker.
+#
+# skip_upload is guarded rather than assumed: without HOMEBREW_TAP_TOKEN in
+# the repo's secrets the formula is simply not published, instead of failing
+# the whole release over a convenience artifact.
+homebrew_casks:
+  - name: quire
+    repository:
+      owner: jclement
+      name: homebrew-tap
+      token: '{{ envOrDefault "HOMEBREW_TAP_TOKEN" "" }}'
+    # envOrDefault, not .Env.X: a missing key is a template error, so the
+    # plain form would break `goreleaser release` for anyone who does not
+    # have the tap token — including a local snapshot build.
+    skip_upload: '{{ if envOrDefault "HOMEBREW_TAP_TOKEN" "" }}false{{ else }}true{{ end }}'
+    homepage: https://github.com/jclement/quire
+    description: Self-hosted personal knowledge and work hub — markdown on disk, agent-operable over MCP
+    license: MIT
+    hooks:
+      post:
+        # Downloaded binaries carry the quarantine attribute, which makes
+        # macOS refuse to run them until it is cleared.
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr",
+                           args: ["-dr", "com.apple.quarantine", "#{staged_path}/quire"]
+          end
 
 changelog:
   use: github-native

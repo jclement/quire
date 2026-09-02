@@ -1,0 +1,4 @@
+# Component tests need a DOM. happy-dom is registered globally before any
+# test file loads React; see src/test-setup.ts.
+[test]
+preload = ["./src/test-setup.ts"]

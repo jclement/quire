@@ -23,6 +23,19 @@ mise run dev        # single-user, no auth, http://localhost:5173 (Vite → Go o
 The dev instance runs with `QUIRE_AUTH_MODE=none` against a scratch vault in
 `tmp/data/`. `mise run dev:reset` wipes local state.
 
+## Installing the CLI
+
+The same binary is both the server and the terminal client, so on a laptop
+you usually just want the client, pointed at a quire running elsewhere:
+
+```sh
+brew install jclement/tap/quire
+export QUIRE_URL=https://quire.example.com QUIRE_TOKEN=sk_…
+quire today
+```
+
+Or grab a binary from [releases](https://github.com/jclement/quire/releases).
+
 ## Running for real
 
 Three complete, copy-and-run deployments live in [deploy/](deploy/) — pick the one

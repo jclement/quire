@@ -37,3 +37,6 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Publishes the Homebrew formula to jclement/homebrew-tap. Unset is
+          # fine — goreleaser skips the formula rather than failing.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
