@@ -114,10 +114,25 @@ export function useDocumentSave(path: string, doc: Document): DocumentSave {
         queryClient.setQueryData(queryKeys.document(path), saved);
         setStatus(textRef.current === text ? "saved" : "dirty");
       } catch (error) {
-        if (isConflictError(error)) {
+        // Before believing a failure, ask the server what it holds. A
+        // response lost in transit (a tunnel hiccup) leaves the write
+        // applied with the client none the wiser; its retry then carries
+        // the old base sha and "conflicts" with its own save. Left there,
+        // read mode keeps showing this buffer and ignores every refetch —
+        // task toggles hit the disk and never appear. If the server has
+        // exactly this text, the save landed and nothing is wrong.
+        const server = await api.getDocument(path).catch(() => null);
+        if (server && server.markdown === text) {
+          baseShaRef.current = server.sha256;
+          savedTextRef.current = text;
+          conflictRef.current = false;
+          setConflictDoc(null);
+          setErrorMessage(null);
+          queryClient.setQueryData(queryKeys.document(path), server);
+          setStatus(textRef.current === text ? "saved" : "dirty");
+        } else if (isConflictError(error)) {
           conflictRef.current = true;
           queuedRef.current = false;
-          const server = await api.getDocument(path).catch(() => null);
           setConflictDoc(server);
           setStatus("conflict");
         } else {

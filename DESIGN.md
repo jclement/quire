@@ -272,6 +272,14 @@ stale base sha, which conflicted again and swallowed the user's choice — so
 the button appeared to do nothing and the other version won. Only an explicit
 override (keepMine, takeDisk) may write while a conflict is unresolved.
 
+A failed save is not believed until the server is asked. A response lost
+in transit (the tunnel dropping it) leaves the write applied; the client's
+retry then carries the old base sha, gets a 409, and would show a conflict
+with its own save — after which read mode renders the buffer snapshot and
+ignores every refetch, so task toggles hit the disk and never appear. So on
+any save error the client fetches the document first: if the server holds
+exactly the text it tried to save, that save landed and state is "saved".
+
 ## Testing
 
 Three layers, each for what only it can see:
