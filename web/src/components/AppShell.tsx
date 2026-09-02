@@ -11,6 +11,8 @@ import {
   Plus,
   Search,
   Settings,
+  BookOpen,
+  Hash,
   Sunrise,
   X,
   type LucideIcon,
@@ -60,12 +62,19 @@ const MOBILE_NAV: NavEntry[] = [
   { to: "/browse/note", label: "Notes", icon: DOC_TYPE_INFO.note.icon },
 ];
 
-/** The month view sits with Daily: both are the vault by date, not by type. */
+/** The month view and the journal sit with Daily: all three are the vault
+ *  by date, not by type. */
 const CALENDAR_NAV: NavEntry = {
   to: "/calendar",
   label: "Calendar",
   icon: CalendarRange,
 };
+const JOURNAL_NAV: NavEntry = {
+  to: "/journal",
+  label: "Journal",
+  icon: BookOpen,
+};
+const TAGS_NAV: NavEntry = { to: "/tags", label: "Tags", icon: Hash };
 
 /** Daily changes at midnight, so compute the link target per render. */
 function dailyNavEntry(): NavEntry {
@@ -107,7 +116,9 @@ function NavSections({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink key={entry.to} entry={entry} onNavigate={onNavigate} />
       ))}
       <NavLink entry={dailyNavEntry()} onNavigate={onNavigate} />
+      <NavLink entry={JOURNAL_NAV} onNavigate={onNavigate} />
       <NavLink entry={CALENDAR_NAV} onNavigate={onNavigate} />
+      <NavLink entry={TAGS_NAV} onNavigate={onNavigate} />
       <div className="mt-auto border-t border-border pt-2">
         <NavLink
           entry={{ to: "/search", label: "Search", icon: Search }}

@@ -5,6 +5,7 @@
 import type {
   AgentGuidanceResponse,
   AttachmentUpload,
+  AuditEntry,
   AuthStatus,
   CalendarMonth,
   ConnectedApp,
@@ -19,6 +20,7 @@ import type {
   NewToken,
   SearchResult,
   ShareInfo,
+  TagCount,
   Task,
   TaskEdit,
   TaskView,
@@ -173,6 +175,17 @@ export const api = {
     ),
 
   getDaily: (date: string) => request<Document>(`/api/v1/daily/${date}`),
+
+  /** The journal's page of history: daily notes before `before`, newest first. */
+  listDaily: (before: string, limit = 10) =>
+    request<Document[]>(
+      `/api/v1/daily?before=${encodeURIComponent(before)}&limit=${limit}`,
+    ),
+
+  listTags: () => request<TagCount[]>("/api/v1/tags"),
+
+  listAudit: (limit = 100) =>
+    request<AuditEntry[]>(`/api/v1/audit?limit=${limit}`),
 
   createDaily: (date: string) =>
     request<Document>(`/api/v1/daily/${date}`, { method: "POST" }),

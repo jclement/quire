@@ -6,7 +6,16 @@
 // invisible entirely. Revocation is the point, so every row has a way out.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link as RouterLink } from "@tanstack/react-router";
-import { Check, Copy, KeyRound, Link2, Plug, Plus, Trash2 } from "lucide-react";
+import {
+  Activity,
+  Check,
+  Copy,
+  KeyRound,
+  Link2,
+  Plug,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage } from "../../api/client.ts";
 import type { NewToken } from "../../api/types.ts";
@@ -463,6 +472,72 @@ export function ShareSettings() {
           {errorMessage(revoke.error)}
         </p>
       ) : null}
+    </section>
+  );
+}
+
+// ---- agent activity ----
+
+/**
+ * What the agents did. Every API-token and OAuth-client write, and every
+ * mutating MCP tool call, with its outcome. The owner's own browser edits
+ * are not here on purpose: they would drown the log in autosaves, and the
+ * question this answers is "what did the agents do?".
+ */
+export function AgentActivity() {
+  const audit = useQuery({
+    queryKey: ["audit"],
+    queryFn: () => api.listAudit(100),
+    refetchInterval: 30_000,
+  });
+  return (
+    <section className="border-t border-border pt-4">
+      <SectionHeading>Agent activity</SectionHeading>
+      <p className="mb-2 text-xs text-muted">
+        Every write made through an API token or a connected app, newest first.
+        Your own edits in this browser are not listed.
+      </p>
+      {audit.isPending ? (
+        <SkeletonRows count={3} />
+      ) : audit.isError ? (
+        <p className="text-xs text-danger">{errorMessage(audit.error)}</p>
+      ) : audit.data.length === 0 ? (
+        <p className="border-y border-border py-3 text-xs text-muted">
+          No agent activity yet.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border border-y border-border">
+          {audit.data.map((entry) => (
+            <li
+              key={entry.id}
+              className="flex min-h-8 items-center gap-2 px-2 py-1"
+            >
+              <Activity
+                className={`size-3.5 shrink-0 ${entry.ok ? "text-muted" : "text-danger"}`}
+                aria-hidden="true"
+              />
+              <span className="shrink-0 font-mono text-xs text-heading">
+                {entry.action.replace(/^mcp:/, "")}
+              </span>
+              {entry.path ? (
+                <RouterLink
+                  to={docHref(entry.path)}
+                  className="truncate font-mono text-xs text-accent hover:underline"
+                >
+                  {entry.path}
+                </RouterLink>
+              ) : null}
+              <span className="truncate text-xs text-muted">
+                {entry.detail}
+              </span>
+              <span className="ml-auto shrink-0 text-xs text-muted">
+                {entry.principal.replace(/^token:/, "")} ·{" "}
+                <When iso={entry.at} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

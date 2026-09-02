@@ -199,6 +199,25 @@ paths:
     delete:
       summary: Revoke a share link
       responses: { "204": { description: revoked } }
+  /api/v1/tags:
+    get:
+      summary: Every tag with its document count, most-used first
+      responses: { "200": { description: "data: TagCount[] — tag, count" } }
+  /api/v1/daily:
+    get:
+      summary: The journal's page of history — existing daily notes before a date, newest first
+      parameters:
+        - { name: before, in: query, schema: { type: string, format: date }, description: "defaults to today" }
+        - { name: limit, in: query, schema: { type: integer, default: 30, maximum: 200 } }
+      responses: { "200": { description: "data: Document[] (full documents, so they render without a second round trip)" } }
+  /api/v1/audit:
+    get:
+      summary: What agents did — API-token and OAuth-client writes and MCP tool calls, newest first
+      description: >
+        The owner's own browser session is not audited (its autosaves would
+        drown the log); everything an agent does is, with the outcome.
+      parameters: [{ name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }]
+      responses: { "200": { description: "data: AuditEntry[] — at, principal, action, path, detail, ok" } }
   /api/v1/tokens:
     get:
       summary: List API tokens (revoked included — audit trail)

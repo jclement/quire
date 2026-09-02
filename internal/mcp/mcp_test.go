@@ -31,7 +31,7 @@ func connect(t *testing.T) *sdk.ClientSession {
 	svc := service.New(v, &index.Index{DB: db, Vault: v})
 	svc.Now = func() time.Time { return time.Date(2026, 9, 1, 10, 0, 0, 0, time.Local) }
 
-	server := newServer(svc, "test", allowAll)
+	server := newServer(svc, "test", allowAll, "owner", nil)
 	clientTransport, serverTransport := sdk.NewInMemoryTransports()
 	ctx := context.Background()
 	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
@@ -156,7 +156,7 @@ func TestOwnerGuidanceReachesInstructions(t *testing.T) {
 
 	connect := func() *sdk.InitializeResult {
 		t.Helper()
-		server := newServer(svc, "test", allowAll)
+		server := newServer(svc, "test", allowAll, "owner", nil)
 		clientTransport, serverTransport := sdk.NewInMemoryTransports()
 		ctx := context.Background()
 		if _, err := server.Connect(ctx, serverTransport, nil); err != nil {

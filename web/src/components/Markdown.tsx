@@ -39,7 +39,11 @@ import type { Link, Task } from "../api/types.ts";
 import type { CalloutType } from "../lib/callouts.ts";
 import { docHref } from "../lib/docs.ts";
 import { extractHeadings } from "../lib/headings.ts";
-import { remarkQuire, WIKILINK_HREF_PREFIX } from "../lib/remarkQuire.ts";
+import {
+  remarkQuire,
+  TAG_HREF_PREFIX,
+  WIKILINK_HREF_PREFIX,
+} from "../lib/remarkQuire.ts";
 
 // Both are heavy and rare per-page; each stays in its own chunk and loads only
 // when a matching fence is actually rendered.
@@ -135,6 +139,18 @@ function resolveWikilink(inner: string, links: Link[]): string | null {
 function Anchor(props: ComponentProps<"a"> & ExtraProps) {
   const { links } = useContext(MarkdownContext);
   const href = props.href ?? "";
+  if (href.startsWith(TAG_HREF_PREFIX)) {
+    const tag = decodeURIComponent(href.slice(TAG_HREF_PREFIX.length));
+    return (
+      <RouterLink
+        to="/search"
+        search={{ q: `tag:${tag}` }}
+        className="rounded bg-hover px-1 font-mono text-[0.85em] text-accent no-underline hover:underline"
+      >
+        {props.children}
+      </RouterLink>
+    );
+  }
   if (!href.startsWith(WIKILINK_HREF_PREFIX)) {
     return <a {...props} target="_blank" rel="noreferrer" />;
   }

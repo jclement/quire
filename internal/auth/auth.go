@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -138,6 +139,17 @@ var migrations = []string{
 		created_at         TEXT NOT NULL,
 		last_used_at       TEXT NOT NULL DEFAULT ''
 	);`,
+	// v5: the audit log of agent actions (API tokens and OAuth clients).
+	`CREATE TABLE IF NOT EXISTS audit_log (
+		id        INTEGER PRIMARY KEY,
+		at        TEXT NOT NULL,
+		principal TEXT NOT NULL,
+		action    TEXT NOT NULL,
+		path      TEXT NOT NULL DEFAULT '',
+		detail    TEXT NOT NULL DEFAULT '',
+		ok        INTEGER NOT NULL DEFAULT 1
+	);
+	CREATE INDEX IF NOT EXISTS audit_log_at ON audit_log(at);`,
 }
 
 // Open opens (creating if needed) auth.db at path.
@@ -242,8 +254,44 @@ func (s *Store) Middleware(mode config.AuthMode, mcpChallenge string, next http.
 			return
 		}
 		// Hand the principal down so per-tool scope checks (MCP) can see it.
-		next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), principal)))
+		r = r.WithContext(WithPrincipal(r.Context(), principal))
+
+		// REST writes by agents are audited with their outcome. MCP audits
+		// itself per tool (a single POST /mcp says nothing useful), so it is
+		// excluded here.
+		if Audited(principal) && r.Method != http.MethodGet && r.Method != http.MethodHead && r.URL.Path != "/mcp" {
+			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+			next.ServeHTTP(sw, r)
+			if err := s.RecordAudit(AuditRecord{
+				Principal: principal.Name,
+				Action:    r.Method + " " + r.URL.Path,
+				Path:      strings.TrimPrefix(r.URL.Path, "/api/v1/documents/"),
+				OK:        sw.status < 400,
+			}); err != nil {
+				slog.Warn("audit", "err", err)
+			}
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
+}
+
+// statusWriter captures the response status for the audit row.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// Flush keeps SSE and streaming responses working through the wrapper.
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // requiredScope maps a request to the scope it needs, or "" when the route

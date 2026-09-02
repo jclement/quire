@@ -10,6 +10,7 @@
 export type {
   AgentGuidanceResponse,
   Attachment,
+  AuditEntry,
   DocType,
   Birthday,
   CalendarDay,
@@ -24,6 +25,7 @@ export type {
   RenameResult,
   SearchResult,
   ShareInfo,
+  TagCount,
   Task,
   TodayPayload,
   TokenInfo,

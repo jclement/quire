@@ -12,9 +12,18 @@ import { splitWikilinks } from "./wikilinks.ts";
  * be stripped. */
 export const WIKILINK_HREF_PREFIX = "#wikilink:";
 
+/** URL prefix carrying a #tag to the <a> renderer, which routes it to search. */
+export const TAG_HREF_PREFIX = "#tag:";
+
+// A tag: `#` at a word boundary, then letters/digits/-/_/slash. Purely
+// numeric "#123" is an issue reference in most people's muscle memory, not
+// a tag, so it is excluded — the same rule Obsidian applies.
+const TAG_RE = /(^|[\s(])#([\p{L}\p{N}_\/-]*\p{L}[\p{L}\p{N}_\/-]*)/gu;
+
 export function remarkQuire() {
   return (tree: Root) => {
     transformWikilinks(tree);
+    transformHashtags(tree);
     transformCallouts(tree);
   };
 }
@@ -37,6 +46,38 @@ function transformWikilinks(tree: Root): void {
     parent.children.splice(index, 1, ...replacements);
     // Skip over what we just inserted so we don't re-visit it.
     return index + replacements.length;
+  });
+}
+
+/** Turns `#tag` in prose into a link the renderer routes to a tag search. */
+function transformHashtags(tree: Root): void {
+  visit(tree, "text", (node: Text, index, parent) => {
+    if (!parent || index === undefined) return;
+    // Inside a link already (a wikilink we just made, or a real one) the
+    // text is the link's label, not prose.
+    if (parent.type === "link") return;
+    const value = node.value;
+    if (!value.includes("#")) return;
+    const pieces: Array<
+      Text | { type: "link"; url: string; children: Text[] }
+    > = [];
+    let last = 0;
+    for (const match of value.matchAll(TAG_RE)) {
+      const start = match.index + match[1]!.length;
+      if (start > last)
+        pieces.push({ type: "text", value: value.slice(last, start) } as Text);
+      pieces.push({
+        type: "link",
+        url: TAG_HREF_PREFIX + encodeURIComponent(match[2]!),
+        children: [{ type: "text", value: "#" + match[2]! } as Text],
+      });
+      last = start + 1 + match[2]!.length;
+    }
+    if (pieces.length === 0) return;
+    if (last < value.length)
+      pieces.push({ type: "text", value: value.slice(last) } as Text);
+    parent.children.splice(index, 1, ...(pieces as never[]));
+    return index + pieces.length;
   });
 }
 

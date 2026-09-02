@@ -26,6 +26,7 @@ import { useUi } from "../keys/UiContext.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { ConfirmButton } from "../components/settings/ConfirmButton.tsx";
 import {
+  AgentActivity,
   ConnectedAppSettings,
   ShareSettings,
   TokenSettings,
@@ -69,6 +70,7 @@ export function SettingsPage() {
       <ConnectedAppSettings />
       <ShareSettings />
       <AgentGuidanceSection />
+      <AgentActivity />
       <AboutSection />
     </div>
   );

@@ -237,3 +237,33 @@ export interface ConnectedApp {
   last_used_at: string;
   active_grant: boolean;
 }
+/**
+ * TagCount is a tag and how many documents carry it — the tags page.
+ */
+export interface TagCount {
+  tag: string;
+  count: number /* int */;
+}
+/**
+ * AuditEntry is one recorded agent action. Human edits from the owner's own
+ * browser session are not audited (they would drown the log in autosaves);
+ * everything an API token or OAuth client does is.
+ */
+export interface AuditEntry {
+  id: number /* int64 */;
+  at: string;
+  principal: string;
+  /**
+   * Action is the MCP tool name, or "METHOD /path" for a REST write.
+   */
+  action: string;
+  /**
+   * Path is the document the action touched, when there was one.
+   */
+  path: string;
+  /**
+   * Detail is a short human-readable summary (a title, a task's text).
+   */
+  detail: string;
+  ok: boolean;
+}

@@ -70,6 +70,12 @@ function DayNav({ date }: { date: string }) {
         </RouterLink>
       ) : null}
       <span className="ml-2 text-xs text-muted">{formatDayHeading(date)}</span>
+      <RouterLink
+        to="/journal"
+        className="ml-auto flex h-7 items-center rounded border border-border px-2 text-xs text-muted hover:bg-hover hover:text-heading"
+      >
+        Journal
+      </RouterLink>
     </nav>
   );
 }

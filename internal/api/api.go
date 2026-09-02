@@ -53,12 +53,14 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/link", s.handleLink)
 
 	mux.HandleFunc("GET /api/v1/search", s.handleSearch)
+	mux.HandleFunc("GET /api/v1/tags", s.handleListTags)
 
 	mux.HandleFunc("GET /api/v1/tasks", s.handleListTasks)
 	mux.HandleFunc("POST /api/v1/tasks", s.handleCreateTask)
 	mux.HandleFunc("POST /api/v1/tasks/{id}/toggle", s.handleToggleTask)
 	mux.HandleFunc("PATCH /api/v1/tasks/{id}", s.handleEditTask)
 
+	mux.HandleFunc("GET /api/v1/daily", s.handleListDaily)
 	mux.HandleFunc("GET /api/v1/daily/{date}", s.handleGetDaily)
 	mux.HandleFunc("POST /api/v1/daily/{date}", s.handleEnsureDaily)
 	mux.HandleFunc("GET /api/v1/today", s.handleToday)
@@ -83,6 +85,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/v1/tokens", s.handleListTokens)
 		mux.HandleFunc("POST /api/v1/tokens", s.handleCreateToken)
 		mux.HandleFunc("DELETE /api/v1/tokens/{prefix}", s.handleRevokeToken)
+		mux.HandleFunc("GET /api/v1/audit", s.handleListAudit)
 		mux.HandleFunc("GET /api/v1/connected-apps", s.handleListConnectedApps)
 		mux.HandleFunc("DELETE /api/v1/connected-apps/{id}", s.handleDisconnectApp)
 	}

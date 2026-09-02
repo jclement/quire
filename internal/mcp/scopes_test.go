@@ -81,9 +81,9 @@ func TestToolsAreScoped(t *testing.T) {
 		write = auth.ScopeWrite
 		tasks = auth.ScopeTasks
 	)
-	readTools := []string{"search", "get_document", "list_tasks", "today", "person_context"}
-	writeTools := []string{"create_document", "update_document", "append_to_document"}
-	taskTools := []string{"create_task", "complete_task"}
+	readTools := []string{"search", "list_documents", "get_document", "get_daily", "list_tasks", "list_tags", "today", "person_context"}
+	writeTools := []string{"create_document", "update_document", "append_to_document", "link_entity", "set_frontmatter"}
+	taskTools := []string{"create_task", "complete_task", "edit_task"}
 
 	for _, tc := range []struct {
 		name    string
@@ -101,7 +101,7 @@ func TestToolsAreScoped(t *testing.T) {
 		{"no principal", func(string) bool { return false }, nil, append(append(slices.Clone(readTools), writeTools...), taskTools...)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := toolNames(t, newServer(newScopeTestService(t), "test", tc.allows))
+			got := toolNames(t, newServer(newScopeTestService(t), "test", tc.allows, "test-token", nil))
 			for _, name := range tc.want {
 				if !slices.Contains(got, name) {
 					t.Errorf("%s should expose %s, got %v", tc.name, name, got)
@@ -113,5 +113,72 @@ func TestToolsAreScoped(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+type recordingAuditor struct{ rows []auth.AuditRecord }
+
+func (r *recordingAuditor) RecordAudit(rec auth.AuditRecord) error {
+	r.rows = append(r.rows, rec)
+	return nil
+}
+
+// TestMutatingToolsAreAudited: an agent's writes are recorded with who, what
+// and where; reads are not; and the owner's own session is never audited.
+func TestMutatingToolsAreAudited(t *testing.T) {
+	svc := newScopeTestService(t)
+	rec := &recordingAuditor{}
+	server := newServer(svc, "test", allowAll, "token:claude", rec)
+
+	clientTransport, serverTransport := sdk.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
+		t.Fatal(err)
+	}
+	session, err := sdk.NewClient(&sdk.Implementation{Name: "audit-probe", Version: "0"}, nil).Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	call := func(name string, args map[string]any) {
+		t.Helper()
+		if _, err := session.CallTool(ctx, &sdk.CallToolParams{Name: name, Arguments: args}); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	call("create_document", map[string]any{"type": "note", "title": "Audited Note"})
+	call("append_to_document", map[string]any{"path": "notes/audited-note.md", "markdown": "more"})
+	call("create_task", map[string]any{"text": "Audited task", "due": "today"})
+	call("search", map[string]any{"query": "audited"}) // a read: not recorded
+	call("list_tags", map[string]any{})
+
+	if len(rec.rows) != 3 {
+		t.Fatalf("expected 3 audit rows (writes only), got %d: %+v", len(rec.rows), rec.rows)
+	}
+	if rec.rows[0].Principal != "token:claude" || rec.rows[0].Action != "mcp:create_document" || rec.rows[0].Path != "notes/audited-note.md" || !rec.rows[0].OK {
+		t.Errorf("first row = %+v", rec.rows[0])
+	}
+	if rec.rows[2].Action != "mcp:create_task" || rec.rows[2].Detail != "Audited task" {
+		t.Errorf("task row = %+v", rec.rows[2])
+	}
+
+	// The owner's own session is not an agent.
+	ownerRec := &recordingAuditor{}
+	ownerServer := newServer(newScopeTestService(t), "test", allowAll, "owner", ownerRec)
+	ct2, st2 := sdk.NewInMemoryTransports()
+	if _, err := ownerServer.Connect(ctx, st2, nil); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := sdk.NewClient(&sdk.Implementation{Name: "owner-probe", Version: "0"}, nil).Connect(ctx, ct2, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s2.Close() })
+	if _, err := s2.CallTool(ctx, &sdk.CallToolParams{Name: "create_task", Arguments: map[string]any{"text": "owner task"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(ownerRec.rows) != 0 {
+		t.Errorf("owner's calls must not be audited: %+v", ownerRec.rows)
 	}
 }

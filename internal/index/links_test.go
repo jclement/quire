@@ -33,3 +33,48 @@ func TestNormalizeNameKeepsHash(t *testing.T) {
 		t.Errorf("normalizeName(%q) = %q — a language name must survive", "C# Notes", got)
 	}
 }
+
+func TestTagsAndDailyNotesBefore(t *testing.T) {
+	ix := newTestIndex(t)
+	tags, err := ix.Tags()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tags) == 0 {
+		t.Fatal("the test vault carries tags; none came back")
+	}
+	// Most-used first, ties alphabetical.
+	for i := 1; i < len(tags); i++ {
+		if tags[i-1].Count < tags[i].Count {
+			t.Errorf("tags not sorted by count: %+v", tags)
+		}
+	}
+
+	for _, rel := range []string{"daily/2020-01-30.md", "daily/2020-01-31.md", "daily/2020-02-01.md"} {
+		if _, err := ix.Vault.Write(rel, []byte("# "+rel+"\n"), ""); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ix.IndexFile(rel); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := ix.DailyNotesBefore("2020-02-01", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before) != 2 || before[0].Path != "daily/2020-01-31.md" || before[1].Path != "daily/2020-01-30.md" {
+		t.Errorf("DailyNotesBefore = %v", paths(before))
+	}
+	one, _ := ix.DailyNotesBefore("2020-02-01", 1)
+	if len(one) != 1 {
+		t.Errorf("limit not honoured: %d", len(one))
+	}
+}
+
+func paths(rows []DocRow) []string {
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = r.Path
+	}
+	return out
+}

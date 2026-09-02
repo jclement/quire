@@ -137,7 +137,17 @@ function DocTable({ docs }: { docs: DocMeta[] }) {
               </RouterLink>
             </td>
             <td className="hidden truncate px-2 text-xs text-muted sm:table-cell">
-              {doc.tags.map((tag) => `#${tag}`).join(" ")}
+              {doc.tags.map((tag) => (
+                <RouterLink
+                  key={tag}
+                  to="/search"
+                  search={{ q: `tag:${tag}` }}
+                  onClick={(event) => event.stopPropagation()}
+                  className="mr-1.5 font-mono text-accent hover:underline"
+                >
+                  #{tag}
+                </RouterLink>
+              ))}
             </td>
             <td className="whitespace-nowrap px-2 text-right text-xs text-muted">
               {formatRelativeTime(doc.mtime)}

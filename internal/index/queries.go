@@ -474,3 +474,45 @@ func collectTasks(rows *sql.Rows) ([]TaskRow, error) {
 	}
 	return tasks, rows.Err()
 }
+
+// TagCount is one tag with how many documents carry it.
+type TagCount struct {
+	Tag   string
+	Count int
+}
+
+// Tags returns every tag in the vault with its document count, most-used
+// first. Tags come from both body #tags and frontmatter tags:, already
+// merged at index time.
+func (ix *Index) Tags() ([]TagCount, error) {
+	rows, err := ix.DB.Query(`SELECT tag, COUNT(DISTINCT path) AS n FROM tags GROUP BY tag ORDER BY n DESC, tag ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("listing tags: %w", err)
+	}
+	defer rows.Close()
+	var out []TagCount
+	for rows.Next() {
+		var t TagCount
+		if err := rows.Scan(&t.Tag, &t.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// DailyNotesBefore returns existing daily notes dated strictly before
+// `date` (YYYY-MM-DD), newest first — the journal view's page of history.
+// Daily paths sort lexically as dates, which is what makes this one query.
+func (ix *Index) DailyNotesBefore(date string, limit int) ([]DocRow, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 30
+	}
+	rows, err := ix.DB.Query(docSelect+` WHERE d.type = 'daily' AND d.path < ? ORDER BY d.path DESC LIMIT ?`,
+		"daily/"+date+".md", limit)
+	if err != nil {
+		return nil, fmt.Errorf("listing daily notes: %w", err)
+	}
+	defer rows.Close()
+	return collectDocs(rows)
+}

@@ -26,6 +26,11 @@ function invalidateForDocEvent(
   void queryClient.invalidateQueries({ queryKey: ["tasks"] });
   void queryClient.invalidateQueries({ queryKey: queryKeys.today });
   void queryClient.invalidateQueries({ queryKey: ["calendar"] });
+  // The journal and the tag list are derived from every document, so a
+  // change to any of them can change either. Missing these left the journal
+  // stale after an external edit — caught by its own E2E test.
+  void queryClient.invalidateQueries({ queryKey: ["journal"] });
+  void queryClient.invalidateQueries({ queryKey: ["tags"] });
 }
 
 /** Mount once (in App). Owns the EventSource for the whole app lifetime. */

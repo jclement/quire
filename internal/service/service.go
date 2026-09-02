@@ -465,3 +465,35 @@ func parseBirthday(raw string) (time.Month, int, int, bool) {
 	}
 	return 0, 0, 0, false
 }
+
+// Tags lists every tag with its document count, most-used first.
+func (s *Service) Tags() ([]TagCount, error) {
+	rows, err := s.Index.Tags()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TagCount, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, TagCount{Tag: r.Tag, Count: r.Count})
+	}
+	return out, nil
+}
+
+// DailyNotesBefore is the journal's page of history: existing daily notes
+// dated before `date`, newest first, as full documents so they render
+// without a second round trip each.
+func (s *Service) DailyNotesBefore(date string, limit int) ([]Document, error) {
+	rows, err := s.Index.DailyNotesBefore(date, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Document, 0, len(rows))
+	for _, r := range rows {
+		doc, err := s.GetDocument(r.Path)
+		if err != nil {
+			continue // deleted between index and read; the journal just skips it
+		}
+		out = append(out, doc)
+	}
+	return out, nil
+}

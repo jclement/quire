@@ -28,6 +28,8 @@ import { GlobalKeys } from "../keys/GlobalKeys.tsx";
 import { BrowsePage } from "./BrowsePage.tsx";
 import { CalendarPage } from "./CalendarPage.tsx";
 import { DailyPage } from "./DailyPage.tsx";
+import { JournalPage } from "./JournalPage.tsx";
+import { TagsPage } from "./TagsPage.tsx";
 import { NotFoundPage } from "./NotFoundPage.tsx";
 import { SearchPage } from "./SearchPage.tsx";
 import { SettingsPage } from "./SettingsPage.tsx";
@@ -175,7 +177,21 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+const journalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/journal",
+  component: JournalPage,
+});
+
+const tagsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tags",
+  component: TagsPage,
+});
+
 const routeTree = rootRoute.addChildren([
+  journalRoute,
+  tagsRoute,
   indexRoute,
   todayRoute,
   inboxRoute,

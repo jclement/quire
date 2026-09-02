@@ -189,3 +189,25 @@ type ConnectedApp struct {
 	LastUsedAt  string   `json:"last_used_at"`
 	ActiveGrant bool     `json:"active_grant"`
 }
+
+// TagCount is a tag and how many documents carry it — the tags page.
+type TagCount struct {
+	Tag   string `json:"tag"`
+	Count int    `json:"count"`
+}
+
+// AuditEntry is one recorded agent action. Human edits from the owner's own
+// browser session are not audited (they would drown the log in autosaves);
+// everything an API token or OAuth client does is.
+type AuditEntry struct {
+	ID        int64  `json:"id"`
+	At        string `json:"at"`
+	Principal string `json:"principal"`
+	// Action is the MCP tool name, or "METHOD /path" for a REST write.
+	Action string `json:"action"`
+	// Path is the document the action touched, when there was one.
+	Path string `json:"path"`
+	// Detail is a short human-readable summary (a title, a task's text).
+	Detail string `json:"detail"`
+	OK     bool   `json:"ok"`
+}

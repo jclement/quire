@@ -161,7 +161,7 @@ func runServe() error {
 	}
 	mux := http.NewServeMux()
 	apiServer.Routes(mux)
-	mcpHandler := mcp.Handler(svc, version)
+	mcpHandler := mcp.Handler(svc, version, authStore)
 	mux.Handle("/mcp", mcpHandler)
 	shares.Routes(mux)
 	mux.Handle("/", webui.Handler())
