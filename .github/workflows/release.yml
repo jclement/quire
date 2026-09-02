@@ -33,7 +33,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: goreleaser/goreleaser-action@v6
         with:
-          version: "~> v2"
+          # Pinned, not "~> v2": a floating version meant the config could
+          # use a template function CI's goreleaser did not have, which is
+          # exactly what broke the v0.2.1 Homebrew publish. Pinning makes a
+          # local `goreleaser check` mean the same thing CI will do.
+          version: "2.18.0"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
