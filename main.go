@@ -27,6 +27,7 @@ import (
 	"github.com/jclement/quire/internal/oauth"
 	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/share"
+	"github.com/jclement/quire/internal/update"
 	"github.com/jclement/quire/internal/vault"
 	"github.com/jclement/quire/internal/webui"
 )
@@ -150,7 +151,13 @@ func runServe() error {
 	}
 
 	shares := share.NewManager(authStore, svc, cfg.BaseURL)
-	apiServer := &api.Server{Service: svc, Events: events, Shares: shares, Version: version}
+	apiServer := &api.Server{
+		Service: svc, Events: events, Shares: shares, Auth: authStore, Version: version,
+	}
+	if cfg.UpdateCheck {
+		checker := update.Start(ctx, version)
+		apiServer.UpdateCheck = checker.Available
+	}
 	mux := http.NewServeMux()
 	apiServer.Routes(mux)
 	mcpHandler := mcp.Handler(svc, version)
@@ -419,6 +426,9 @@ func securityHeaders(next http.Handler) http.Handler {
 			h.Set("Content-Security-Policy",
 				"default-src 'self'; img-src 'self' data: blob:; "+
 					"style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "+
+					// Fonts are inlined into the bundle as data: URIs; without
+					// this the whole UI silently falls back to system faces.
+					"font-src 'self' data:; "+
 					"connect-src 'self'; base-uri 'self'; frame-ancestors 'none'; "+
 					"object-src 'none'; form-action 'self'")
 		}

@@ -1,8 +1,10 @@
-// Settings (/settings): passkey management (list, add, delete) and logout —
-// only meaningful when the server runs passkey auth; in mode "none" the
-// auth/status call 404s and a calm note renders instead — plus the agent
-// guidance every MCP client is told to follow. Kept deliberately small; the
-// server config itself lives in config.yaml, not here.
+// Settings (/settings): everything that has access to the vault and how to
+// revoke it — passkeys, API tokens, connected OAuth apps, share links —
+// plus the agent guidance every MCP client is told to follow.
+//
+// Passkey management is meaningful only when the server runs passkey auth;
+// in mode "none" the auth/status call 404s and a calm note renders instead.
+// Server configuration itself lives in config.yaml, not here.
 import { Link as RouterLink } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -22,6 +24,12 @@ import { docHref } from "../lib/docs.ts";
 import { noAutofill } from "../lib/noAutofill.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
+import { ConfirmButton } from "../components/settings/ConfirmButton.tsx";
+import {
+  ConnectedAppSettings,
+  ShareSettings,
+  TokenSettings,
+} from "../components/settings/Credentials.tsx";
 import { SkeletonRows } from "../components/Skeleton.tsx";
 
 const PASSKEYS_KEY = ["auth", "passkeys"] as const;
@@ -43,7 +51,7 @@ export function SettingsPage() {
   });
 
   return (
-    <div className="flex max-w-lg flex-col gap-5">
+    <div className="flex max-w-2xl flex-col gap-5">
       <header className="flex items-center gap-2 border-b border-border pb-2">
         <SettingsIcon className="size-4 text-muted" aria-hidden="true" />
         <h1 className="text-lg font-semibold text-heading">Settings</h1>
@@ -57,6 +65,9 @@ export function SettingsPage() {
       ) : (
         <PasskeySettings />
       )}
+      <TokenSettings />
+      <ConnectedAppSettings />
+      <ShareSettings />
       <AgentGuidanceSection />
       <AboutSection />
     </div>
@@ -226,14 +237,13 @@ function PasskeySettings() {
                 <span className="ml-auto shrink-0 text-xs text-muted">
                   added {formatRelativeTime(passkey.created_at)}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => remove.mutate(passkey.id)}
-                  aria-label={`Delete passkey ${passkey.name}`}
-                  className="flex size-7 shrink-0 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-danger"
+                <ConfirmButton
+                  label={`Delete passkey ${passkey.name}`}
+                  confirmLabel="Delete?"
+                  onConfirm={() => remove.mutate(passkey.id)}
                 >
                   <Trash2 className="size-3.5" aria-hidden="true" />
-                </button>
+                </ConfirmButton>
               </li>
             ))}
           </ul>

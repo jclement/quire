@@ -9,6 +9,7 @@ the handful of values it asks for, and `docker compose up -d`.
 | [`tailscale/`](tailscale/) | your tailnet only | Private notes. Nothing is on the public internet. |
 | [`tailscale-funnel/`](tailscale-funnel/) | your tailnet + the public internet | You want share links to work for other people, and claude.ai connectors to reach `/mcp`. |
 | [`cloudflare-tunnel/`](cloudflare-tunnel/) | the public internet, on your own domain | You want a memorable URL like `notes.example.com`. |
+| [`gatecrash/`](gatecrash/) | the public internet, through your own tunnel server | Same as above, but the entry point is a box you run rather than Cloudflare. |
 
 All three run the same image and differ only in what sits in front of it.
 

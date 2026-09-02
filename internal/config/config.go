@@ -43,6 +43,12 @@ type Config struct {
 	// auto-commits (commit-only; quire never pushes or merges). On by
 	// default — QUIRE_GIT=false to opt out.
 	Git bool `yaml:"git"`
+
+	// UpdateCheck asks GitHub once a day whether a newer release exists, to
+	// power the notice in Settings. On by default — QUIRE_UPDATE_CHECK=false
+	// to opt out, because a self-hosted app phoning a third party should be
+	// something you can decline.
+	UpdateCheck bool `yaml:"update_check"`
 }
 
 // VaultDir is where the user's markdown lives — the only tree quire treats as
@@ -58,12 +64,13 @@ func (c Config) StateDir() string { return filepath.Join(c.DataDir, ".quire") }
 // directories so callers can rely on them existing.
 func Load() (Config, error) {
 	cfg := Config{
-		DataDir:  "./data",
-		Addr:     "127.0.0.1:8321",
-		BaseURL:  DefaultBaseURL,
-		AuthMode: AuthNone,
-		LogLevel: "info",
-		Git:      true,
+		DataDir:     "./data",
+		Addr:        "127.0.0.1:8321",
+		BaseURL:     DefaultBaseURL,
+		AuthMode:    AuthNone,
+		LogLevel:    "info",
+		Git:         true,
+		UpdateCheck: true,
 	}
 
 	if v := os.Getenv("QUIRE_DATA_DIR"); v != "" {
@@ -116,6 +123,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("QUIRE_GIT"); v != "" {
 		cfg.Git = v != "false" && v != "0"
+	}
+	if v := os.Getenv("QUIRE_UPDATE_CHECK"); v != "" {
+		cfg.UpdateCheck = v != "false" && v != "0"
 	}
 }
 

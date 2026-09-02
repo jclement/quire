@@ -7,6 +7,7 @@ import type {
   AttachmentUpload,
   AuthStatus,
   CalendarMonth,
+  ConnectedApp,
   DocMeta,
   DocType,
   Document,
@@ -15,12 +16,14 @@ import type {
   RecoverResult,
   RegisterFinishResult,
   RenameResult,
+  NewToken,
   SearchResult,
   ShareInfo,
   Task,
   TaskEdit,
   TaskView,
   TodayPayload,
+  TokenInfo,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -204,6 +207,32 @@ export const api = {
 
   revokeShare: (token: string) =>
     request<void>(`/api/v1/shares/${encodeURIComponent(token)}`, {
+      method: "DELETE",
+    }),
+
+  // ---- credentials ----
+
+  listTokens: () => request<TokenInfo[]>("/api/v1/tokens"),
+
+  createToken: (name: string, scopes: string[], expiresInDays?: number) =>
+    request<NewToken>(
+      "/api/v1/tokens",
+      jsonInit("POST", {
+        name,
+        scopes,
+        ...(expiresInDays ? { expires_in_days: expiresInDays } : {}),
+      }),
+    ),
+
+  revokeToken: (prefix: string) =>
+    request<void>(`/api/v1/tokens/${encodeURIComponent(prefix)}`, {
+      method: "DELETE",
+    }),
+
+  listConnectedApps: () => request<ConnectedApp[]>("/api/v1/connected-apps"),
+
+  disconnectApp: (clientId: string) =>
+    request<void>(`/api/v1/connected-apps/${encodeURIComponent(clientId)}`, {
       method: "DELETE",
     }),
 

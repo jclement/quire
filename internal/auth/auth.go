@@ -6,6 +6,7 @@
 package auth
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -37,6 +38,23 @@ func (p Principal) Allows(scope string) bool {
 		return true
 	}
 	return scope == ScopeTasks && p.Scopes[ScopeWrite]
+}
+
+// principalKey carries the authenticated principal down to handlers. It is
+// unexported so nothing outside this package can forge one into a context.
+type principalKey struct{}
+
+// WithPrincipal returns ctx carrying p.
+func WithPrincipal(ctx context.Context, p Principal) context.Context {
+	return context.WithValue(ctx, principalKey{}, p)
+}
+
+// PrincipalFrom returns the principal the middleware authenticated for r.
+// The false return means the request never passed the middleware — callers
+// must treat that as "no access", never as "owner".
+func PrincipalFrom(r *http.Request) (Principal, bool) {
+	p, ok := r.Context().Value(principalKey{}).(Principal)
+	return p, ok
 }
 
 // Store wraps auth.db.
@@ -219,26 +237,33 @@ func (s *Store) Middleware(mode config.AuthMode, mcpChallenge string, next http.
 			return
 		}
 
-		if scope := requiredScope(r); !principal.Allows(scope) {
+		if scope := requiredScope(r); scope != "" && !principal.Allows(scope) {
 			http.Error(w, `{"error":{"code":"FORBIDDEN","message":"token lacks the `+scope+` scope"}}`, http.StatusForbidden)
 			return
 		}
-		next.ServeHTTP(w, r)
+		// Hand the principal down so per-tool scope checks (MCP) can see it.
+		next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), principal)))
 	})
 }
 
-// requiredScope maps a request to the scope it needs. MCP is a POST
-// transport carrying reads and writes alike, so it requires whatever the
-// token has beyond read — enforced per-tool in a future pass; v0.1 requires
-// the tasks scope as the floor for /mcp mutating safely.
+// requiredScope maps a request to the scope it needs, or "" when the route
+// enforces its own.
+//
+// /mcp is the "" case: it is one POST transport carrying reads and writes
+// alike, so any single blanket scope is wrong. internal/mcp instead
+// registers each tool against the scope that tool actually needs, so a
+// caller sees exactly the tools it may use — a read-only token gets the
+// read tools, a tasks token gets the task tools, and neither is handed the
+// document-write tools it would have received before, when passing this
+// gate granted the whole toolset.
 func requiredScope(r *http.Request) string {
+	if r.URL.Path == "/mcp" {
+		return ""
+	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		return ScopeRead
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/v1/tasks") {
-		return ScopeTasks
-	}
-	if r.URL.Path == "/mcp" {
 		return ScopeTasks
 	}
 	return ScopeWrite

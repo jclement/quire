@@ -154,3 +154,38 @@ type AgentGuidanceResponse struct {
 	Path string `json:"path"`
 	Text string `json:"text"`
 }
+
+// TokenInfo is an API token as the management UI sees it. The token itself
+// is never here: only its 8-char display prefix, because the plaintext is
+// shown once at creation and only its hash is stored.
+type TokenInfo struct {
+	ID     int64    `json:"id"`
+	Name   string   `json:"name"`
+	Prefix string   `json:"prefix"`
+	Scopes []string `json:"scopes"`
+	// Always sent (empty string = unset) so the client can type them
+	// honestly — see ShareInfo.
+	CreatedAt  string `json:"created_at"`
+	ExpiresAt  string `json:"expires_at"`
+	RevokedAt  string `json:"revoked_at"`
+	LastUsedAt string `json:"last_used_at"`
+}
+
+// NewToken is the create response — the only time the plaintext exists
+// outside the caller's clipboard.
+type NewToken struct {
+	Token TokenInfo `json:"token"`
+	// Plaintext is shown once and never retrievable again.
+	Plaintext string `json:"plaintext"`
+}
+
+// ConnectedApp is an OAuth client that has been granted access: what is
+// attached to this vault, with what scopes, and whether its grant is live.
+type ConnectedApp struct {
+	ClientID    string   `json:"client_id"`
+	Name        string   `json:"name"`
+	Scopes      []string `json:"scopes"`
+	ConsentedAt string   `json:"consented_at"`
+	LastUsedAt  string   `json:"last_used_at"`
+	ActiveGrant bool     `json:"active_grant"`
+}

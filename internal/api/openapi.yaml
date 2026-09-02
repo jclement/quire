@@ -189,6 +189,47 @@ paths:
     delete:
       summary: Revoke a share link
       responses: { "204": { description: revoked } }
+  /api/v1/tokens:
+    get:
+      summary: List API tokens (revoked included — audit trail)
+      description: >
+        Never returns the token itself: only its 8-char display prefix, since
+        the plaintext is shown once at creation and only a hash is stored.
+      responses: { "200": { description: "data: TokenInfo[] — id, name, prefix, scopes, created_at, expires_at, revoked_at, last_used_at" } }
+    post:
+      summary: Mint an API token
+      description: >
+        Body {name, scopes[], expires_in_days?}. Scopes must be a subset of
+        read/write/tasks; an unknown scope is a 400 rather than a token that
+        silently grants nothing. The response carries the plaintext exactly
+        once and it is never retrievable again.
+      responses:
+        "201": { description: "data: NewToken — {token: TokenInfo, plaintext}" }
+        "400": { description: "VALIDATION_ERROR — missing name, no scopes, or an unknown scope" }
+  /api/v1/tokens/{prefix}:
+    delete:
+      summary: Revoke an API token by its display prefix (or numeric id)
+      responses:
+        "204": { description: revoked }
+        "404": { description: no active token with that prefix }
+  /api/v1/connected-apps:
+    get:
+      summary: List OAuth clients that have been granted access
+      description: >
+        Consented clients only — anyone can register via DCR, so unconsented
+        registrations are not connections. active_grant reports whether the
+        client still holds an unexpired, unrevoked refresh token.
+      responses: { "200": { description: "data: ConnectedApp[] — client_id, name, scopes, consented_at, last_used_at, active_grant" } }
+  /api/v1/connected-apps/{id}:
+    delete:
+      summary: Disconnect an app
+      description: >
+        Revokes every token the client holds, drops its outstanding
+        authorization codes, and forgets the client, so reconnecting has to
+        pass consent again.
+      responses:
+        "204": { description: disconnected }
+        "404": { description: no connected app with that id }
   /api/v1/auth/status:
     get:
       summary: Passkey-mode status (unauthenticated)

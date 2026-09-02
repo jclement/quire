@@ -153,6 +153,11 @@ seconds wide. Conflicts surface a reload/overwrite/copy-mine dialog — no auto-
 Scopes are coarse: `read`, `write`, `tasks`, `share`. Tokens: `sk_` + 32 random bytes,
 SHA-256 stored, 8-char prefix displayed, expiry/revocation/`last_used_at`.
 
+Settings is where access is audited and withdrawn: passkeys, API tokens, connected
+OAuth apps and live share links, each revocable. Disconnecting an app deletes the
+client record *and* revokes its outstanding tokens and codes, so a reconnect must
+pass consent again. Revoked tokens stay listed — an audit trail, like shares.
+
 ## MCP
 
 Official `modelcontextprotocol/go-sdk`, Streamable HTTP at `/mcp`, authenticated by
@@ -168,6 +173,15 @@ candidates, never guesses), `complete_task`, `today` (the flagship composed call
 
 Agent guardrails: read-only tokens are the default posture; no delete tool; every
 API/MCP write is audit-logged (principal, tool, path, when).
+
+**Tools are registered per request against the caller's scopes.** The auth
+middleware attaches the principal to the request context and internal/mcp builds
+that request's server from it: read scope yields the five read tools, tasks yields
+the task tools, write yields the document writers. This replaced a single blanket
+scope check on /mcp, which was a real privilege escalation — a token scoped only to
+`tasks` was refused a document write over REST (403) and could make the identical
+write through `create_document`. Registering rather than rejecting also means
+`tools/list` tells the truth, so an agent never picks a tool that will refuse it.
 
 ## Getting to it from outside
 

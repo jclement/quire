@@ -43,13 +43,15 @@ Images are published to ghcr:
 | `:main-<sha>` | One specific commit, to pin or roll back to |
 | `:latest`, `:x.y.z` | Tagged releases (also published as signed binaries) |
 
-Create API tokens with:
+Create API tokens in **Settings → API tokens**, or from the CLI:
 
 ```sh
 docker compose exec quire quire token create claude read write tasks
 ```
 
 Point Claude Code (or any MCP client) at `https://<host>/mcp` with that bearer token.
+Settings also lists every connected OAuth app and every live share link, each with a
+one-click revoke — that page is the answer to "what can currently reach my notes?"
 
 A complete backup is `data/vault/` + `data/.quire/auth.db` + `data/.quire/config.yaml`.
 The index is disposable: `quire reindex` rebuilds it from markdown. `quire doctor`
@@ -151,6 +153,7 @@ quire today
 | `QUIRE_AUTH_MODE` | `none` | `none` (loopback only, enforced) \| `token-only` \| `passkey` |
 | `QUIRE_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
 | `QUIRE_GIT` | `true` | Git-backed vault (auto-init + debounced auto-commit) |
+| `QUIRE_UPDATE_CHECK` | `true` | Ask GitHub once a day whether a newer release exists |
 | `QUIRE_SMTP_HOST/PORT/USER/PASS/FROM` | | SMTP relay (any provider's SMTP endpoint) |
 | `QUIRE_DIGEST_TO` / `QUIRE_DIGEST_TIME` | | Daily digest recipient and local HH:MM |
 | `QUIRE_URL` / `QUIRE_TOKEN` | | CLI verbs: which quire to talk to, and as whom |
@@ -177,6 +180,12 @@ Two credential paths, per the house pattern:
   claude mcp add quire --transport http http://localhost:8321/mcp   # dev, no auth
   claude mcp add quire --transport http https://<host>/mcp --header "Authorization: Bearer sk_…"
   ```
+
+  **Scopes decide which tools the agent sees.** A `read` token gets `search`,
+  `get_document`, `list_tasks`, `today` and `person_context`; `tasks` adds
+  `create_task`/`complete_task`; `write` adds the document-writing tools. The
+  toolset is built per request, so `tools/list` is honest and an agent is never
+  offered a tool it cannot use.
 
 - **OAuth 2.1 + dynamic client registration** (claude.ai connectors, Claude Desktop):
   paste `https://<host>/mcp` into Settings → Connectors and quire handles the rest —

@@ -195,3 +195,45 @@ export interface AgentGuidanceResponse {
   path: string;
   text: string;
 }
+/**
+ * TokenInfo is an API token as the management UI sees it. The token itself
+ * is never here: only its 8-char display prefix, because the plaintext is
+ * shown once at creation and only its hash is stored.
+ */
+export interface TokenInfo {
+  id: number /* int64 */;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  /**
+   * Always sent (empty string = unset) so the client can type them
+   * honestly — see ShareInfo.
+   */
+  created_at: string;
+  expires_at: string;
+  revoked_at: string;
+  last_used_at: string;
+}
+/**
+ * NewToken is the create response — the only time the plaintext exists
+ * outside the caller's clipboard.
+ */
+export interface NewToken {
+  token: TokenInfo;
+  /**
+   * Plaintext is shown once and never retrievable again.
+   */
+  plaintext: string;
+}
+/**
+ * ConnectedApp is an OAuth client that has been granted access: what is
+ * attached to this vault, with what scopes, and whether its grant is live.
+ */
+export interface ConnectedApp {
+  client_id: string;
+  name: string;
+  scopes: string[];
+  consented_at: string;
+  last_used_at: string;
+  active_grant: boolean;
+}

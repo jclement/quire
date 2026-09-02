@@ -156,9 +156,17 @@ export function formatRelativeTime(
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return iso;
   const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 7 * 86_400) return `${Math.floor(seconds / 86_400)}d ago`;
+
+  // Future timestamps are real here — a share link's expiry, a token's. A
+  // signed comparison alone would render "expires in 7 days" as "just now",
+  // so measure the gap and let the sign choose the wording.
+  const ago = seconds >= 0;
+  const gap = Math.abs(seconds);
+  const phrase = (value: string) => (ago ? `${value} ago` : `in ${value}`);
+
+  if (gap < 60) return ago ? "just now" : "in a moment";
+  if (gap < 3600) return phrase(`${Math.floor(gap / 60)}m`);
+  if (gap < 86_400) return phrase(`${Math.floor(gap / 3600)}h`);
+  if (gap < 7 * 86_400) return phrase(`${Math.floor(gap / 86_400)}d`);
   return formatShortDate(toISODate(then), todayISO(now));
 }

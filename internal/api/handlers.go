@@ -10,11 +10,14 @@ import (
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	available := false
+	if s.UpdateCheck != nil {
+		available = s.UpdateCheck()
+	}
 	writeData(w, http.StatusOK, service.Health{
-		Status:  "ok",
-		Version: s.Version,
-		// Wired to a real check when self-update lands; false is honest today.
-		UpdateAvailable: false,
+		Status:          "ok",
+		Version:         s.Version,
+		UpdateAvailable: available,
 	})
 }
 

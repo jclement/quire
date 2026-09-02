@@ -304,3 +304,77 @@ func (s *Store) oauthAccessPrincipal(token string) (Principal, error) {
 func base64URLNoPad(b []byte) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
+
+// ---- connected apps (management) ----
+
+// ConnectedApp is a consented OAuth client as the management UI sees it:
+// who is attached to this vault, with what access, and when it was last
+// used. Unconsented registrations are not apps — anyone can create those
+// via DCR — so they are excluded.
+type ConnectedApp struct {
+	ClientID    string   `json:"client_id"`
+	Name        string   `json:"name"`
+	Scopes      []string `json:"scopes"`
+	ConsentedAt string   `json:"consented_at"`
+	LastUsedAt  string   `json:"last_used_at"`
+	ActiveGrant bool     `json:"active_grant"`
+}
+
+// ListConnectedApps returns every consented client with the state of its
+// live grant, newest consent first.
+func (s *Store) ListConnectedApps() ([]ConnectedApp, error) {
+	rows, err := s.DB.Query(`
+		SELECT c.id, c.name, c.consented_at,
+		       COALESCE(MAX(t.scopes), ''),
+		       COALESCE(MAX(t.last_used_at), ''),
+		       COALESCE(MAX(CASE WHEN t.revoked_at = '' AND t.refresh_expires_at > ?
+		                         THEN 1 ELSE 0 END), 0)
+		FROM oauth_clients c
+		LEFT JOIN oauth_tokens t ON t.client_id = c.id
+		WHERE c.consented_at != ''
+		GROUP BY c.id
+		ORDER BY c.consented_at DESC`,
+		time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var apps []ConnectedApp
+	for rows.Next() {
+		var app ConnectedApp
+		var scopes string
+		var active int
+		if err := rows.Scan(&app.ClientID, &app.Name, &app.ConsentedAt, &scopes, &app.LastUsedAt, &active); err != nil {
+			return nil, err
+		}
+		app.ActiveGrant = active == 1
+		app.Scopes = strings.Fields(scopes)
+		if app.Scopes == nil {
+			app.Scopes = []string{}
+		}
+		apps = append(apps, app)
+	}
+	return apps, rows.Err()
+}
+
+// DisconnectApp revokes every token the client holds and forgets the client
+// itself, so a reconnect has to pass consent again. Returns an error only if
+// the client does not exist — revoking an app with no live tokens is a
+// perfectly reasonable thing to ask for.
+func (s *Store) DisconnectApp(clientID string) error {
+	res, err := s.DB.Exec("DELETE FROM oauth_clients WHERE id = ?", clientID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("no connected app %q", clientID)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := s.DB.Exec("UPDATE oauth_tokens SET revoked_at = ? WHERE client_id = ? AND revoked_at = ''", now, clientID); err != nil {
+		return fmt.Errorf("revoking tokens for %s: %w", clientID, err)
+	}
+	// Outstanding authorization codes for a disconnected client are dead too.
+	_, _ = s.DB.Exec("DELETE FROM oauth_codes WHERE client_id = ?", clientID)
+	return nil
+}

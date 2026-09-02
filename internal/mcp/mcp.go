@@ -12,6 +12,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jclement/quire/internal/auth"
 	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/vault"
 )
@@ -21,7 +22,19 @@ import (
 // in Settings reaches the next client that connects, with no restart.
 func Handler(svc *service.Service, version string) http.Handler {
 	return sdk.NewStreamableHTTPHandler(
-		func(*http.Request) *sdk.Server { return newServer(svc, version) }, nil)
+		func(r *http.Request) *sdk.Server { return newServer(svc, version, scopesFor(r)) }, nil)
+}
+
+// scopesFor returns what the caller of r is allowed to do. A request that
+// never passed the auth middleware carries no principal; that is a
+// programming error rather than an anonymous caller (the middleware rejects
+// those), so it yields no scopes at all — fail closed, never fail owner.
+func scopesFor(r *http.Request) func(scope string) bool {
+	principal, ok := auth.PrincipalFrom(r)
+	if !ok {
+		return func(string) bool { return false }
+	}
+	return principal.Allows
 }
 
 // baseInstructions are the cross-cutting rules every agent gets. The owner's
@@ -42,7 +55,7 @@ Working rules:
   meeting — each answers in one call what would otherwise take several.
 - Never invent a document path; find it with search first.`
 
-func newServer(svc *service.Service, version string) *sdk.Server {
+func newServer(svc *service.Service, version string, allows func(string) bool) *sdk.Server {
 	instructions := baseInstructions
 	if guidance := svc.AgentGuidance(); guidance != "" {
 		instructions += "\n\n---\n\nThe vault owner's own guidance (authoritative where it conflicts\nwith the above):\n\n" + guidance
@@ -51,36 +64,53 @@ func newServer(svc *service.Service, version string) *sdk.Server {
 		&sdk.ServerOptions{Instructions: instructions})
 	t := &tools{svc: svc}
 
-	sdk.AddTool(s, &sdk.Tool{Name: "search",
-		Description: "Search the knowledge base. Supports the shared filter grammar: bare words full-text search; type:<note|person|company|project|meeting|daily> and tag:<tag> filter."},
-		t.search)
-	sdk.AddTool(s, &sdk.Tool{Name: "get_document",
-		Description: "Fetch a document by vault path: raw markdown plus parsed structure (frontmatter, links with resolution, backlinks, tasks). Use search to find paths."},
-		t.getDocument)
-	sdk.AddTool(s, &sdk.Tool{Name: "create_document",
-		Description: "Create a new document of a given type (note, person, company, project, meeting). The server picks the path from the title. Body is optional markdown; wikilinks like [[Sarah Chen]] create relationships."},
-		t.createDocument)
-	sdk.AddTool(s, &sdk.Tool{Name: "update_document",
-		Description: "Replace a document's full markdown. Requires base_sha256 from a prior get_document — a stale hash is rejected so agents can never clobber concurrent edits. Prefer append_to_document for additions."},
-		t.updateDocument)
-	sdk.AddTool(s, &sdk.Tool{Name: "append_to_document",
-		Description: "Append markdown to the end of a document (or under a named section heading if given). The safe way to add notes, decisions, or action items without rewriting the file."},
-		t.appendToDocument)
-	sdk.AddTool(s, &sdk.Tool{Name: "list_tasks",
-		Description: "List tasks by view: inbox (unprocessed), today (due/overdue/available now), upcoming, waiting (delegated), logbook (completed)."},
-		t.listTasks)
-	sdk.AddTool(s, &sdk.Tool{Name: "create_task",
-		Description: "Create a task (lands in today's daily note with full provenance). Dates are YYYY-MM-DD: due = deadline, defer = hide until this date."},
-		t.createTask)
-	sdk.AddTool(s, &sdk.Tool{Name: "complete_task",
-		Description: "Mark a task complete by id (from list_tasks/get_document). Edits the source markdown checkbox surgically."},
-		t.completeTask)
-	sdk.AddTool(s, &sdk.Tool{Name: "today",
-		Description: "The composed 'what matters right now' payload: today's meetings, overdue and due tasks, available and waiting tasks, recent documents, and the daily note. Start here for 'what should I work on'."},
-		t.today)
-	sdk.AddTool(s, &sdk.Tool{Name: "person_context",
-		Description: "Everything about a person (or project/company) in one call: their document, backlinks (meetings and notes mentioning them), and open tasks involving them. Ideal for meeting prep."},
-		t.personContext)
+	// Tools are registered per request against the caller's scopes, so a
+	// token sees exactly the tools it may use: tools/list is honest, and an
+	// agent is never handed a tool that will refuse it mid-task. Before
+	// this, passing the /mcp gate granted every tool — a token scoped only
+	// to "tasks" could create and rewrite documents, which REST refused.
+
+	// Reading the vault.
+	if allows(auth.ScopeRead) {
+		sdk.AddTool(s, &sdk.Tool{Name: "search",
+			Description: "Search the knowledge base. Supports the shared filter grammar: bare words full-text search; type:<note|person|company|project|meeting|daily> and tag:<tag> filter."},
+			t.search)
+		sdk.AddTool(s, &sdk.Tool{Name: "get_document",
+			Description: "Fetch a document by vault path: raw markdown plus parsed structure (frontmatter, links with resolution, backlinks, tasks). Use search to find paths."},
+			t.getDocument)
+		sdk.AddTool(s, &sdk.Tool{Name: "list_tasks",
+			Description: "List tasks by view: inbox (unprocessed), today (due/overdue/available now), upcoming, waiting (delegated), logbook (completed)."},
+			t.listTasks)
+		sdk.AddTool(s, &sdk.Tool{Name: "today",
+			Description: "The composed 'what matters right now' payload: today's meetings, overdue and due tasks, available and waiting tasks, recent documents, and the daily note. Start here for 'what should I work on'."},
+			t.today)
+		sdk.AddTool(s, &sdk.Tool{Name: "person_context",
+			Description: "Everything about a person (or project/company) in one call: their document, backlinks (meetings and notes mentioning them), and open tasks involving them. Ideal for meeting prep."},
+			t.personContext)
+	}
+
+	// Creating and rewriting documents.
+	if allows(auth.ScopeWrite) {
+		sdk.AddTool(s, &sdk.Tool{Name: "create_document",
+			Description: "Create a new document of a given type (note, person, company, project, meeting). The server picks the path from the title. Body is optional markdown; wikilinks like [[Sarah Chen]] create relationships."},
+			t.createDocument)
+		sdk.AddTool(s, &sdk.Tool{Name: "update_document",
+			Description: "Replace a document's full markdown. Requires base_sha256 from a prior get_document — a stale hash is rejected so agents can never clobber concurrent edits. Prefer append_to_document for additions."},
+			t.updateDocument)
+		sdk.AddTool(s, &sdk.Tool{Name: "append_to_document",
+			Description: "Append markdown to the end of a document (or under a named section heading if given). The safe way to add notes, decisions, or action items without rewriting the file."},
+			t.appendToDocument)
+	}
+
+	// Task management — the "agent runs my todos" token stops here.
+	if allows(auth.ScopeTasks) {
+		sdk.AddTool(s, &sdk.Tool{Name: "create_task",
+			Description: "Create a task (lands in today's daily note with full provenance). Dates are YYYY-MM-DD: due = deadline, defer = hide until this date."},
+			t.createTask)
+		sdk.AddTool(s, &sdk.Tool{Name: "complete_task",
+			Description: "Mark a task complete by id (from list_tasks/get_document). Edits the source markdown checkbox surgically."},
+			t.completeTask)
+	}
 
 	return s
 }

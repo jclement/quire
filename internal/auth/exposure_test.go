@@ -71,6 +71,11 @@ var dataRoutes = []struct{ method, path string }{
 	{"GET", "/api/v1/shares"},  // share tokens = read access to documents
 	{"POST", "/api/v1/shares"}, // minting a share is granting public access
 	{"DELETE", "/api/v1/shares/tok"},
+	{"GET", "/api/v1/tokens"},  // token names, prefixes, scopes
+	{"POST", "/api/v1/tokens"}, // minting a credential
+	{"DELETE", "/api/v1/tokens/abcd1234"},
+	{"GET", "/api/v1/connected-apps"},
+	{"DELETE", "/api/v1/connected-apps/xyz"},
 	{"GET", "/api/v1/agent-guidance"},
 	{"PUT", "/api/v1/agent-guidance"},
 	{"POST", "/api/v1/rename"},

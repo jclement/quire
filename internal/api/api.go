@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/jclement/quire/internal/auth"
 	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/share"
 	"github.com/jclement/quire/internal/vault"
@@ -23,7 +24,13 @@ type Server struct {
 	Service *service.Service
 	Events  *Broadcaster
 	Shares  *share.Manager
+	// Auth backs the credential-management routes. Nil in tests that only
+	// exercise document handlers, so those routes register only when set.
+	Auth    *auth.Store
 	Version string
+	// UpdateCheck reports whether a newer release exists; nil means the
+	// check is disabled and health honestly says false.
+	UpdateCheck func() bool
 }
 
 // Routes registers all /api/v1 handlers onto mux.
@@ -69,6 +76,14 @@ func (s *Server) Routes(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/v1/shares", s.handleListShares)
 		mux.HandleFunc("POST /api/v1/shares", s.handleCreateShare)
 		mux.HandleFunc("DELETE /api/v1/shares/{token}", s.handleRevokeShare)
+	}
+
+	if s.Auth != nil {
+		mux.HandleFunc("GET /api/v1/tokens", s.handleListTokens)
+		mux.HandleFunc("POST /api/v1/tokens", s.handleCreateToken)
+		mux.HandleFunc("DELETE /api/v1/tokens/{prefix}", s.handleRevokeToken)
+		mux.HandleFunc("GET /api/v1/connected-apps", s.handleListConnectedApps)
+		mux.HandleFunc("DELETE /api/v1/connected-apps/{id}", s.handleDisconnectApp)
 	}
 }
 

@@ -7,6 +7,7 @@ import {
   daysFromToday,
   dueInfo,
   formatDayHeading,
+  formatRelativeTime,
   groupByDate,
   nextMondayISO,
   nextSaturdayISO,
@@ -145,5 +146,27 @@ describe("formatDayHeading", () => {
 describe("todayISO", () => {
   test("formats a fixed date", () => {
     expect(todayISO(new Date(2026, 0, 5))).toBe("2026-01-05");
+  });
+});
+
+describe("formatRelativeTime with future timestamps", () => {
+  const now = new Date("2026-09-01T12:00:00Z");
+  const at = (iso: string) => formatRelativeTime(iso, now);
+
+  // Share expiries and token expiries are in the future; before this was
+  // handled, every one of them rendered as "just now".
+  test("words future times as 'in X'", () => {
+    expect(at("2026-09-08T12:00:00Z")).toBe("Sep 8");
+    expect(at("2026-09-04T12:00:00Z")).toBe("in 3d");
+    expect(at("2026-09-01T15:00:00Z")).toBe("in 3h");
+    expect(at("2026-09-01T12:30:00Z")).toBe("in 30m");
+    expect(at("2026-09-01T12:00:30Z")).toBe("in a moment");
+  });
+
+  test("still words past times as 'X ago'", () => {
+    expect(at("2026-08-29T12:00:00Z")).toBe("3d ago");
+    expect(at("2026-09-01T09:00:00Z")).toBe("3h ago");
+    expect(at("2026-09-01T11:30:00Z")).toBe("30m ago");
+    expect(at("2026-09-01T11:59:30Z")).toBe("just now");
   });
 });

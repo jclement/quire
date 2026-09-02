@@ -15,15 +15,18 @@ export type {
   CalendarDay,
   CalendarDoc,
   CalendarMonth,
+  ConnectedApp,
   DocMeta,
   Document,
   Health,
   Link,
+  NewToken,
   RenameResult,
   SearchResult,
   ShareInfo,
   Task,
   TodayPayload,
+  TokenInfo,
 } from "./generated.ts";
 
 /**

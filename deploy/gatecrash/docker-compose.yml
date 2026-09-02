@@ -1,0 +1,83 @@
+# quire exposed at a public hostname through the self-hosted Gatecrash
+# tunnel (https://github.com/jclement/gatecrash) — a self-hosted alternative
+# to Cloudflare Tunnel, so the public entry point is a box you own.
+#
+# Setup:
+#   1. In the Gatecrash admin panel, create a tunnel token named "quire"
+#      routed to hostname quire.example.com, and put it in .env as
+#      GATECRASH_TOKEN=quire:SECRET
+#   2. docker compose up -d
+#   3. Claim the instance — an unclaimed quire on a reachable address would
+#      otherwise belong to whoever loads it first, so the first passkey
+#      registration needs the enrollment code from the log:
+#        docker compose logs quire | grep enrollment_code
+#      Open https://quire.example.com, paste the code, register your
+#      passkey, and SAVE THE 8 RECOVERY CODES. The enrollment code changes
+#      on every restart and stops working once a passkey exists.
+#
+# No Gatecrash access policy is applied, deliberately: quire authenticates
+# every /api/* and /mcp request in-process. What the internet can read
+# without a credential is exactly /s/* share pages (the link is the secret),
+# the empty SPA shell, /api/v1/health, and OAuth discovery metadata. Adding a
+# policy here would break share links, /mcp and /oauth/* unless each is
+# excluded — share recipients and agents cannot pass an interactive challenge.
+services:
+  quire:
+    image: ghcr.io/jclement/quire:latest
+    restart: unless-stopped
+    stop_grace_period: 30s
+    labels:
+      - "io.pullpilot.soak=0"   # update immediately on webhook poke (no 24h soak)
+    environment:
+      # 0.0.0.0 is the container boundary; no host port is published, so the
+      # tunnel is the only way in. Binding a non-loopback address is also
+      # what makes quire refuse auth mode "none".
+      QUIRE_ADDR: 0.0.0.0:8321
+      # Must match the tunnel hostname exactly: passkeys bind to it, and
+      # share links and OAuth discovery are built from it. Never inferred
+      # from the Host header, which a caller controls.
+      QUIRE_BASE_URL: https://quire.example.com
+      # passkey is the mode for a human, and the only one in which OAuth
+      # consent can be approved — which claude.ai connectors require.
+      QUIRE_AUTH_MODE: passkey
+      # Optional morning digest; uncomment and fill in .env to enable.
+      # QUIRE_SMTP_HOST: ${QUIRE_SMTP_HOST:-}
+      # QUIRE_SMTP_PORT: ${QUIRE_SMTP_PORT:-587}
+      # QUIRE_SMTP_USER: ${QUIRE_SMTP_USER:-}
+      # QUIRE_SMTP_PASS: ${QUIRE_SMTP_PASS:-}
+      # QUIRE_SMTP_FROM: ${QUIRE_SMTP_FROM:-}
+      # QUIRE_DIGEST_TO: ${QUIRE_DIGEST_TO:-}
+      # QUIRE_DIGEST_TIME: ${QUIRE_DIGEST_TIME:-06:30}
+    volumes:
+      # vault/ is plain markdown and is the source of truth; .quire/auth.db
+      # holds passkeys, tokens and share grants. Both live here.
+      - ./data:/data
+
+  tunnel:
+    image: ghcr.io/jclement/gatecrash:latest
+    restart: unless-stopped
+    depends_on:
+      - quire
+    environment:
+      GATECRASH_SERVER: ${GATECRASH_SERVER:?set GATECRASH_SERVER in .env}
+      GATECRASH_HOST_KEY: ${GATECRASH_HOST_KEY:?set GATECRASH_HOST_KEY in .env}
+      GATECRASH_TOKEN: ${GATECRASH_TOKEN:?set GATECRASH_TOKEN in .env}
+      GATECRASH_TARGET: quire:8321
+
+  # Auto-update: pull freshly-published images and redeploy. Hourly, or
+  # instantly via the webhook poke URL printed in this service's logs.
+  pullpilot:
+    image: ghcr.io/jclement/pullpilot:stable
+    environment:
+      PP_LOG_LEVEL: debug
+      PP_DRY_RUN: "false"
+      PP_SCHEDULE: "0 * * * *"
+      PP_JITTER: "0"
+      PP_WEBHOOK: "true"
+      PP_DATA_DIR: /data
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./pullpilot-data:/data
+      - /root/.docker/config.json:/root/.docker/config.json:ro
+    user: "0:0"
+    restart: unless-stopped
