@@ -1,7 +1,7 @@
 // Per-type document lists (/browse/<type>): a sortable table of title, tags,
 // and modified time, with j/k navigation and a New button opening the shared
 // create dialog.
-import { useNavigate } from "@tanstack/react-router";
+import { Link as RouterLink, useNavigate } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useDocumentList } from "../api/queries.ts";
@@ -123,7 +123,19 @@ function DocTable({ docs }: { docs: DocMeta[] }) {
               at === nav.index ? "bg-selected" : "hover:bg-hover"
             }`}
           >
-            <td className="max-w-0 truncate px-2 text-body">{doc.title}</td>
+            <td className="max-w-0 truncate px-2 text-body">
+              {/* A real anchor, not just a row click handler: this is how a
+                  row is opened in a new tab, middle-clicked, copied as a
+                  link, or reached by a screen reader. The row's onClick
+                  stays for click-anywhere convenience. */}
+              <RouterLink
+                to={docHref(doc.path)}
+                onClick={(event) => event.stopPropagation()}
+                className="block truncate outline-none hover:underline"
+              >
+                {doc.title}
+              </RouterLink>
+            </td>
             <td className="hidden truncate px-2 text-xs text-muted sm:table-cell">
               {doc.tags.map((tag) => `#${tag}`).join(" ")}
             </td>

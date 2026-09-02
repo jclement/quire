@@ -73,6 +73,31 @@ func TestValidatePath(t *testing.T) {
 	}
 }
 
+// TestInferTypeIsCaseInsensitive: an imported vault very often uses
+// "People/" or "Projects/". Matching only the lowercase form typed all of it
+// as plain notes, which silently disabled the entity model on someone's
+// existing library. A directory that is simply named differently — "Meeting
+// Notes/" — stays a note on purpose: guessing at intent would be worse than
+// honouring a frontmatter `type:` the user wrote deliberately.
+func TestInferTypeIsCaseInsensitive(t *testing.T) {
+	for path, want := range map[string]DocType{
+		"people/sarah.md":       TypePerson,
+		"People/sarah.md":       TypePerson,
+		"PEOPLE/sarah.md":       TypePerson,
+		"Projects/apollo.md":    TypeProject,
+		"Companies/acme.md":     TypeCompany,
+		"Meetings/sync.md":      TypeMeeting,
+		"Daily/2026-09-01.md":   TypeDaily,
+		"Projects/Archive/x.md": TypeProject, // nesting keeps the top-level type
+		"Meeting Notes/sync.md": TypeNote,    // a different name, not a case variant
+		"notes/x.md":            TypeNote,
+	} {
+		if got := InferType(path); got != want {
+			t.Errorf("InferType(%q) = %q, want %q", path, got, want)
+		}
+	}
+}
+
 func TestInferTypeAndNewDocPath(t *testing.T) {
 	if got := InferType("people/sarah.md"); got != TypePerson {
 		t.Errorf("InferType people = %v", got)

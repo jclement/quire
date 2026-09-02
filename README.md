@@ -113,6 +113,21 @@ instantly.
   exact hostname. This is the mode to use for anything a human logs into, and the
   only mode in which OAuth consent can be approved.
 
+### Bringing an existing vault
+
+Point `QUIRE_DATA_DIR` at a directory whose `vault/` is your existing markdown
+and run `quire reindex`. Nothing is rewritten: frontmatter, directory
+structure, attachments and wikilinks are preserved as they are.
+
+Type inference reads the top-level directory case-insensitively, so `People/`,
+`Projects/`, `Meetings/`, `Companies/` and `Daily/` are recognised alongside
+their lowercase forms. A directory named something else — `Meeting Notes/` —
+stays a plain note; add `type: meeting` to a document's frontmatter to type it
+explicitly, which always wins over the directory.
+
+`[[Page]]`, `[[Page|alias]]` and `[[Page#Heading]]` all resolve to Page.
+`quire doctor` lists anything that does not.
+
 ### Git-backed vault
 
 The vault is a local git repository by default: auto-initialized, with debounced

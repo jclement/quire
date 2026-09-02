@@ -57,12 +57,15 @@ func ValidatePath(rel string) error {
 }
 
 // InferType returns the document type implied by rel's top-level directory.
+// Matching is case-insensitive: an imported vault very often uses "People/"
+// or "Projects/", and typing all of it as generic notes would silently
+// disable the entity model on someone's existing library.
 func InferType(rel string) DocType {
 	top, _, found := strings.Cut(rel, "/")
 	if !found {
 		return TypeNote
 	}
-	if t, ok := typeDirs[top]; ok {
+	if t, ok := typeDirs[strings.ToLower(top)]; ok {
 		return t
 	}
 	return TypeNote

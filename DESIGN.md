@@ -218,6 +218,24 @@ Removing tsnet also dropped 318 of 819 Go packages (196 of them Tailscale's) and
 of binary — 65.5 MB to 41.7 MB, a third of the artifact. A sidecar gives back the same
 TLS and MagicDNS, with the trust boundary at the proxy where it can be reasoned about.
 
+## Importing an existing vault
+
+quire indexes whatever markdown it is pointed at; there is no import step and
+nothing is rewritten on the way in. Two rules make an existing library work
+rather than merely survive:
+
+- **Type inference is case-insensitive on the top-level directory**, because
+  vaults that predate quire commonly use `People/` and `Projects/`. Matching
+  only the lowercase form typed everything as a plain note and the entity
+  model silently did nothing. A directory named differently (`Meeting Notes/`)
+  stays a note — guessing at intent is worse than honouring an explicit
+  frontmatter `type:`, which always wins.
+- **A wikilink resolves to the page it names**, so `[[Page#Heading]]` and
+  `[[Page^block]]` reach Page. Anchors used to resolve to nothing: `doctor`
+  called them dangling and the target grew no backlink. The anchor is stripped
+  for link resolution only — document *names* keep their `#`, or a page titled
+  "C# Notes" would become unlinkable.
+
 ## Testing
 
 Three layers, each for what only it can see:

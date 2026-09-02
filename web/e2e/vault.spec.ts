@@ -161,6 +161,33 @@ test("search finds a document by its content", async ({ page }) => {
   await expect(page.getByText("Zanzibar Trip").first()).toBeVisible();
 });
 
+test("an imported document with spaces in its path opens from a link", async ({
+  page,
+}) => {
+  // Vaults imported from Obsidian routinely have "Meeting Notes/2026-08-15
+  // Acme Sync.md". Those paths reach the router through the /doc/* splat and
+  // must survive the round trip, spaces and all.
+  const created = await page.request.post("/api/v1/documents", {
+    data: { type: "note", title: "Spaced Out Note", markdown: "# Spaced Out Note\n\nBody here.\n" },
+  });
+  const { data } = await created.json();
+
+  // Force a path with a space, the way an import would have one.
+  const spaced = "notes/A Spaced Path.md";
+  await page.request.post("/api/v1/rename", {
+    data: { path: data.path, new_path: spaced, rewrite_links: true },
+  });
+
+  await page.goto(`/doc/${encodeURI(spaced)}`);
+  await expect(page.getByRole("heading", { name: "Spaced Out Note" }).first()).toBeVisible();
+
+  // And reached by clicking, not just by typing the URL — this is where an
+  // unencoded href would break.
+  await page.goto("/browse/note");
+  await page.getByRole("link", { name: /spaced out note/i }).first().click();
+  await expect(page.getByRole("heading", { name: "Spaced Out Note" }).first()).toBeVisible();
+});
+
 test("wikilinks produce a backlink on the target", async ({ page }) => {
   await page.request.post("/api/v1/documents", {
     data: { type: "person", title: "Sarah Chen", markdown: "# Sarah Chen\n" },

@@ -88,8 +88,12 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 		return false, err
 	}
 	for _, l := range doc.Links {
+		target := linkTarget(l.Raw)
+		if target == "" {
+			continue // a same-page heading link points at no document
+		}
 		if _, err := tx.Exec(`INSERT INTO links (src_path, target_norm, target_raw, display, line) VALUES (?, ?, ?, ?, ?)`,
-			rel, normalizeName(l.Raw), l.Raw, l.Display, l.Line); err != nil {
+			rel, target, l.Raw, l.Display, l.Line); err != nil {
 			return false, fmt.Errorf("inserting link in %s: %w", rel, err)
 		}
 	}
@@ -266,7 +270,9 @@ func insertTasks(tx *sql.Tx, rel string, fm map[string]any, tasks []markdown.Tas
 			return fmt.Errorf("inserting task in %s: %w", rel, err)
 		}
 		for _, l := range t.Links {
-			if _, err := tx.Exec("INSERT INTO task_links (task_id, target_norm) VALUES (?, ?)", id, normalizeName(l.Raw)); err != nil {
+			if target := linkTarget(l.Raw); target == "" {
+				continue
+			} else if _, err := tx.Exec("INSERT INTO task_links (task_id, target_norm) VALUES (?, ?)", id, target); err != nil {
 				return fmt.Errorf("inserting task link in %s: %w", rel, err)
 			}
 		}
@@ -279,6 +285,24 @@ func insertTasks(tx *sql.Tx, rel string, fm map[string]any, tasks []markdown.Tas
 // normalizeName is the one canonicalization used on both sides of the
 // docnames join.
 func normalizeName(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+
+// linkTarget reduces a wikilink target to the page it names. Obsidian's
+// "[[Page#Heading]]" and "[[Page^block]]" both point at Page, and without
+// this they resolved to nothing: `quire doctor` reported them dangling and
+// the target grew no backlink, which quietly breaks the relationship model
+// on any imported vault that uses heading links.
+//
+// Deliberately not folded into normalizeName, which also names documents: a
+// page titled "C# Notes" must keep its "#".
+func linkTarget(raw string) string {
+	s := strings.TrimSpace(raw)
+	if i := strings.IndexAny(s, "#^"); i >= 0 {
+		s = s[:i]
+	}
+	// "[[#Heading]]" is a jump within the current page and names no other
+	// document; the empty result is skipped by the caller.
+	return normalizeName(s)
+}
 
 // stripWikilink unwraps "[[Target|Alias]]" → "Target"; plain strings pass
 // through.
