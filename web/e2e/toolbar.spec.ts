@@ -89,17 +89,31 @@ test("the properties strip stays live while editing", async ({ page }) => {
   await page.getByRole("button", { name: "Add tag to this document" }).click();
   await page.getByLabel("Search tags").fill("live");
   await page.keyboard.press("Enter");
-  // The buffer gains the frontmatter and keeps the words typed before it.
-  await expect(editor).toContainText("tags: [live]");
+  // The chip shows the tag; the buffer keeps the words typed before it and
+  // never shows frontmatter — that is the app's, edited only through the UI.
+  await expect(page.getByRole("link", { name: "live" })).toBeVisible();
   await expect(editor).toContainText("unsaved words");
+  await expect(editor).not.toContainText("tags:");
+  await expect(editor).not.toContainText("---");
 
   await page.getByRole("button", { name: "Document area" }).click();
   await page.getByRole("listbox", { name: "Choose area" }).getByRole("option", { name: "Work", exact: true }).click();
-  await expect(editor).toContainText("area: work");
   await expect(page.getByRole("button", { name: "Document area" })).toContainText("work");
+  await expect(editor).not.toContainText("area:");
 
   const text = await diskText(page, path);
   expect(text).toContain("tags: [live]");
   expect(text).toContain("area: work");
   expect(text).toContain("unsaved words");
+
+  // Typing on carries the frontmatter along on the next save.
+  await editor.click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("\nmore words");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect.poll(() => diskText(page, path)).toContain("more words");
+  const after = await diskText(page, path);
+  expect(after.startsWith("---\n")).toBe(true);
+  expect(after).toContain("area: work");
+  expect(after).toContain("tags: [live]");
 });

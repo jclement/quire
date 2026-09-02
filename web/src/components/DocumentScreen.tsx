@@ -44,6 +44,7 @@ import { useUi } from "../keys/UiContext.tsx";
 import type { MarkdownEditorHandle } from "../editor/MarkdownEditor.tsx";
 import type { EditorContext } from "../editor/commands.ts";
 import type { StripSync } from "../api/queries.ts";
+import { frontmatterLines, splitFrontmatter } from "../lib/frontmatter.ts";
 import { EditorToolbar } from "./EditorToolbar.tsx";
 import { extractHeadings } from "../lib/headings.ts";
 import { requestTableEdit } from "../lib/tableEditor.ts";
@@ -151,7 +152,9 @@ function DocumentView({
   const toggleTask = useToggleTask();
   // Editor buffer mirrored into state for the split preview and the outline
   // (debounced so neither re-renders per keystroke).
-  const [liveText, setLiveText] = useState(save.currentText);
+  const [liveText, setLiveText] = useState(
+    () => splitFrontmatter(save.currentText()).body,
+  );
   const previewText = useDebouncedValue(liveText, PREVIEW_DEBOUNCE_MS);
   const [editorTopLine, setEditorTopLine] = useState(1);
   const [editorContext, setEditorContext] = useState<EditorContext | null>(
@@ -163,13 +166,22 @@ function DocumentView({
     before: () => save.save(),
     after: (updated) => {
       save.adopt(updated);
-      editorRef.current?.adopt(updated.markdown);
-      setLiveText(updated.markdown);
+      const { body } = splitFrontmatter(updated.markdown);
+      editorRef.current?.adopt(body);
+      setLiveText(body);
     },
   };
 
   // Read mode outlines the saved buffer; edit/split outlines what's being typed.
   const outlineSource = mode === "read" ? save.text : previewText;
+  // Indexed task lines count from the top of the file; the editor buffer
+  // starts after the frontmatter, so shift them for the split preview.
+  const bodyTasks = useMemo(() => {
+    const offset = frontmatterLines(save.text);
+    return offset === 0
+      ? doc.tasks
+      : doc.tasks.map((task) => ({ ...task, line: task.line - offset }));
+  }, [doc.tasks, save.text]);
   const headings = useMemo(
     () => extractHeadings(outlineSource),
     [outlineSource],
@@ -328,7 +340,9 @@ function DocumentView({
           onKeepMine={() => void save.keepMine()}
           onTakeDisk={() => {
             const disk = save.takeDisk();
-            if (disk !== null) editorRef.current?.setValue(disk);
+            if (disk !== null) {
+              editorRef.current?.setValue(splitFrontmatter(disk).body);
+            }
           }}
         />
       ) : null}
@@ -380,10 +394,13 @@ function DocumentView({
                 <Suspense fallback={<SkeletonRows count={6} />}>
                   <MarkdownEditor
                     ref={editorRef}
-                    initialValue={save.currentText()}
-                    onChange={(text) => {
-                      save.onEditorChange(text);
-                      setLiveText(text);
+                    initialValue={splitFrontmatter(save.currentText()).body}
+                    onChange={(body) => {
+                      // The buffer is the body; the frontmatter is the app's and is
+                      // stitched back on from the last known text.
+                      const head = splitFrontmatter(save.currentText()).head;
+                      save.onEditorChange(head + body);
+                      setLiveText(body);
                     }}
                     onSave={() => void save.save()}
                     onSaveAndExit={exitEdit}
@@ -401,7 +418,7 @@ function DocumentView({
                     <Markdown
                       markdown={previewText}
                       links={doc.links}
-                      tasks={doc.tasks}
+                      tasks={bodyTasks}
                       onToggleLine={(line) =>
                         editorRef.current?.toggleTaskOnLine(line)
                       }

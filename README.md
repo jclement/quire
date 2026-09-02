@@ -168,7 +168,10 @@ while the cursor is in a table), and Drawing. Everything acts on the cursor
 line.
 The properties strip — area, tags, people, companies — stays while editing:
 a change flushes the buffer, rewrites the file, and loads the result back
-into the editor, so nothing typed is lost.
+into the editor, so nothing typed is lost. The editor shows the body only:
+frontmatter is the app's, edited through the strip (or vim — the file is
+still the file), and rides along untouched on every save. The toolbar
+sticks to the top of the page while you scroll.
 
 ### Areas
 
