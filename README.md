@@ -249,9 +249,12 @@ toggle appears on the search page (and `?mode=semantic` on the API, plus
 by heading, embedded with `text-embedding-3-small` (512 dimensions, a few
 cents per thousand notes), kept up to date as you edit, and ranked by cosine
 similarity; each document's rail also lists the notes nearest to it in
-meaning — only ones that stand clearly above the note's similarity to the
-vault at large, and never for a note with no body yet (hover an entry for
-its score). Be clear about what this means: **note text is sent to that
+meaning under "Similar" (as distinct from "Linked from", which is real
+backlinks) — only ones that stand clearly above the note's similarity to
+the vault at large, and never for a note with no body yet (hover an entry
+for its score). Re-embedding happens per heading section, only for
+sections whose text changed, and only after a note has been quiet for 30
+seconds, so a writing session costs one pass, not one per autosave. Be clear about what this means: **note text is sent to that
 embeddings endpoint.** Nothing is sent with the key unset. Any
 OpenAI-compatible server works via `QUIRE_OPENAI_BASE_URL` (Ollama, LiteLLM),
 which keeps the text on your own machine. Embeddings live in `index.db` and
@@ -283,6 +286,7 @@ quire today
 | `QUIRE_OPENAI_API_KEY` | _(none)_ | Turns on semantic search — **sends note text to the embeddings endpoint** |
 | `QUIRE_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible embeddings API |
 | `QUIRE_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
+| `QUIRE_EMBEDDING_COOLDOWN` | `30s` | How long a note sits unchanged before its changed sections are re-embedded |
 | `QUIRE_DIGEST_TO` / `QUIRE_DIGEST_TIME` | | Daily digest recipient and local HH:MM |
 | `QUIRE_URL` / `QUIRE_TOKEN` | | CLI verbs: which quire to talk to, and as whom |
 

@@ -119,8 +119,10 @@ export function DocumentRail({
       ) : null}
 
       {related.length > 0 ? (
-        <nav aria-label="Related documents">
-          <RailHeading>Related</RailHeading>
+        <nav aria-label="Similar documents">
+          {/* "Similar", not "Related": these come from embeddings, not from
+              links — the links are the "Linked from" list above. */}
+          <RailHeading>Similar</RailHeading>
           <ul className="border-l border-border">
             {related.map((hit) => {
               const Icon = isDocType(hit.type)

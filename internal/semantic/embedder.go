@@ -71,7 +71,18 @@ type Embedder struct {
 	queued    map[string]bool
 	queue     chan string
 	lastError string
+
+	// Cooldown is how long a document must go unchanged before its chunks
+	// are re-embedded. Autosave fires every couple of seconds while a
+	// section is being written; embedding each keystroke's worth would be
+	// cheap but pointless. Zero embeds immediately (tests).
+	Cooldown time.Duration
+	timersMu sync.Mutex
+	timers   map[string]*time.Timer
 }
+
+// DefaultCooldown is the pause after the last change before re-embedding.
+const DefaultCooldown = 30 * time.Second
 
 // retryDelay between attempts when the endpoint is rate-limiting or down.
 const retryDelay = 15 * time.Second
@@ -84,9 +95,11 @@ func Start(ctx context.Context, db *sql.DB, v *vault.Vault, client *Client) (*Em
 	}
 	e := &Embedder{
 		db: db, vault: v, client: client,
-		byPath: map[string][]int{},
-		queued: map[string]bool{},
-		queue:  make(chan string, 4096),
+		byPath:   map[string][]int{},
+		queued:   map[string]bool{},
+		queue:    make(chan string, 4096),
+		Cooldown: DefaultCooldown,
+		timers:   map[string]*time.Timer{},
 	}
 	if err := e.load(); err != nil {
 		return nil, err
@@ -98,13 +111,36 @@ func Start(ctx context.Context, db *sql.DB, v *vault.Vault, client *Client) (*Em
 	return e, nil
 }
 
-// Notify is the index hook: an upsert queues a refresh, a delete drops rows.
+// Notify is the index hook: an upsert queues a refresh once the document
+// has sat unchanged for Cooldown; a delete drops rows at once.
 func (e *Embedder) Notify(ev index.Event) {
 	if ev.Action == "delete" {
+		e.cancelTimer(ev.Path)
 		e.remove(ev.Path)
 		return
 	}
-	e.enqueue(ev.Path)
+	if e.Cooldown <= 0 {
+		e.enqueue(ev.Path)
+		return
+	}
+	e.timersMu.Lock()
+	defer e.timersMu.Unlock()
+	if t, ok := e.timers[ev.Path]; ok {
+		t.Stop()
+	}
+	e.timers[ev.Path] = time.AfterFunc(e.Cooldown, func() {
+		e.cancelTimer(ev.Path)
+		e.enqueue(ev.Path)
+	})
+}
+
+func (e *Embedder) cancelTimer(path string) {
+	e.timersMu.Lock()
+	defer e.timersMu.Unlock()
+	if t, ok := e.timers[path]; ok {
+		t.Stop()
+		delete(e.timers, path)
+	}
 }
 
 // Status reports counts for the Settings page.
@@ -116,6 +152,9 @@ func (e *Embedder) Status() Status {
 	pending := len(e.queued)
 	lastError := e.lastError
 	e.queueMu.Unlock()
+	e.timersMu.Lock()
+	pending += len(e.timers)
+	e.timersMu.Unlock()
 	return Status{Enabled: true, Model: e.client.Model, Documents: docs, Pending: pending, LastError: lastError}
 }
 

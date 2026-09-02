@@ -34,6 +34,7 @@ const CLEAN_ENV = {
   QUIRE_OPENAI_API_KEY: "",
   QUIRE_OPENAI_BASE_URL: "",
   QUIRE_EMBEDDING_MODEL: "",
+  QUIRE_EMBEDDING_COOLDOWN: "",
   QUIRE_LOG_LEVEL: "warn",
 };
 
@@ -91,6 +92,8 @@ export default defineConfig({
         QUIRE_AUTH_MODE: "none",
         QUIRE_OPENAI_API_KEY: "test-key",
         QUIRE_OPENAI_BASE_URL: `http://127.0.0.1:${FAKE_OPENAI_PORT}/v1`,
+        // Embed at once; the suite is not going to wait out a 30s cooldown.
+        QUIRE_EMBEDDING_COOLDOWN: "0s",
       },
     },
     {

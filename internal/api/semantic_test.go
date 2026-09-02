@@ -48,6 +48,7 @@ func TestSemanticSearchEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		embedder.Cooldown = 0 // tests want the write embedded now, not in 30s
 		svc.Semantic = embedder
 		svc.Index.Notify = embedder.Notify
 	})

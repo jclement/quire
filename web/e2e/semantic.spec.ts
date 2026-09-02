@@ -77,7 +77,7 @@ test("semantic mode ranks by meaning and survives reload; text mode is exact", a
   // The document rail lists what is near this note.
   await page.setViewportSize({ width: 1400, height: 900 });
   await page.goto(`/doc/${rollout}`);
-  const related = page.getByRole("navigation", { name: "Related documents" });
+  const related = page.getByRole("navigation", { name: "Similar documents" });
   await expect(related).toBeVisible();
   await expect(related.getByRole("link").first()).toContainText("Ingress upgrade");
 });

@@ -73,6 +73,10 @@ type Config struct {
 	OpenAIBaseURL string `yaml:"openai_base_url"`
 	// EmbeddingModel names the embeddings model to use.
 	EmbeddingModel string `yaml:"embedding_model"`
+	// EmbeddingCooldown is how long a note must go unchanged before its
+	// changed sections are re-embedded ("30s"); a writing session then
+	// costs one pass rather than one per autosave. Empty means 30s.
+	EmbeddingCooldown string `yaml:"embedding_cooldown"`
 }
 
 // ParseTrustedProxies turns the configured list into prefixes. "any" widens
@@ -191,6 +195,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("QUIRE_EMBEDDING_MODEL"); v != "" {
 		cfg.EmbeddingModel = v
+	}
+	if v := os.Getenv("QUIRE_EMBEDDING_COOLDOWN"); v != "" {
+		cfg.EmbeddingCooldown = v
 	}
 	if v := os.Getenv("QUIRE_GIT"); v != "" {
 		cfg.Git = v != "false" && v != "0"

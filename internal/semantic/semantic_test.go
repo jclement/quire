@@ -133,6 +133,7 @@ func TestEmbedderIndexesSearchesAndRelates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	e.Cooldown = 0
 	waitIdle(t, e)
 	if st := e.Status(); st.Documents != 3 || st.LastError != "" {
 		t.Fatalf("status = %+v", st)
@@ -171,6 +172,7 @@ func TestEmbedderIndexesSearchesAndRelates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	e2.Cooldown = 0
 	waitIdle(t, e2)
 	if calls.Load() != before {
 		t.Errorf("warm start made %d API calls", calls.Load()-before)
@@ -227,5 +229,46 @@ func TestEmbedderRetriesRateLimits(t *testing.T) {
 	}
 	if st.Documents != 0 {
 		t.Errorf("nothing should be embedded yet: %+v", st)
+	}
+}
+
+// TestCooldownCoalescesEdits: a burst of saves to one document costs one
+// embedding pass, after the document has been quiet for the cooldown.
+func TestCooldownCoalescesEdits(t *testing.T) {
+	ix, v := newVault(t, map[string]string{"notes/a.md": "# A\n\nfirst draft of a paragraph\n"})
+	srv, calls := fakeOpenAI(t, 0)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	e, err := Start(ctx, ix.DB, v, NewClient(srv.URL+"/v1", "test-key", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Cooldown = 0
+	waitIdle(t, e)
+	baseline := calls.Load()
+	e.Cooldown = 300 * time.Millisecond
+
+	for i := 0; i < 5; i++ {
+		f, _ := v.Read("notes/a.md")
+		body := "# A\n\n" + strings.Repeat("more words ", i+1) + "\n"
+		if _, err := v.Write("notes/a.md", []byte(body), f.SHA256); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ix.IndexFile("notes/a.md"); err != nil {
+			t.Fatal(err)
+		}
+		e.Notify(index.Event{Path: "notes/a.md", Action: "upsert"})
+		time.Sleep(50 * time.Millisecond)
+	}
+	if calls.Load() != baseline {
+		t.Fatalf("embedded during the burst: %d extra calls", calls.Load()-baseline)
+	}
+	if e.Status().Pending != 1 {
+		t.Errorf("a cooling-down document should count as pending: %+v", e.Status())
+	}
+	time.Sleep(400 * time.Millisecond)
+	waitIdle(t, e)
+	if got := calls.Load() - baseline; got != 1 {
+		t.Errorf("the burst should cost one embedding call, got %d", got)
 	}
 }

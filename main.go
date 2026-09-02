@@ -163,13 +163,20 @@ func runServe() error {
 		if err != nil {
 			return fmt.Errorf("starting semantic search: %w", err)
 		}
+		if cfg.EmbeddingCooldown != "" {
+			cooldown, err := time.ParseDuration(cfg.EmbeddingCooldown)
+			if err != nil || cooldown < 0 {
+				return fmt.Errorf("invalid QUIRE_EMBEDDING_COOLDOWN %q (want a duration like 30s)", cfg.EmbeddingCooldown)
+			}
+			embedder.Cooldown = cooldown
+		}
 		svc.Semantic = embedder
 		previous := svc.Index.Notify
 		svc.Index.Notify = func(ev index.Event) {
 			previous(ev)
 			embedder.Notify(ev)
 		}
-		slog.Info("semantic search on", "model", client.Model, "endpoint", client.BaseURL)
+		slog.Info("semantic search on", "model", client.Model, "endpoint", client.BaseURL, "cooldown", embedder.Cooldown)
 	}
 
 	shares := share.NewManager(authStore, svc, cfg.BaseURL)
