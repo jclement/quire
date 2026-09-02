@@ -3,8 +3,15 @@
 // drawer. Routed pages render into <main> via children. Version and update
 // status live in Settings, not in page furniture.
 import { AreaDot } from "./AreaDot.tsx";
+import { AreaPicker } from "./AreaPicker.tsx";
 import { useAreas, useAreasEnabled } from "../api/queries.ts";
-import { AREA_ALL, AREA_NONE, areaLabel } from "../lib/area.ts";
+import {
+  AREA_ALL,
+  AREA_NONE,
+  areaLabel,
+  joinAreas,
+  splitAreas,
+} from "../lib/area.ts";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   CalendarRange,
@@ -16,10 +23,10 @@ import {
   Settings,
   BookOpen,
   Hash,
-  Layers,
   Sunrise,
   X,
   type LucideIcon,
+  ChevronDown,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { todayISO } from "../lib/dates.ts";
@@ -118,33 +125,67 @@ function AreaSwitcher() {
   const { area, setArea } = useUi();
   const areas = useAreas();
   const enabled = useAreasEnabled();
+  const [open, setOpen] = useState(false);
   if (!enabled) return null;
-  const choices = [
-    AREA_ALL,
-    ...(areas.data ?? []).map((a) => a.area),
-    AREA_NONE,
-  ];
-  const current = (areas.data ?? []).find((a) => a.area === area);
+  const list = areas.data ?? [];
+  const selected = splitAreas(area);
+  const colorOf = (name: string) => list.find((a) => a.area === name)?.color;
+  const toggle = (value: string) => {
+    const next = selected.includes(value)
+      ? selected.filter((a) => a !== value)
+      : [...selected, value];
+    setArea(joinAreas(next));
+  };
   return (
-    <label className="mb-1 flex items-center gap-1.5 px-2">
-      {current ? (
-        <AreaDot color={current.color} className="ml-1 mr-1" />
-      ) : (
-        <Layers className="size-4 shrink-0 text-muted" aria-hidden="true" />
-      )}
-      <select
+    <div className="relative mb-1 px-2">
+      <button
+        type="button"
         aria-label="Area"
-        value={area}
-        onChange={(event) => setArea(event.target.value)}
-        className="field-bare h-8 min-w-0 flex-1 rounded border border-border bg-raised px-1.5 text-sm text-heading outline-none focus:border-accent"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        title="Which areas to show — pick one or several"
+        onClick={() => setOpen(!open)}
+        className="flex h-8 w-full min-w-0 items-center gap-1.5 rounded border border-border bg-raised px-2 text-sm text-heading hover:bg-hover"
       >
-        {choices.map((choice) => (
-          <option key={choice || "all"} value={choice}>
-            {areaLabel(choice)}
-          </option>
-        ))}
-      </select>
-    </label>
+        <span className="text-xs text-muted">Area:</span>
+        {selected.length === 0 ? (
+          <span className="truncate">all</span>
+        ) : (
+          <>
+            <span className="flex shrink-0 items-center gap-0.5">
+              {selected.map((name) =>
+                name === AREA_NONE ? (
+                  <span
+                    key={name}
+                    className="inline-block size-2 shrink-0 rounded-full border border-border"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <AreaDot key={name} color={colorOf(name)} />
+                ),
+              )}
+            </span>
+            <span className="truncate">{areaLabel(area)}</span>
+          </>
+        )}
+        <ChevronDown
+          className="ml-auto size-3.5 shrink-0 text-muted"
+          aria-hidden="true"
+        />
+      </button>
+      {open ? (
+        <AreaPicker
+          label="Choose areas"
+          areas={list}
+          selected={selected}
+          multi
+          noneLabel="All areas"
+          onToggle={toggle}
+          onClear={() => setArea(AREA_ALL)}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </div>
   );
 }
 

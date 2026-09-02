@@ -317,6 +317,10 @@ Chosen over fixed areas (a third one would need a code change) and over
 directory-based areas (`work/people/` collides with the type directories and
 breaks the imported-vault story). Decision made with the owner, 2026-09-02.
 
+The filter value is a comma-separated list ("work,personal", "none,work"):
+`areaClause` ORs the members, so the switcher can show several areas at
+once and the API/MCP take the same string. A document still has one area.
+
 ## Templates
 
 `templates/` is a document type of its own, kept out of everyday listings and

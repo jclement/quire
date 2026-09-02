@@ -220,7 +220,7 @@ type appendIn struct {
 
 type listTasksIn struct {
 	View string `json:"view" jsonschema:"one of: inbox, today, upcoming, waiting, logbook"`
-	Area string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; omit for all"`
+	Area string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; comma-separate several (work,personal); omit for all"`
 }
 
 type areasOut struct {
@@ -244,11 +244,11 @@ type editTaskIn struct {
 const areaDoc = "area to narrow to (e.g. work, personal), or none for unclassified; omit for all"
 
 type areaIn struct {
-	Area string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; omit for all"`
+	Area string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; comma-separate several (work,personal); omit for all"`
 }
 
 type listDocsIn struct {
-	Area  string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; omit for all"`
+	Area  string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; comma-separate several (work,personal); omit for all"`
 	Type  string `json:"type,omitempty" jsonschema:"filter by type: note, person, company, project, meeting, daily, template; omit for all (templates are only listed when asked for by type)"`
 	Title string `json:"title,omitempty" jsonschema:"optional title substring, case-insensitive"`
 	Limit int    `json:"limit,omitempty" jsonschema:"max results (default 50)"`
@@ -313,7 +313,7 @@ func (t *tools) search(_ context.Context, _ *sdk.CallToolRequest, in searchIn) (
 type semanticIn struct {
 	Query string `json:"query" jsonschema:"what you are looking for, in plain language"`
 	Limit int    `json:"limit,omitempty" jsonschema:"max results (default 20)"`
-	Area  string `json:"area,omitempty" jsonschema:"restrict to an area (see list_areas); 'none' for unclassified"`
+	Area  string `json:"area,omitempty" jsonschema:"restrict to an area (see list_areas); 'none' for unclassified; comma-separate several"`
 }
 
 type relatedIn struct {

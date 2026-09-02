@@ -34,9 +34,13 @@ test("defining a second area in Settings, with a colour, turns everything on", a
   expect(side?.defined).toBe(true);
 
   await page.goto("/browse/note");
-  const switcher = page.getByLabel("Area", { exact: true });
+  const switcher = page.getByRole("button", { name: "Area", exact: true });
   await expect(switcher).toBeVisible();
-  await expect(switcher.locator("option", { hasText: "Side project" })).toHaveCount(1);
+  await switcher.click();
+  await expect(
+    page.getByRole("listbox", { name: "Choose areas" }).getByRole("option", { name: "Side project" }),
+  ).toHaveCount(1);
+  await page.keyboard.press("Escape");
 
   await page.request.post("/api/v1/documents", {
     data: { type: "note", title: "Violet Note", area: "side project", markdown: "# Violet Note\n" },
@@ -47,7 +51,7 @@ test("defining a second area in Settings, with a colour, turns everything on", a
   expect(await dot.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
 
   await page.goto("/doc/notes/violet-note.md");
-  await expect(page.getByLabel("Document area")).toHaveValue("side project");
+  await expect(page.getByRole("button", { name: "Document area" })).toContainText("side project");
 });
 
 test("bad definitions are refused with a reason", async ({ page }) => {

@@ -67,32 +67,37 @@ func TestSemanticSearchEndToEnd(t *testing.T) {
 	doJSON(t, "POST", ts.URL+"/api/v1/documents", map[string]any{
 		"type": "note", "title": "Lunch", "markdown": "# Lunch\n\ntacos with the team\n",
 	}, http.StatusCreated, nil)
+	doJSON(t, "POST", ts.URL+"/api/v1/documents", map[string]any{
+		"type": "note", "title": "Ingress upgrade",
+		"markdown": "# Ingress upgrade\n\ndrain the kubernetes cluster before the ingress upgrade\n",
+	}, http.StatusCreated, nil)
 
 	deadline := time.Now().Add(10 * time.Second)
 	var status service.SemanticStatus
 	for time.Now().Before(deadline) {
 		doJSON(t, "GET", ts.URL+"/api/v1/semantic/status", nil, http.StatusOK, &status)
-		if status.Documents == 2 && status.Pending == 0 {
+		if status.Documents == 3 && status.Pending == 0 {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if status.Documents != 2 || !status.Enabled || status.Model != semantic.DefaultModel {
+	if status.Documents != 3 || !status.Enabled || status.Model != semantic.DefaultModel {
 		t.Fatalf("status = %+v", status)
 	}
 
 	var hits []service.SearchResult
 	doJSON(t, "GET", ts.URL+"/api/v1/search?mode=semantic&q=kubernetes+rollout", nil, http.StatusOK, &hits)
-	if len(hits) != 2 || hits[0].Path != created.Path || hits[0].Score <= hits[1].Score {
+	if len(hits) != 3 || hits[0].Path != created.Path || hits[0].Score <= hits[1].Score {
 		t.Errorf("semantic hits = %+v", hits)
 	}
 	if hits[0].Title != "Cluster rollout" || hits[0].Type != "note" {
 		t.Errorf("hit should carry index metadata: %+v", hits[0])
 	}
 
+	// Related has a similarity floor: the ingress note qualifies, lunch does not.
 	var related []service.SearchResult
 	doJSON(t, "GET", ts.URL+"/api/v1/related?path="+created.Path, nil, http.StatusOK, &related)
-	if len(related) != 1 || related[0].Title != "Lunch" {
+	if len(related) != 1 || related[0].Title != "Ingress upgrade" {
 		t.Errorf("related = %+v", related)
 	}
 }

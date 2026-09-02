@@ -152,6 +152,12 @@ Entities relate through wikilinks, either in prose (`met [[Sarah Chen]] about
 `people: ["[[Sarah Chen]]"]`). Both are indexed, so either produces a backlink
 on the target, and person/company/project pages assemble themselves from them.
 
+### Editing
+
+A new document opens straight into the editor, in whichever of Edit or Split
+you used last (remembered per device, like the theme). `e` edits, ⌘E cycles
+read → edit → split, and Escape or Read flushes the save.
+
 ### Areas
 
 Optional, Nirvana-style **work / personal / unclassified**, as a frontmatter key:
@@ -167,6 +173,13 @@ device, and files new documents under it. Every document page gets an area chip
 to re-file it in place, and its colour shows as a dot wherever the area does.
 Daily notes never have an area — they belong to every one. `area:work` works in
 search too, and the CLI/MCP accept an area on listing and creation.
+
+The switcher is a badge in the sidebar — "Area: all", or the coloured dots
+and names of what is selected — and its picker takes several areas at once,
+so Work and Personal can be on together (the API and MCP take the same thing
+as a comma-separated list: `area=work,personal`). A document shows its own
+badge, "Area: unassigned" or its area in colour, and clicking it re-files
+the document.
 
 ### Templates
 
@@ -198,7 +211,7 @@ grid**, and Tab moving between cells. Tables inside fenced code are left alone.
 
 ### Drawings
 
-Run **Insert drawing** from the palette to drop an [Excalidraw](https://excalidraw.com)
+Run **Insert drawing** from the palette or the document's ⋯ menu to drop an [Excalidraw](https://excalidraw.com)
 sketch into the note at the cursor (or onto the end, from read mode) and start
 drawing full-screen. Saving writes two files under `attachments/`: the
 `.excalidraw` scene and a `.excalidraw.svg` render. The note embeds the
@@ -210,7 +223,10 @@ left out to save 12MB; CJK text in a drawing falls back to a system font.
 
 ### Tags
 
-`#tags` in prose and `tags:` in frontmatter are the same thing. `/tags` lists
+`#tags` in prose and `tags:` in frontmatter are the same thing. The `tags:`
+list is editable as chips under the title: each links to its search and
+removes with ×, and "+" offers the vault's existing tags or takes a new one.
+`/tags` lists
 every tag sized by use; tags in prose, in Browse rows and on the tags page all
 link to the `tag:x` search. Purely numeric `#123` is not a tag.
 

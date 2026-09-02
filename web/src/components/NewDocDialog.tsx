@@ -58,7 +58,9 @@ function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
     onSuccess: (doc) => {
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
       close();
-      void navigate({ to: docHref(doc.path) });
+      // A brand-new document is there to be written: open it for editing,
+      // in whichever of Edit / Split the person used last.
+      void navigate({ to: docHref(doc.path), search: { edit: true } });
     },
   });
 

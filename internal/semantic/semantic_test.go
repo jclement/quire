@@ -157,6 +157,9 @@ func TestEmbedderIndexesSearchesAndRelates(t *testing.T) {
 		if h.Path == "notes/k8s.md" {
 			t.Error("a document must not relate to itself")
 		}
+		if h.Path == "notes/lunch.md" {
+			t.Errorf("lunch shares nothing with the rollout note and must fall under the floor: %+v", related)
+		}
 	}
 
 	// A restart re-embeds nothing: fingerprints are current.

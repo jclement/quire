@@ -27,12 +27,13 @@ export function storeArea(area: string): void {
 export function areaLabel(area: string): string {
   if (area === AREA_ALL) return "All areas";
   if (area === AREA_NONE) return "Unclassified";
+  if (area.includes(",")) return splitAreas(area).map(areaLabel).join(", ");
   return area.charAt(0).toUpperCase() + area.slice(1);
 }
 
 /** True when the value names a real area rather than a view of all/none. */
 export function isRealArea(area: string): boolean {
-  return area !== AREA_ALL && area !== AREA_NONE;
+  return primaryArea(area) !== "";
 }
 
 /** The palette, in the order swatches are offered. Mirrors settings.Colors. */
@@ -54,4 +55,29 @@ export function areaColorVar(color: string | undefined): string {
     ? color
     : "slate";
   return `var(--area-${name})`;
+}
+
+// ---- multiple areas ----
+// The switcher can narrow to several areas at once; the value is then a
+// comma-separated list ("work,personal", "none,work"), which is also what
+// the API's area parameter accepts.
+
+/** The individual areas in a filter value, normalised and de-duplicated. */
+export function splitAreas(area: string): string[] {
+  const out: string[] = [];
+  for (const part of area.split(",")) {
+    const a = part.trim().toLowerCase();
+    if (a && a !== "all" && !out.includes(a)) out.push(a);
+  }
+  return out;
+}
+
+export function joinAreas(areas: string[]): string {
+  return splitAreas(areas.join(",")).join(",");
+}
+
+/** The single real area a selection names, or "" when it names none or several. */
+export function primaryArea(area: string): string {
+  const areas = splitAreas(area);
+  return areas.length === 1 && areas[0] !== AREA_NONE ? areas[0]! : "";
 }

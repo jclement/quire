@@ -3,6 +3,7 @@ package index
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jclement/quire/internal/vault"
@@ -282,5 +283,29 @@ func TestFrontmatterLinksAndTagsAreIndexed(t *testing.T) {
 	}
 	if len(hits) != 1 || hits[0].Path != "people/dan-roe.md" {
 		t.Errorf("tag:vip search = %+v", hits)
+	}
+}
+
+func TestAreaClauseCombinesAreas(t *testing.T) {
+	cases := map[string]struct {
+		clause string
+		args   int
+	}{
+		"":                 {"", 0},
+		"all":              {"", 0},
+		"work":             {"d.area IN (?)", 1},
+		"Work, personal":   {"d.area IN (?,?)", 2},
+		"none":             {"(d.area = '' AND d.type != 'daily')", 0},
+		"none,work":        {"(d.area = '' AND d.type != 'daily') OR d.area IN (?)", 1},
+		"work,work,,none,": {"(d.area = '' AND d.type != 'daily') OR d.area IN (?)", 1},
+	}
+	for in, want := range cases {
+		clause, args := areaClause(in)
+		if !strings.Contains(clause, want.clause) || len(args) != want.args {
+			t.Errorf("areaClause(%q) = %q %v, want containing %q with %d args", in, clause, args, want.clause, want.args)
+		}
+		if want.clause == "" && clause != "" {
+			t.Errorf("areaClause(%q) should be empty, got %q", in, clause)
+		}
 	}
 }

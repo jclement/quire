@@ -4,6 +4,8 @@
 // recognises one, keeps its <img> fresh after a save, and asks the single
 // mounted DrawingDialog to open on it.
 import { useSyncExternalStore } from "react";
+import { api } from "../api/client.ts";
+import { requestInsertText } from "./insertText.ts";
 
 export const DRAWING_RENDER_SUFFIX = ".excalidraw.svg";
 
@@ -56,6 +58,30 @@ export function onDrawingEditRequest(
     handler((event as CustomEvent<string>).detail);
   window.addEventListener(EVENT, listener);
   return () => window.removeEventListener(EVENT, listener);
+}
+
+/**
+ * Creates an empty drawing and puts its embed into the document: at the
+ * cursor when the editor is open, else appended through the API (a CAS
+ * round trip, so it can never clobber an edit made since the page loaded).
+ * Then opens the editor on it. Rejects when any step fails.
+ */
+export async function insertDrawingInto(docPath: string): Promise<void> {
+  const drawing = await api.createDrawing();
+  if (!requestInsertText(drawing.markdown)) {
+    const doc = await api.getDocument(docPath);
+    const gap = doc.markdown.endsWith("\n\n")
+      ? ""
+      : doc.markdown.endsWith("\n")
+        ? "\n"
+        : "\n\n";
+    await api.putDocument(
+      docPath,
+      `${doc.markdown}${gap}${drawing.markdown}\n`,
+      doc.sha256,
+    );
+  }
+  requestDrawingEdit(drawing.path);
 }
 
 declare global {

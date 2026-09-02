@@ -15,6 +15,7 @@ import {
   Printer,
   Share2,
   Trash2,
+  PenTool,
 } from "lucide-react";
 import {
   lazy,
@@ -33,6 +34,7 @@ import {
   useToggleTask,
   useRelated,
   useSemanticEnabled,
+  useShares,
 } from "../api/queries.ts";
 import type { Document } from "../api/types.ts";
 import { formatRelativeTime } from "../lib/dates.ts";
@@ -42,6 +44,8 @@ import { useUi } from "../keys/UiContext.tsx";
 import type { MarkdownEditorHandle } from "../editor/MarkdownEditor.tsx";
 import { extractHeadings } from "../lib/headings.ts";
 import { requestTableEdit } from "../lib/tableEditor.ts";
+import { insertDrawingInto } from "../lib/drawings.ts";
+import { preferredEditMode, storeEditMode } from "../lib/viewMode.ts";
 import { findTables } from "../lib/tables.ts";
 import { printPage, registerPrintHook } from "../lib/printing.ts";
 import { DocumentRail } from "./DocumentRail.tsx";
@@ -111,7 +115,14 @@ function DocumentView({
   doc: Document;
   initialEdit: boolean;
 }) {
-  const [mode, setMode] = useState<ViewMode>(initialEdit ? "edit" : "read");
+  // A document opened for editing lands in whichever of Edit / Split the
+  // person used last; every switch into one of them updates that memory.
+  const [mode, setMode] = useState<ViewMode>(() =>
+    initialEdit ? preferredEditMode() : "read",
+  );
+  useEffect(() => {
+    if (mode !== "read") storeEditMode(mode);
+  }, [mode]);
   const {
     registerKey,
     pushEscape,
@@ -119,8 +130,17 @@ function DocumentView({
     setShareDocPath,
     setRenameDocPath,
     setDeleteDocPath,
+    toast,
   } = useUi();
   const save = useDocumentSave(path, doc);
+  // The share button lights up while a live link exists for this document.
+  const shares = useShares();
+  const isShared = (shares.data ?? []).some(
+    (share) =>
+      share.doc_path === path &&
+      !share.revoked_at &&
+      (!share.expires_at || new Date(share.expires_at) > new Date()),
+  );
   // Related-by-meaning needs the embeddings pipeline; the hook stays
   // disabled (no request) when it is off.
   const related = useRelated(path, useSemanticEnabled() && mode === "read");
@@ -258,13 +278,24 @@ function DocumentView({
           type="button"
           onClick={() => setShareDocPath(path)}
           aria-label="Share this document"
-          className="flex size-7 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-heading print:hidden"
+          aria-pressed={isShared}
+          title={isShared ? "Shared — manage its links" : "Share"}
+          className={`flex size-7 items-center justify-center rounded border print:hidden ${
+            isShared
+              ? "border-accent bg-accent/10 text-accent hover:opacity-90"
+              : "border-border text-muted hover:bg-hover hover:text-heading"
+          }`}
         >
           <Share2 className="size-3.5" aria-hidden="true" />
         </button>
         <DocMenu
           onRename={() => setRenameDocPath(path)}
           onDelete={() => setDeleteDocPath(path)}
+          onInsertDrawing={() =>
+            insertDrawingInto(path).catch(() =>
+              toast("Couldn't create a drawing — reload and try again"),
+            )
+          }
         />
         <button
           type="button"
@@ -409,9 +440,11 @@ function ModeSwitch({
 function DocMenu({
   onRename,
   onDelete,
+  onInsertDrawing,
 }: {
   onRename: () => void;
   onDelete: () => void;
+  onInsertDrawing: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -445,6 +478,17 @@ function DocMenu({
             >
               <Printer className="size-3.5 text-muted" aria-hidden="true" />
               Print / Save as PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onInsertDrawing();
+              }}
+              className="flex h-8 w-full items-center gap-2 px-3 text-left text-xs text-body hover:bg-hover hover:text-heading"
+            >
+              <PenTool className="size-3.5 text-muted" aria-hidden="true" />
+              Insert drawing
             </button>
             <button
               type="button"

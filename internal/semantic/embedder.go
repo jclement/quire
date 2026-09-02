@@ -129,8 +129,16 @@ func (e *Embedder) Search(ctx context.Context, query string, limit int) ([]Hit, 
 	return e.nearest(vecs[0], "", limit), nil
 }
 
+// minRelatedScore is the cosine similarity below which two documents are
+// not shown as related. Without a floor the rail always fills its slots,
+// and a note that says only "test" is "related" to whatever is least
+// unlike it. 0.4 sits well above the 0.1–0.3 that unrelated notes score
+// with text-embedding-3 while keeping genuinely overlapping ones.
+const minRelatedScore = 0.4
+
 // Related ranks other documents by similarity to this one — no API call,
-// the document's own vectors are already here. Nil when it has none yet.
+// the document's own vectors are already here. Nil when it has none yet,
+// and only documents above minRelatedScore are returned.
 func (e *Embedder) Related(path string, limit int) []Hit {
 	e.mu.RLock()
 	idx := e.byPath[path]
@@ -146,7 +154,14 @@ func (e *Embedder) Related(path string, limit int) []Hit {
 		}
 	}
 	e.mu.RUnlock()
-	return e.nearest(normalize(sum), path, limit)
+	hits := e.nearest(normalize(sum), path, limit)
+	kept := hits[:0]
+	for _, h := range hits {
+		if h.Score >= minRelatedScore {
+			kept = append(kept, h)
+		}
+	}
+	return kept
 }
 
 func (e *Embedder) nearest(q []float32, exclude string, limit int) []Hit {

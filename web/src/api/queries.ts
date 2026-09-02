@@ -96,6 +96,15 @@ export function useSearch(q: string, mode: SearchMode = "text") {
   });
 }
 
+/** Every tag in the vault with its count; feeds the tag chip typeahead. */
+export function useTags() {
+  return useQuery({
+    queryKey: ["tags"],
+    queryFn: api.listTags,
+    staleTime: 30_000,
+  });
+}
+
 /** Whether the server has an embeddings key — gates every semantic UI. */
 export function useSemanticEnabled(): boolean {
   return useHealth().data?.semantic_search === true;

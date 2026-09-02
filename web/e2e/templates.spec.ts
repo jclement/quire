@@ -26,7 +26,8 @@ test("a new meeting takes the meeting default without asking", async ({ page }) 
   await page.getByRole("textbox").first().fill("Templated Sync");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Templated Sync" }).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Action items" })).toBeVisible();
+  // New documents open in the editor, so the template shows as source.
+  await expect(page.locator(".cm-content")).toContainText("Action items");
 });
 
 test("a named template is offered for notes and inherits its frontmatter", async ({ page }) => {
@@ -38,7 +39,7 @@ test("a named template is offered for notes and inherits its frontmatter", async
   await page.getByRole("textbox").first().fill("Use SQLite");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Use SQLite" }).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Consequences" })).toBeVisible();
+  await expect(page.locator(".cm-content")).toContainText("Consequences");
 
   const doc = await (await page.request.get("/api/v1/documents/notes/use-sqlite.md")).json();
   expect(doc.data.tags).toContain("decision");

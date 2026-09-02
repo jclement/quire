@@ -455,6 +455,25 @@ func runToken(args []string) error {
 	return nil
 }
 
+// contentSecurityPolicy is the SPA's policy: its own bundle only. The one
+// exception is form-action on the OAuth consent form — approving it answers
+// with a redirect to the client's callback (an https:// or custom-scheme
+// URL), and browsers apply form-action to that redirect, so 'self' would
+// swallow the hand-back and leave the user staring at the consent page.
+func contentSecurityPolicy(path string) string {
+	formAction := "form-action 'self'"
+	if strings.HasPrefix(path, "/oauth/") {
+		formAction = "form-action *"
+	}
+	return "default-src 'self'; img-src 'self' data: blob:; " +
+		"style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; " +
+		// Fonts are inlined into the bundle as data: URIs; without
+		// this the whole UI silently falls back to system faces.
+		"font-src 'self' data:; " +
+		"connect-src 'self'; base-uri 'self'; frame-ancestors 'none'; " +
+		"object-src 'none'; " + formAction
+}
+
 // securityHeaders applies the house baseline to every response.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -467,14 +486,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		// pre-paint theme script in index.html forces it for scripts too.
 		// Share pages override this with a far stricter policy of their own.
 		if !strings.HasPrefix(r.URL.Path, "/s/") {
-			h.Set("Content-Security-Policy",
-				"default-src 'self'; img-src 'self' data: blob:; "+
-					"style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "+
-					// Fonts are inlined into the bundle as data: URIs; without
-					// this the whole UI silently falls back to system faces.
-					"font-src 'self' data:; "+
-					"connect-src 'self'; base-uri 'self'; frame-ancestors 'none'; "+
-					"object-src 'none'; form-action 'self'")
+			h.Set("Content-Security-Policy", contentSecurityPolicy(r.URL.Path))
 		}
 		next.ServeHTTP(w, r)
 	})

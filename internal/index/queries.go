@@ -27,16 +27,48 @@ type DocRow struct {
 // Daily notes are excluded from it: they belong to every area, not none.
 const AreaUnclassified = "none"
 
-// areaClause restricts documents alias `d` to an area. "" is no filter.
+// areaClause restricts documents alias `d` to one or more areas — a
+// comma-separated list ("work,personal", "none,work") matches any of them.
+// "" is no filter.
 func areaClause(area string) (string, []any) {
-	switch NormalizeArea(area) {
-	case "":
+	areas := SplitAreas(area)
+	if len(areas) == 0 {
 		return "", nil
-	case AreaUnclassified:
-		return " AND d.area = '' AND d.type != 'daily'", nil
-	default:
-		return " AND d.area = ?", []any{NormalizeArea(area)}
 	}
+	var parts []string
+	var args []any
+	var named []string
+	for _, a := range areas {
+		if a == AreaUnclassified {
+			parts = append(parts, "(d.area = '' AND d.type != 'daily')")
+			continue
+		}
+		named = append(named, a)
+	}
+	if len(named) > 0 {
+		marks := strings.TrimSuffix(strings.Repeat("?,", len(named)), ",")
+		parts = append(parts, "d.area IN ("+marks+")")
+		for _, a := range named {
+			args = append(args, a)
+		}
+	}
+	return " AND (" + strings.Join(parts, " OR ") + ")", args
+}
+
+// SplitAreas parses a filter value into normalised, de-duplicated areas.
+// A daily-note-friendly "" or a lone "all" means no filter.
+func SplitAreas(area string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, part := range strings.Split(area, ",") {
+		a := NormalizeArea(part)
+		if a == "" || a == "all" || seen[a] {
+			continue
+		}
+		seen[a] = true
+		out = append(out, a)
+	}
+	return out
 }
 
 // AreaCount is one area with how many documents are filed under it.
