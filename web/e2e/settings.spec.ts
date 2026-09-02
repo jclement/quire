@@ -109,3 +109,12 @@ test("agent guidance saves and is served to MCP clients", async ({ page }) => {
     })
     .toBe(true);
 });
+
+test("Settings says email is off when SMTP is not configured", async ({ page }) => {
+  await page.goto("/settings");
+  const section = page.getByRole("heading", { name: "Email" }).locator("..");
+  await expect(section).toContainText("Off.");
+  await expect(page.getByRole("button", { name: "Send test email" })).toHaveCount(0);
+  const res = await page.request.post("/api/v1/email/test");
+  expect(res.status()).toBe(400);
+});

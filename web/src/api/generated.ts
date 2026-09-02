@@ -198,6 +198,16 @@ export interface SemanticStatus {
   last_error: string;
 }
 /**
+ * EmailStatus is what Settings shows about email: whether SMTP and a digest
+ * recipient are configured, and when the digest goes out.
+ */
+export interface EmailStatus {
+  configured: boolean;
+  from: string;
+  digest_to: string;
+  digest_time: string;
+}
+/**
  * Drawing is an Excalidraw drawing: the scene file and its SVG render.
  */
 export interface Drawing {

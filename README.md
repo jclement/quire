@@ -367,6 +367,10 @@ config; restore by extracting into an empty data dir and running `quire reindex`
 
 ### Email
 
+Settings shows what is configured and has **Send test email**: it sends
+today's digest, or a sample day when there is nothing to report, so a bad
+relay is found there rather than by a morning that goes quiet.
+
 Mail goes out over SMTP — every provider (Mailgun, SES, Postmark, Resend) exposes an
 SMTP endpoint, so switching providers is four env vars. With `QUIRE_DIGEST_TO` and
 `QUIRE_DIGEST_TIME=06:30` set, the server emails a morning digest (meetings,

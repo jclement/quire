@@ -31,6 +31,9 @@ type Server struct {
 	Version string
 	// Git reports whether the vault is git-backed, for the health payload.
 	Git bool
+	// Email, when set, answers Settings' email status and sends the test
+	// digest; nil means SMTP is not configured.
+	Email *EmailHooks
 	// UpdateCheck reports whether a newer release exists; nil means the
 	// check is disabled and health honestly says false.
 	UpdateCheck func() bool
@@ -57,6 +60,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/search", s.handleSearch)
 	mux.HandleFunc("GET /api/v1/related", s.handleRelated)
 	mux.HandleFunc("GET /api/v1/semantic/status", s.handleSemanticStatus)
+	mux.HandleFunc("GET /api/v1/email", s.handleEmailStatus)
+	mux.HandleFunc("POST /api/v1/email/test", s.handleEmailTest)
 	mux.HandleFunc("GET /api/v1/tags", s.handleListTags)
 	mux.HandleFunc("GET /api/v1/areas", s.handleListAreas)
 	mux.HandleFunc("PUT /api/v1/areas", s.handleSetAreas)

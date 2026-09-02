@@ -269,71 +269,94 @@ function DocumentView({
   const typeInfo = DOC_TYPE_INFO[doc.type];
   return (
     <article className="flex min-h-full flex-col">
-      <header className="mb-3 flex items-center gap-2 border-b border-border pb-3">
-        <typeInfo.icon
-          className="size-4 shrink-0 text-muted"
-          aria-hidden="true"
-        />
-        <h1 className="min-w-0 truncate text-lg font-semibold text-heading">
-          {doc.title}
-        </h1>
-        <span className="hidden font-mono text-[10px] uppercase text-muted sm:inline">
-          {doc.type}
-        </span>
-        {/* Everything from here right is screen furniture: on paper the header
-            is just the type icon, the title and the rule under it. */}
-        <span className="ml-auto hidden text-xs text-muted sm:inline print:hidden">
-          {formatRelativeTime(doc.mtime)}
-        </span>
-        {mode !== "read" ? (
-          <span
-            className={`font-mono text-[10px] print:hidden ${STATUS_LABEL[save.status].classes}`}
-          >
-            {STATUS_LABEL[save.status].text}
+      {/* On desktop the header (title, mode, share, menu) stays put while the
+          note scrolls; on a phone only the editor toolbar does, since the
+          header would eat the screen. */}
+      <div className="md:sticky md:-top-4 md:z-10 md:-mt-4 md:bg-surface md:pt-4">
+        <header className="mb-3 flex items-center gap-2 border-b border-border pb-3">
+          <typeInfo.icon
+            className="size-4 shrink-0 text-muted"
+            aria-hidden="true"
+          />
+          <h1 className="min-w-0 truncate text-lg font-semibold text-heading">
+            {doc.title}
+          </h1>
+          <span className="hidden font-mono text-[10px] uppercase text-muted sm:inline">
+            {doc.type}
           </span>
-        ) : null}
-        <ModeSwitch mode={mode} onChange={setMode} onLeaveEdit={exitEdit} />
-        <button
-          type="button"
-          onClick={() => setOverlay("markdownHelp", true)}
-          aria-label="Markdown help"
-          title="Markdown reference"
-          className="flex size-7 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-heading print:hidden"
-        >
-          <HelpCircle className="size-3.5" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setShareDocPath(path)}
-          aria-label="Share this document"
-          aria-pressed={isShared}
-          title={isShared ? "Shared — manage its links" : "Share"}
-          className={`flex size-7 items-center justify-center rounded border print:hidden ${
-            isShared
-              ? "border-accent bg-accent/10 text-accent hover:opacity-90"
-              : "border-border text-muted hover:bg-hover hover:text-heading"
-          }`}
-        >
-          <Share2 className="size-3.5" aria-hidden="true" />
-        </button>
-        <DocMenu
-          onRename={() => setRenameDocPath(path)}
-          onDelete={() => setDeleteDocPath(path)}
-          onInsertDrawing={() =>
-            insertDrawingInto(path).catch(() =>
-              toast("Couldn't create a drawing — reload and try again"),
-            )
-          }
-        />
-        <button
-          type="button"
-          onClick={mode === "read" ? () => setMode("edit") : exitEdit}
-          className="flex h-7 items-center gap-1.5 rounded border border-border px-2 text-xs text-body hover:bg-hover hover:text-heading md:hidden print:hidden"
-        >
-          <Pencil className="size-3" aria-hidden="true" />
-          {mode === "read" ? "Edit" : "Done"}
-        </button>
-      </header>
+          {/* Everything from here right is screen furniture: on paper the header
+            is just the type icon, the title and the rule under it. */}
+          <span className="ml-auto hidden text-xs text-muted sm:inline print:hidden">
+            {formatRelativeTime(doc.mtime)}
+          </span>
+          {mode !== "read" ? (
+            <span
+              className={`font-mono text-[10px] print:hidden ${STATUS_LABEL[save.status].classes}`}
+            >
+              {STATUS_LABEL[save.status].text}
+            </span>
+          ) : null}
+          <ModeSwitch mode={mode} onChange={setMode} onLeaveEdit={exitEdit} />
+          <button
+            type="button"
+            onClick={() => setOverlay("markdownHelp", true)}
+            aria-label="Markdown help"
+            title="Markdown reference"
+            className="flex size-7 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-heading print:hidden"
+          >
+            <HelpCircle className="size-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShareDocPath(path)}
+            aria-label="Share this document"
+            aria-pressed={isShared}
+            title={isShared ? "Shared — manage its links" : "Share"}
+            className={`flex size-7 items-center justify-center rounded border print:hidden ${
+              isShared
+                ? "border-accent bg-accent/10 text-accent hover:opacity-90"
+                : "border-border text-muted hover:bg-hover hover:text-heading"
+            }`}
+          >
+            <Share2 className="size-3.5" aria-hidden="true" />
+          </button>
+          <DocMenu
+            onRename={() => setRenameDocPath(path)}
+            onDelete={() => setDeleteDocPath(path)}
+            onInsertDrawing={() =>
+              insertDrawingInto(path).catch(() =>
+                toast("Couldn't create a drawing — reload and try again"),
+              )
+            }
+          />
+          <button
+            type="button"
+            onClick={mode === "read" ? () => setMode("edit") : exitEdit}
+            className="flex h-7 items-center gap-1.5 rounded border border-border px-2 text-xs text-body hover:bg-hover hover:text-heading md:hidden print:hidden"
+          >
+            <Pencil className="size-3" aria-hidden="true" />
+            {mode === "read" ? "Edit" : "Done"}
+          </button>
+        </header>
+        {/* The properties strip lives with the header in both modes; while
+          editing it syncs through the buffer, and the toolbar joins it. */}
+        {mode === "read" ? (
+          <FrontmatterStrip doc={doc} />
+        ) : (
+          <>
+            <FrontmatterStrip doc={doc} sync={stripSync} />
+            <EditorToolbar
+              context={editorContext}
+              run={(command) => editorRef.current?.run(command)}
+              onInsertDrawing={() =>
+                insertDrawingInto(path).catch(() =>
+                  toast("Couldn't create a drawing — reload and try again"),
+                )
+              }
+            />
+          </>
+        )}
+      </div>
 
       {save.status === "conflict" ? (
         <ConflictBanner
@@ -359,7 +382,6 @@ function DocumentView({
         <div className="flex min-w-0 flex-1 flex-col">
           {mode === "read" ? (
             <>
-              <FrontmatterStrip doc={doc} />
               <Markdown
                 markdown={save.text}
                 links={doc.links}
@@ -371,19 +393,6 @@ function DocumentView({
             </>
           ) : (
             <>
-              {/* The strip stays while editing: a change it makes flushes
-                  the buffer, rewrites the file on the server, and loads
-                  the result back into the editor. */}
-              <FrontmatterStrip doc={doc} sync={stripSync} />
-              <EditorToolbar
-                context={editorContext}
-                run={(command) => editorRef.current?.run(command)}
-                onInsertDrawing={() =>
-                  insertDrawingInto(path).catch(() =>
-                    toast("Couldn't create a drawing — reload and try again"),
-                  )
-                }
-              />
               <div
                 className={
                   mode === "split"

@@ -80,6 +80,7 @@ export function SettingsPage() {
       <TemplateSettings />
       <AgentGuidanceSection />
       <SemanticSettings />
+      <EmailSettings />
       <AgentActivity />
       <AboutSection />
     </div>
@@ -179,6 +180,52 @@ function AgentGuidanceSection() {
 
 // Version and update status used to sit in a page footer; it belongs here,
 // where it costs no screen space on a phone.
+/** Email is configured by environment; this shows what is set and sends a
+ * test digest so a bad relay is found here, not by a missing morning mail. */
+function EmailSettings() {
+  const { toast } = useUi();
+  const status = useQuery({ queryKey: ["email"], queryFn: api.emailStatus });
+  const send = useMutation({
+    mutationFn: api.sendTestEmail,
+    onSuccess: () => toast("Test email sent"),
+    onError: (error) => toast(errorMessage(error)),
+  });
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold text-heading">Email</h2>
+      {!status.data?.configured ? (
+        <p className="text-xs text-muted">
+          Off. Set <code className="font-mono">QUIRE_SMTP_HOST</code>,{" "}
+          <code className="font-mono">QUIRE_SMTP_FROM</code> and{" "}
+          <code className="font-mono">QUIRE_DIGEST_TO</code> for a morning
+          digest of meetings, birthdays and dated tasks.
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-end gap-4">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+            <dt className="text-muted">From</dt>
+            <dd className="font-mono text-heading">{status.data.from}</dd>
+            <dt className="text-muted">Digest to</dt>
+            <dd className="font-mono text-heading">{status.data.digest_to}</dd>
+            <dt className="text-muted">Sent at</dt>
+            <dd className="text-heading">
+              {status.data.digest_time || "not scheduled (QUIRE_DIGEST_TIME)"}
+            </dd>
+          </dl>
+          <button
+            type="button"
+            onClick={() => send.mutate()}
+            disabled={send.isPending}
+            className="flex h-8 items-center rounded border border-border px-2.5 text-xs text-body hover:bg-hover hover:text-heading disabled:opacity-50"
+          >
+            {send.isPending ? "Sending…" : "Send test email"}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** Semantic search is configured by environment, not here; this shows
  * whether it is on and how the embedding backlog is doing. */
 function SemanticSettings() {

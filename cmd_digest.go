@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jclement/quire/internal/api"
 	"github.com/jclement/quire/internal/config"
 	"github.com/jclement/quire/internal/mail"
 	"github.com/jclement/quire/internal/service"
@@ -62,6 +63,35 @@ func sendDigest(cfg config.Config, svc *service.Service) (bool, error) {
 		return false, err
 	}
 	return true, sender.Send(msg)
+}
+
+// emailHooks is Settings' view of email: status, and a test send of today's
+// digest (or a sample day when there is nothing to report). Nil when SMTP
+// or the recipient is not configured.
+func emailHooks(cfg config.Config, svc *service.Service) *api.EmailHooks {
+	smtpCfg, configured := mail.FromEnv()
+	to := os.Getenv("QUIRE_DIGEST_TO")
+	if !configured || to == "" {
+		return nil
+	}
+	return &api.EmailHooks{
+		Status: func() service.EmailStatus {
+			return service.EmailStatus{Configured: true, From: smtpCfg.From, DigestTo: to, DigestTime: os.Getenv("QUIRE_DIGEST_TIME")}
+		},
+		SendTest: func() error {
+			today, err := svc.Today()
+			if err != nil {
+				return err
+			}
+			msg := mail.BuildSample(today, cfg.BaseURL)
+			msg.To = to
+			sender, err := mail.NewSMTP(smtpCfg)
+			if err != nil {
+				return err
+			}
+			return sender.Send(msg)
+		},
+	}
 }
 
 // scheduleDigest runs the daily send loop inside serve. digestTime is local

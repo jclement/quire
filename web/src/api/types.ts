@@ -14,6 +14,7 @@ export type {
   Attachment,
   Drawing,
   SemanticStatus,
+  EmailStatus,
   AuditEntry,
   DocType,
   Birthday,

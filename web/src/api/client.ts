@@ -32,6 +32,7 @@ import type {
   Drawing,
   SemanticStatus,
   SearchMode,
+  EmailStatus,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -200,6 +201,10 @@ export const api = {
     request<SearchResult[]>(`/api/v1/related?path=${encodeURIComponent(path)}`),
 
   semanticStatus: () => request<SemanticStatus>("/api/v1/semantic/status"),
+
+  emailStatus: () => request<EmailStatus>("/api/v1/email"),
+  sendTestEmail: () =>
+    request<{ sent: boolean }>("/api/v1/email/test", jsonInit("POST", {})),
 
   listTasks: (view: TaskView, area = "") =>
     request<Task[]>(

@@ -3,7 +3,11 @@
 // restricts to commands. Full-screen on mobile, top-anchored panel on desktop.
 // The inner content mounts fresh each open (blank query, instant focus), and
 // the doc query keeps previous results while typing so the list never flashes.
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   CalendarRange,
@@ -19,6 +23,7 @@ import {
   type LucideIcon,
   Table2,
   PenTool,
+  CheckSquare,
 } from "lucide-react";
 import {
   useMemo,
@@ -28,7 +33,7 @@ import {
 import { api } from "../api/client.ts";
 import { formatAllTables } from "../lib/tables.ts";
 import { insertDrawingInto } from "../lib/drawings.ts";
-import { queryKeys } from "../api/queries.ts";
+import { invalidateTaskCaches, queryKeys } from "../api/queries.ts";
 import type { DocMeta, DocType } from "../api/types.ts";
 import { todayISO } from "../lib/dates.ts";
 import { DOC_TYPE_INFO, docHref, vaultPathFromRoute } from "../lib/docs.ts";
@@ -105,9 +110,31 @@ const COMMANDS: Command[] = [
 ];
 
 type PaletteItem =
-  { kind: "command"; command: Command } | { kind: "doc"; doc: DocMeta };
+  | { kind: "command"; command: Command }
+  | { kind: "doc"; doc: DocMeta }
+  | { kind: "task"; text: string; due: string };
+
+/** Trailing date words the server understands: "call bob tomorrow",
+ * "renew passport fri", "review +3d", "pay 2026-09-15". */
+const DUE_WORD =
+  /\s+(today|tomorrow|tom|mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\+\d+[dwm]|\d{4}-\d{2}-\d{2})$/i;
+
+/** `+ buy milk tomorrow` → a task for today's daily note; null otherwise. */
+function parseQuickTask(query: string): { text: string; due: string } | null {
+  if (!query.startsWith("+")) return null;
+  let text = query.slice(1).trim();
+  if (!text) return null;
+  let due = "";
+  const m = DUE_WORD.exec(text);
+  if (m) {
+    due = m[1]!.toLowerCase();
+    text = text.slice(0, m.index).trim();
+  }
+  return text ? { text, due } : null;
+}
 
 function itemText(item: PaletteItem): string {
+  if (item.kind === "task") return `Add task: ${item.text}`;
   return item.kind === "command" ? item.command.label : item.doc.title;
 }
 
@@ -118,18 +145,20 @@ function usePaletteItems(
   extraCommands: Command[],
 ): PaletteItem[] {
   const commandsOnly = query.startsWith(">");
+  const quickTask = parseQuickTask(query);
   const text = (commandsOnly ? query.slice(1) : query).trim();
   const debounced = useDebouncedValue(text, QUERY_DEBOUNCE_MS);
 
   const docsQuery = useQuery({
     queryKey: queryKeys.documents({ q: debounced, limit: RESULT_LIMIT }),
     queryFn: () => api.listDocuments({ q: debounced, limit: RESULT_LIMIT }),
-    enabled: !commandsOnly && debounced.length > 0,
+    enabled: !commandsOnly && quickTask === null && debounced.length > 0,
     placeholderData: keepPreviousData,
     retry: false,
   });
 
   return useMemo(() => {
+    if (quickTask) return [{ kind: "task", ...quickTask }];
     const commands = [...COMMANDS, ...extraCommands].map<PaletteItem>(
       (command) => ({ kind: "command", command }),
     );
@@ -142,7 +171,7 @@ function usePaletteItems(
       0,
       RESULT_LIMIT,
     );
-  }, [commandsOnly, text, docsQuery.data, extraCommands]);
+  }, [commandsOnly, quickTask, text, docsQuery.data, extraCommands]);
 }
 
 export function CommandPalette() {
@@ -164,6 +193,7 @@ export function CommandPalette() {
 function PaletteContent({ close }: { close: () => void }) {
   const ui = useUi();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
 
@@ -247,7 +277,21 @@ function PaletteContent({ close }: { close: () => void }) {
   const pick = (item: PaletteItem) => {
     close();
     if (item.kind === "doc") go(docHref(item.doc.path));
-    else item.command.run(ui, go);
+    else if (item.kind === "task") {
+      api
+        .createTask(item.text, item.due || undefined)
+        .then(() => {
+          invalidateTaskCaches(queryClient);
+          ui.toast(
+            item.due ? `Added task, due ${item.due}` : "Added to today's note",
+          );
+        })
+        .catch((error: unknown) =>
+          ui.toast(
+            error instanceof Error ? error.message : "Couldn't add the task",
+          ),
+        );
+    } else item.command.run(ui, go);
   };
 
   const onKeyDown = (event: ReactKeyboardEvent) => {
@@ -271,7 +315,7 @@ function PaletteContent({ close }: { close: () => void }) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Search documents, > for commands…"
+          placeholder="Search, > commands, + add a task…"
           aria-label="Command palette input"
           {...noAutofill("palette")}
           className="field-bare h-11 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
@@ -280,7 +324,13 @@ function PaletteContent({ close }: { close: () => void }) {
       <ul className="flex-1 overflow-y-auto py-1 md:max-h-80" role="listbox">
         {items.map((item, at) => (
           <PaletteRow
-            key={item.kind === "doc" ? item.doc.path : item.command.id}
+            key={
+              item.kind === "doc"
+                ? item.doc.path
+                : item.kind === "task"
+                  ? "quick-task"
+                  : item.command.id
+            }
             item={item}
             selected={at === index}
             onPick={() => pick(item)}
@@ -311,7 +361,9 @@ function PaletteRow({
   const Icon =
     item.kind === "command"
       ? item.command.icon
-      : DOC_TYPE_INFO[item.doc.type].icon;
+      : item.kind === "task"
+        ? CheckSquare
+        : DOC_TYPE_INFO[item.doc.type].icon;
   return (
     <li role="option" aria-selected={selected}>
       <button
@@ -327,6 +379,12 @@ function PaletteRow({
         <span className="ml-auto flex items-center gap-1 font-mono text-[10px] uppercase text-muted">
           {item.kind === "doc" ? (
             item.doc.type
+          ) : item.kind === "task" ? (
+            item.due ? (
+              `task · ${item.due}`
+            ) : (
+              "task · today's note"
+            )
           ) : (
             <>
               <ChevronsRight className="size-3" aria-hidden="true" />

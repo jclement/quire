@@ -153,6 +153,15 @@ type SemanticStatus struct {
 	LastError string `json:"last_error"`
 }
 
+// EmailStatus is what Settings shows about email: whether SMTP and a digest
+// recipient are configured, and when the digest goes out.
+type EmailStatus struct {
+	Configured bool   `json:"configured"`
+	From       string `json:"from"`
+	DigestTo   string `json:"digest_to"`
+	DigestTime string `json:"digest_time"`
+}
+
 // Drawing is an Excalidraw drawing: the scene file and its SVG render.
 type Drawing struct {
 	// Path is the .excalidraw scene, the file the editor reopens.

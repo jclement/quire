@@ -54,7 +54,7 @@ export function EditorToolbar({
       // Sticky to the top of the scrolling page, so it is there however far
       // down a long note the cursor is; the background hides text passing
       // beneath it.
-      className="sticky top-0 z-10 -mx-1 mb-1.5 flex flex-wrap items-center gap-0.5 border-b border-border bg-surface px-1 py-1.5 print:hidden"
+      className="sticky top-0 z-10 -mx-1 mb-1.5 flex flex-wrap items-center gap-0.5 border-b border-border bg-surface px-1 py-1.5 md:static print:hidden"
     >
       <Menu
         open={open === "heading"}
