@@ -182,6 +182,7 @@ func runServe() error {
 	shares := share.NewManager(authStore, svc, cfg.BaseURL)
 	apiServer := &api.Server{
 		Service: svc, Events: events, Shares: shares, Auth: authStore, Version: version,
+		Git: committer != nil,
 	}
 	if cfg.UpdateCheck {
 		checker := update.Start(ctx, version)

@@ -125,6 +125,11 @@ export interface Health {
    * shows the Semantic toggle only when it is.
    */
   semantic_search: boolean;
+  /**
+   * Git is whether the vault is git-backed (on by default; QUIRE_GIT=false
+   * turns it off), so the UI can say whether a deletion is recoverable.
+   */
+  git: boolean;
 }
 /**
  * ShareInfo is a share link as the API presents it. It lives here rather

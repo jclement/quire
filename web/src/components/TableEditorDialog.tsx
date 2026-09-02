@@ -8,7 +8,7 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
-  Minus,
+  Trash2,
   Plus,
   X,
 } from "lucide-react";
@@ -150,15 +150,13 @@ export function TableEditorDialog() {
                           <AlignIcon align={align} />
                           {ALIGN_LABEL[align]}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setModel(removeColumn(model, column))}
+                        <TrashButton
+                          label={`Remove column ${column + 1}`}
                           disabled={model.aligns.length <= 1}
-                          className="rounded p-1 text-muted hover:bg-hover hover:text-danger disabled:opacity-30"
-                          aria-label={`Remove column ${column + 1}`}
-                        >
-                          <Minus className="size-3.5" aria-hidden="true" />
-                        </button>
+                          onConfirm={() =>
+                            setModel(removeColumn(model, column))
+                          }
+                        />
                       </div>
                     </th>
                   ))}
@@ -207,14 +205,11 @@ export function TableEditorDialog() {
                     ))}
                     <td className="p-0.5">
                       {row === 0 ? null : (
-                        <button
-                          type="button"
-                          onClick={() => setModel(removeRow(model, row))}
-                          className="rounded p-1 text-muted hover:bg-hover hover:text-danger"
-                          aria-label={`Remove row ${row}`}
-                        >
-                          <Minus className="size-3.5" aria-hidden="true" />
-                        </button>
+                        <TrashButton
+                          label={`Remove row ${row}`}
+                          disabled={false}
+                          onConfirm={() => setModel(removeRow(model, row))}
+                        />
                       )}
                     </td>
                   </tr>
@@ -251,5 +246,57 @@ export function TableEditorDialog() {
         </div>
       ) : null}
     </Modal>
+  );
+}
+
+/**
+ * A trash button that asks once: the first click arms it ("Remove?"), the
+ * second removes. It disarms on blur or after a few seconds, so a stray
+ * click costs nothing and a deliberate one costs two.
+ */
+function TrashButton({
+  label,
+  disabled,
+  onConfirm,
+}: {
+  label: string;
+  disabled: boolean;
+  onConfirm: () => void;
+}) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const timer = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [armed]);
+  if (armed) {
+    return (
+      <button
+        type="button"
+        autoFocus
+        onClick={() => {
+          setArmed(false);
+          onConfirm();
+        }}
+        onBlur={() => setArmed(false)}
+        aria-label={`Confirm: ${label}`}
+        className="flex h-6 items-center gap-1 rounded border border-danger/50 bg-danger/10 px-1.5 text-[11px] font-medium text-danger"
+      >
+        <Trash2 className="size-3.5" aria-hidden="true" />
+        Remove?
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setArmed(true)}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="rounded p-1 text-muted hover:bg-hover hover:text-danger disabled:opacity-30"
+    >
+      <Trash2 className="size-3.5" aria-hidden="true" />
+    </button>
   );
 }

@@ -7,7 +7,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../api/client.ts";
-import { queryKeys, useDocument } from "../api/queries.ts";
+import { queryKeys, useDocument, useHealth } from "../api/queries.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import { Modal } from "./Modal.tsx";
 
@@ -32,6 +32,8 @@ function DeleteConfirm({ path, close }: { path: string; close: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useUi();
+  // Git backing is the default; only its absence changes the warning.
+  const gitBacked = useHealth().data?.git === true;
   // Cached when opened from the document page; the path is the fallback title.
   const doc = useDocument(path);
   const title = doc.data?.title ?? path;
@@ -66,8 +68,10 @@ function DeleteConfirm({ path, close }: { path: string; close: () => void }) {
           <p className="mt-1 text-xs text-muted">
             This removes <span className="font-mono text-body">{path}</span>{" "}
             from the vault. Tasks and backlinks in other notes will point at
-            nothing. If your vault is a git repository the file is recoverable
-            from history — otherwise this is permanent.
+            nothing.{" "}
+            {gitBacked
+              ? "The vault's git history keeps the file, so it can be recovered from there."
+              : "This vault is not git-backed, so this is permanent."}
           </p>
         </div>
       </div>

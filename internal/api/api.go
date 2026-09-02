@@ -29,6 +29,8 @@ type Server struct {
 	// exercise document handlers, so those routes register only when set.
 	Auth    *auth.Store
 	Version string
+	// Git reports whether the vault is git-backed, for the health payload.
+	Git bool
 	// UpdateCheck reports whether a newer release exists; nil means the
 	// check is disabled and health honestly says false.
 	UpdateCheck func() bool

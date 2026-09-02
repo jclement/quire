@@ -89,9 +89,12 @@ test("editor: the table panel opens the grid and writes into the buffer", async 
   const dialog = page.getByRole("dialog", { name: "Edit table" });
   await expect(dialog.getByLabel("Row 2, column 2")).toHaveValue("CTO");
 
-  // Remove a column and a row.
+  // Remove a column and a row: each asks once before doing it.
   await dialog.getByRole("button", { name: "Remove row 1" }).click();
+  await expect(dialog.getByLabel("Row 1, column 1")).toHaveValue("Sarah"); // still there
+  await dialog.getByRole("button", { name: "Confirm: Remove row 1" }).click();
   await dialog.getByRole("button", { name: "Remove column 2" }).click();
+  await dialog.getByRole("button", { name: "Confirm: Remove column 2" }).click();
   await expect(dialog.getByLabel("Row 1, column 1")).toHaveValue("Bo");
   await dialog.getByRole("button", { name: "Save table" }).click();
 
