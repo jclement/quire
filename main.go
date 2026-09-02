@@ -26,6 +26,7 @@ import (
 	"github.com/jclement/quire/internal/index"
 	"github.com/jclement/quire/internal/mcp"
 	"github.com/jclement/quire/internal/oauth"
+	"github.com/jclement/quire/internal/semantic"
 	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/settings"
 	"github.com/jclement/quire/internal/share"
@@ -152,6 +153,23 @@ func runServe() error {
 				committer.Poke()
 			}
 		}
+	}
+
+	// Semantic search: only with a key, and chained after whatever Notify
+	// already does so every index change also refreshes its embeddings.
+	if cfg.OpenAIAPIKey != "" {
+		client := semantic.NewClient(cfg.OpenAIBaseURL, cfg.OpenAIAPIKey, cfg.EmbeddingModel)
+		embedder, err := semantic.Start(ctx, svc.Index.DB, svc.Vault, client)
+		if err != nil {
+			return fmt.Errorf("starting semantic search: %w", err)
+		}
+		svc.Semantic = embedder
+		previous := svc.Index.Notify
+		svc.Index.Notify = func(ev index.Event) {
+			previous(ev)
+			embedder.Notify(ev)
+		}
+		slog.Info("semantic search on", "model", client.Model, "endpoint", client.BaseURL)
 	}
 
 	shares := share.NewManager(authStore, svc, cfg.BaseURL)

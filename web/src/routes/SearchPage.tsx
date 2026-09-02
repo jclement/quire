@@ -3,10 +3,18 @@
 // passes through to the server verbatim. Snippets arrive with literal <mark>
 // tags that we parse ourselves — no HTML injection.
 import { useNavigate } from "@tanstack/react-router";
-import { CheckSquare, SearchX, Search as SearchIcon } from "lucide-react";
+import {
+  CheckSquare,
+  SearchX,
+  Search as SearchIcon,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import { useSearch as useSearchQuery } from "../api/queries.ts";
-import type { SearchResult } from "../api/types.ts";
+import {
+  useSearch as useSearchQuery,
+  useSemanticEnabled,
+} from "../api/queries.ts";
+import type { SearchMode, SearchResult } from "../api/types.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import { parseSnippet } from "../lib/snippet.ts";
 import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
@@ -17,20 +25,32 @@ import { SkeletonRows } from "../components/Skeleton.tsx";
 
 const URL_SYNC_DEBOUNCE_MS = 300;
 
-export function SearchPage({ initialQuery }: { initialQuery: string }) {
+export function SearchPage({
+  initialQuery,
+  initialMode = "text",
+}: {
+  initialQuery: string;
+  initialMode?: SearchMode;
+}) {
   const navigate = useNavigate();
   const [query, setQuery] = useState(initialQuery);
+  const semanticAvailable = useSemanticEnabled();
+  const [mode, setMode] = useState<SearchMode>(initialMode);
+  const effectiveMode: SearchMode = semanticAvailable ? mode : "text";
   const debounced = useDebouncedValue(query, URL_SYNC_DEBOUNCE_MS);
-  const results = useSearchQuery(debounced.trim());
+  const results = useSearchQuery(debounced.trim(), effectiveMode);
 
-  // Keep ?q= in sync so a search survives reload/share.
+  // Keep ?q= (and ?mode=) in sync so a search survives reload/share.
   useEffect(() => {
     void navigate({
       to: "/search",
-      search: debounced ? { q: debounced } : {},
+      search: {
+        ...(debounced ? { q: debounced } : {}),
+        ...(effectiveMode === "semantic" ? { mode: "semantic" as const } : {}),
+      },
       replace: true,
     });
-  }, [debounced, navigate]);
+  }, [debounced, effectiveMode, navigate]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -52,6 +72,26 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
           {...noAutofill("search")}
           className="field-bare h-9 w-full bg-transparent text-sm text-heading outline-none placeholder:text-muted"
         />
+        {semanticAvailable ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={effectiveMode === "semantic"}
+            aria-label="Semantic search"
+            title="Search by meaning (embeddings) instead of exact words"
+            onClick={() =>
+              setMode(effectiveMode === "semantic" ? "text" : "semantic")
+            }
+            className={`flex h-7 shrink-0 items-center gap-1 rounded border px-2 text-xs ${
+              effectiveMode === "semantic"
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border text-muted hover:text-heading"
+            }`}
+          >
+            <Sparkles className="size-3.5" aria-hidden="true" />
+            Semantic
+          </button>
+        ) : null}
       </div>
       {results.isLoading ? (
         <SkeletonRows />
@@ -59,7 +99,9 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
         <ErrorState error={results.error} />
       ) : !results.data ? (
         <p className="py-8 text-center text-xs text-muted">
-          Search titles and full text. Filters: type: tag: is:task
+          {effectiveMode === "semantic"
+            ? "Describe what you're looking for — results are ranked by meaning, not exact words."
+            : "Search titles and full text. Filters: type: tag: is:task"}
         </p>
       ) : results.data.length === 0 ? (
         <EmptyState

@@ -107,6 +107,10 @@ export interface SearchResult {
   type: DocType | "task";
   title: string;
   snippet: string;
+  /**
+   * Score is cosine similarity for semantic results; absent for full-text.
+   */
+  score: number /* float64 */ | null;
 }
 /**
  * Health is the unauthenticated liveness payload (also feeds the update
@@ -116,6 +120,11 @@ export interface Health {
   status: string;
   version: string;
   update_available: boolean;
+  /**
+   * SemanticSearch is whether an embeddings key is configured — the UI
+   * shows the Semantic toggle only when it is.
+   */
+  semantic_search: boolean;
 }
 /**
  * ShareInfo is a share link as the API presents it. It lives here rather
@@ -169,6 +178,19 @@ export interface TodayPayload {
 export interface Attachment {
   path: string;
   markdown: string;
+}
+/**
+ * SemanticStatus is the embeddings pipeline as Settings shows it.
+ */
+export interface SemanticStatus {
+  enabled: boolean;
+  model: string;
+  documents: number /* int */;
+  pending: number /* int */;
+  /**
+   * LastError is the most recent embedding failure, "" when healthy.
+   */
+  last_error: string;
 }
 /**
  * Drawing is an Excalidraw drawing: the scene file and its SVG render.

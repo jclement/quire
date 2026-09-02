@@ -78,6 +78,8 @@ type SearchResult struct {
 	Type    string `json:"type" tstype:"DocType | \"task\""`
 	Title   string `json:"title"`
 	Snippet string `json:"snippet"`
+	// Score is cosine similarity for semantic results; absent for full-text.
+	Score float64 `json:"score,omitempty"`
 }
 
 // Health is the unauthenticated liveness payload (also feeds the update
@@ -86,6 +88,9 @@ type Health struct {
 	Status          string `json:"status"`
 	Version         string `json:"version"`
 	UpdateAvailable bool   `json:"update_available"`
+	// SemanticSearch is whether an embeddings key is configured — the UI
+	// shows the Semantic toggle only when it is.
+	SemanticSearch bool `json:"semantic_search"`
 }
 
 // ShareInfo is a share link as the API presents it. It lives here rather
@@ -133,6 +138,16 @@ type TodayPayload struct {
 type Attachment struct {
 	Path     string `json:"path"`
 	Markdown string `json:"markdown"`
+}
+
+// SemanticStatus is the embeddings pipeline as Settings shows it.
+type SemanticStatus struct {
+	Enabled   bool   `json:"enabled"`
+	Model     string `json:"model"`
+	Documents int    `json:"documents"`
+	Pending   int    `json:"pending"`
+	// LastError is the most recent embedding failure, "" when healthy.
+	LastError string `json:"last_error"`
 }
 
 // Drawing is an Excalidraw drawing: the scene file and its SVG render.

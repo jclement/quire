@@ -13,6 +13,7 @@ export type {
   AreaDef,
   Attachment,
   Drawing,
+  SemanticStatus,
   AuditEntry,
   DocType,
   Birthday,
@@ -57,6 +58,9 @@ export interface DocEvent {
   path: string;
   action: "upsert" | "delete";
 }
+
+/** Full-text (exact, free) or semantic (by meaning, via embeddings). */
+export type SearchMode = "text" | "semantic";
 
 /** POST /attachments response — the same shape as the generated Attachment. */
 export interface AttachmentUpload {

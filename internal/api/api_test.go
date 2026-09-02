@@ -20,6 +20,13 @@ import (
 
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	return newTestServerWith(t, func(*service.Service) {})
+}
+
+// newTestServerWith lets a test adjust the service before routes are built
+// (wiring an embedder, say).
+func newTestServerWith(t *testing.T, configure func(*service.Service)) *httptest.Server {
+	t.Helper()
 	v, err := vault.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -32,6 +39,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 
 	svc := service.New(v, &index.Index{DB: db, Vault: v})
 	svc.Now = func() time.Time { return time.Date(2026, 9, 1, 10, 0, 0, 0, time.Local) }
+	configure(svc)
 
 	s := &Server{Service: svc, Events: NewBroadcaster(), Version: "test"}
 	mux := http.NewServeMux()

@@ -166,12 +166,18 @@ const calendarMonthRoute = createRoute({
 const searchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/search",
-  validateSearch: (search: Record<string, unknown>): { q?: string } =>
-    typeof search.q === "string" && search.q ? { q: search.q } : {},
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { q?: string; mode?: "semantic" } => ({
+    ...(typeof search.q === "string" && search.q ? { q: search.q } : {}),
+    ...(search.mode === "semantic" ? { mode: "semantic" as const } : {}),
+  }),
   component: function SearchRouteComponent() {
-    const { q } = searchRoute.useSearch();
+    const { q, mode } = searchRoute.useSearch();
     // Keyed so arriving with a fresh ?q= reseeds the input.
-    return <SearchPage key={q ?? ""} initialQuery={q ?? ""} />;
+    return (
+      <SearchPage key={q ?? ""} initialQuery={q ?? ""} initialMode={mode} />
+    );
   },
 });
 

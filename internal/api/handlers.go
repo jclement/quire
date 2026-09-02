@@ -18,6 +18,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Status:          "ok",
 		Version:         s.Version,
 		UpdateAvailable: available,
+		SemanticSearch:  s.Service.SemanticEnabled(),
 	})
 }
 
@@ -161,12 +162,38 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	hits, err := s.Service.Search(r.URL.Query().Get("q"), limit)
+	q := r.URL.Query()
+	if q.Get("mode") == "semantic" {
+		hits, err := s.Service.SemanticSearch(r.Context(), q.Get("q"), limit, q.Get("area"))
+		if err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		writeData(w, http.StatusOK, hits)
+		return
+	}
+	hits, err := s.Service.Search(q.Get("q"), limit)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
 	writeData(w, http.StatusOK, hits)
+}
+
+// handleRelated: nearest documents by meaning. ?path= rather than a
+// /documents/{path}/related route because {path...} must end the pattern.
+func (s *Server) handleRelated(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	hits, err := s.Service.RelatedDocuments(r.URL.Query().Get("path"), limit)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, hits)
+}
+
+func (s *Server) handleSemanticStatus(w http.ResponseWriter, _ *http.Request) {
+	writeData(w, http.StatusOK, s.Service.SemanticStatus())
 }
 
 // ---- tasks ----

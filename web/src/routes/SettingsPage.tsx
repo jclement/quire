@@ -16,7 +16,12 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage } from "../api/client.ts";
-import { queryKeys, useHealth } from "../api/queries.ts";
+import {
+  queryKeys,
+  useHealth,
+  useSemanticEnabled,
+  useSemanticStatus,
+} from "../api/queries.ts";
 import { AUTH_STATUS_KEY } from "../components/auth/AuthGate.tsx";
 import { RegisterPanel } from "../components/auth/AuthScreens.tsx";
 import { formatRelativeTime } from "../lib/dates.ts";
@@ -74,6 +79,7 @@ export function SettingsPage() {
       <AreaSettings />
       <TemplateSettings />
       <AgentGuidanceSection />
+      <SemanticSettings />
       <AgentActivity />
       <AboutSection />
     </div>
@@ -173,6 +179,44 @@ function AgentGuidanceSection() {
 
 // Version and update status used to sit in a page footer; it belongs here,
 // where it costs no screen space on a phone.
+/** Semantic search is configured by environment, not here; this shows
+ * whether it is on and how the embedding backlog is doing. */
+function SemanticSettings() {
+  const enabled = useSemanticEnabled();
+  const status = useSemanticStatus(enabled);
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold text-heading">Semantic search</h2>
+      {!enabled ? (
+        <p className="text-xs text-muted">
+          Off. Set <code className="font-mono">QUIRE_OPENAI_API_KEY</code> to
+          search by meaning — note text is then sent to that embeddings endpoint
+          (OpenAI, or any compatible server via{" "}
+          <code className="font-mono">QUIRE_OPENAI_BASE_URL</code>).
+        </p>
+      ) : (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+          <dt className="text-muted">Model</dt>
+          <dd className="font-mono text-heading">
+            {status.data?.model ?? "…"}
+          </dd>
+          <dt className="text-muted">Embedded</dt>
+          <dd className="text-heading" data-testid="semantic-documents">
+            {status.data ? `${status.data.documents} documents` : "…"}
+            {status.data?.pending ? ` · ${status.data.pending} pending` : ""}
+          </dd>
+          {status.data?.last_error ? (
+            <>
+              <dt className="text-muted">Last error</dt>
+              <dd className="text-danger">{status.data.last_error}</dd>
+            </>
+          ) : null}
+        </dl>
+      )}
+    </section>
+  );
+}
+
 function AboutSection() {
   const health = useHealth();
   return (

@@ -85,6 +85,14 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 		sdk.AddTool(s, &sdk.Tool{Name: "search", Annotations: readOnly,
 			Description: "Search the vault. Bare words are full-text (title and body, ranked); filters combine with them: type:<note|person|company|project|meeting|daily>, tag:<tag>, area:<work|personal|none>, is:task (search tasks instead of documents), due:today | due:overdue | due:week | due:YYYY-MM-DD. Returns paths — use get_document for content. Always search before guessing a path."},
 			t.search)
+		if svc.SemanticEnabled() {
+			sdk.AddTool(s, &sdk.Tool{Name: "semantic_search", Annotations: readOnly,
+				Description: "Search by meaning rather than exact words: the query and every note are compared as embeddings, so 'what did we decide about pricing' finds the note titled 'Rate card discussion'. Use it when the owner's wording is uncertain or the question is conceptual; use search for names, tags, exact phrases, task filters and dates (it is exact and free). Returns paths with a similarity score and the best-matching section heading — use get_document for content."},
+				t.semanticSearch)
+			sdk.AddTool(s, &sdk.Tool{Name: "related_documents", Annotations: readOnly,
+				Description: "Documents closest in meaning to a given one, from stored embeddings (no external call). Good for 'what else touches this project' or surfacing an older note that covers the same ground before creating a duplicate."},
+				t.relatedDocuments)
+		}
 		sdk.AddTool(s, &sdk.Tool{Name: "list_documents", Annotations: readOnly,
 			Description: "Browse documents by type, most recently modified first, optionally filtered by a title substring. Use this to see what exists (all people, recent meetings, every project) when you have no search term; use search when you do."},
 			t.listDocuments)
@@ -296,6 +304,33 @@ type personContextOut struct {
 
 func (t *tools) search(_ context.Context, _ *sdk.CallToolRequest, in searchIn) (*sdk.CallToolResult, searchOut, error) {
 	hits, err := t.svc.Search(in.Query, in.Limit)
+	if err != nil {
+		return nil, searchOut{}, err
+	}
+	return nil, searchOut{Results: hits}, nil
+}
+
+type semanticIn struct {
+	Query string `json:"query" jsonschema:"what you are looking for, in plain language"`
+	Limit int    `json:"limit,omitempty" jsonschema:"max results (default 20)"`
+	Area  string `json:"area,omitempty" jsonschema:"restrict to an area (see list_areas); 'none' for unclassified"`
+}
+
+type relatedIn struct {
+	Path  string `json:"path" jsonschema:"vault path of the document"`
+	Limit int    `json:"limit,omitempty" jsonschema:"max results (default 5)"`
+}
+
+func (t *tools) semanticSearch(ctx context.Context, _ *sdk.CallToolRequest, in semanticIn) (*sdk.CallToolResult, searchOut, error) {
+	hits, err := t.svc.SemanticSearch(ctx, in.Query, in.Limit, in.Area)
+	if err != nil {
+		return nil, searchOut{}, err
+	}
+	return nil, searchOut{Results: hits}, nil
+}
+
+func (t *tools) relatedDocuments(_ context.Context, _ *sdk.CallToolRequest, in relatedIn) (*sdk.CallToolResult, searchOut, error) {
+	hits, err := t.svc.RelatedDocuments(in.Path, in.Limit)
 	if err != nil {
 		return nil, searchOut{}, err
 	}

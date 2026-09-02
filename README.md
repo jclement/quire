@@ -225,6 +225,18 @@ One grammar everywhere (UI, API, MCP, CLI): full-text terms, `type:meeting`,
 `tag:x`, and task search with `is:task`, `due:today`, `due:overdue`, `due:week`,
 `due:2026-09-15`.
 
+**Semantic search** is opt-in: set `QUIRE_OPENAI_API_KEY` and a **Semantic**
+toggle appears on the search page (and `?mode=semantic` on the API, plus
+`semantic_search` / `related_documents` tools for agents). Notes are chunked
+by heading, embedded with `text-embedding-3-small` (512 dimensions, a few
+cents per thousand notes), kept up to date as you edit, and ranked by cosine
+similarity; each document's rail also lists the notes nearest to it in
+meaning. Be clear about what this means: **note text is sent to that
+embeddings endpoint.** Nothing is sent with the key unset. Any
+OpenAI-compatible server works via `QUIRE_OPENAI_BASE_URL` (Ollama, LiteLLM),
+which keeps the text on your own machine. Embeddings live in `index.db` and
+are rebuilt after a `quire reindex`.
+
 ## CLI
 
 The same binary talks to a running quire (`QUIRE_URL`, `QUIRE_TOKEN` env):
@@ -248,6 +260,9 @@ quire today
 | `QUIRE_UPDATE_CHECK` | `true` | Ask GitHub once a day whether a newer release exists |
 | `QUIRE_TRUSTED_PROXIES` | _(none)_ | Proxy IPs/CIDRs (or `any`) whose `X-Forwarded-For` may be believed — **set this behind a tunnel**, or rate limiting sees one client |
 | `QUIRE_SMTP_HOST/PORT/USER/PASS/FROM` | | SMTP relay (any provider's SMTP endpoint) |
+| `QUIRE_OPENAI_API_KEY` | _(none)_ | Turns on semantic search — **sends note text to the embeddings endpoint** |
+| `QUIRE_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible embeddings API |
+| `QUIRE_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
 | `QUIRE_DIGEST_TO` / `QUIRE_DIGEST_TIME` | | Daily digest recipient and local HH:MM |
 | `QUIRE_URL` / `QUIRE_TOKEN` | | CLI verbs: which quire to talk to, and as whom |
 
@@ -265,7 +280,7 @@ destructive) so clients know what deserves a confirmation:
 
 | Scope | Tools |
 |---|---|
-| read | `search` (full-text + `type:` `tag:` `is:task` `due:`), `list_documents`, `get_document`, `get_daily`, `list_tasks`, `list_tags`, `today`, `person_context` |
+| read | `search` (full-text + `type:` `tag:` `is:task` `due:`), `semantic_search` and `related_documents` (when a key is set), `list_documents`, `get_document`, `get_daily`, `list_tasks`, `list_tags`, `today`, `person_context` |
 | write | `create_document`, `append_to_document`, `update_document` (hash-guarded), `link_entity`, `set_frontmatter` |
 | tasks | `create_task`, `complete_task`, `edit_task` (snooze / reprioritise) |
 

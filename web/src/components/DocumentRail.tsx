@@ -10,7 +10,7 @@
 // (where clicking scrolls the editor instead of the page).
 import { Link as RouterLink } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import type { DocMeta } from "../api/types.ts";
+import type { DocMeta, SearchResult } from "../api/types.ts";
 import { DOC_TYPE_INFO, docHref, isDocType } from "../lib/docs.ts";
 import type { Heading } from "../lib/headings.ts";
 import { MIN_OUTLINE_HEADINGS } from "../lib/headings.ts";
@@ -25,6 +25,8 @@ interface DocumentRailProps {
   onScrollToLine?: (line: number) => void;
   /** Documents linking here; the page repeats these below lg. */
   backlinks: DocMeta[];
+  /** Nearest documents by meaning (semantic search on); empty otherwise. */
+  related?: SearchResult[];
 }
 
 /** Left padding per heading level — H1 flush, deeper levels stepped in. */
@@ -36,11 +38,14 @@ export function DocumentRail({
   activeLine,
   onScrollToLine,
   backlinks,
+  related = [],
 }: DocumentRailProps) {
   const activeId = useActiveHeading(headings, mode, activeLine);
 
   const showOutline = headings.length >= MIN_OUTLINE_HEADINGS;
-  if (!showOutline && backlinks.length === 0) return null;
+  if (!showOutline && backlinks.length === 0 && related.length === 0) {
+    return null;
+  }
 
   const go = (heading: Heading) => {
     if (mode === "source") {
@@ -105,6 +110,36 @@ export function DocumentRail({
                       />
                     ) : null}
                     <span className="line-clamp-2">{backlink.title}</span>
+                  </RouterLink>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      ) : null}
+
+      {related.length > 0 ? (
+        <nav aria-label="Related documents">
+          <RailHeading>Related</RailHeading>
+          <ul className="border-l border-border">
+            {related.map((hit) => {
+              const Icon = isDocType(hit.type)
+                ? DOC_TYPE_INFO[hit.type].icon
+                : undefined;
+              return (
+                <li key={hit.path}>
+                  <RouterLink
+                    to={docHref(hit.path)}
+                    title={`${hit.title} (${hit.type})`}
+                    className="-ml-px flex items-start gap-1.5 border-l border-transparent py-0.5 pr-1 pl-2 text-xs leading-snug text-muted hover:border-border hover:text-body"
+                  >
+                    {Icon ? (
+                      <Icon
+                        className="mt-0.5 size-3 shrink-0"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <span className="line-clamp-2">{hit.title}</span>
                   </RouterLink>
                 </li>
               );

@@ -30,6 +30,8 @@ import type {
   TodayPayload,
   TokenInfo,
   Drawing,
+  SemanticStatus,
+  SearchMode,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -186,8 +188,18 @@ export const api = {
       jsonInit("POST", { path, key, target, ...(remove ? { remove } : {}) }),
     ),
 
-  search: (q: string) =>
-    request<SearchResult[]>(`/api/v1/search?q=${encodeURIComponent(q)}`),
+  search: (q: string, mode: SearchMode = "text", area = "") =>
+    request<SearchResult[]>(
+      `/api/v1/search?q=${encodeURIComponent(q)}` +
+        (mode === "semantic" ? "&mode=semantic" : "") +
+        (area ? `&area=${encodeURIComponent(area)}` : ""),
+    ),
+
+  /** Nearest documents by meaning; 400 unless semantic search is on. */
+  related: (path: string) =>
+    request<SearchResult[]>(`/api/v1/related?path=${encodeURIComponent(path)}`),
+
+  semanticStatus: () => request<SemanticStatus>("/api/v1/semantic/status"),
 
   listTasks: (view: TaskView, area = "") =>
     request<Task[]>(

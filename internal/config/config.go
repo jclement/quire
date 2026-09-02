@@ -63,6 +63,16 @@ type Config struct {
 	// connects, which is only safe when nothing but the proxy can reach the
 	// listen address at all.
 	TrustedProxies []netip.Prefix `yaml:"trusted_proxies"`
+
+	// OpenAIAPIKey turns on semantic search. Empty (the default) means off:
+	// nothing leaves the machine. Set, quire sends note text to the
+	// embeddings endpoint below — an explicit choice, never a default.
+	OpenAIAPIKey string `yaml:"openai_api_key"`
+	// OpenAIBaseURL is the OpenAI-compatible API root; any compatible
+	// server (Ollama, LiteLLM, a proxy) works here.
+	OpenAIBaseURL string `yaml:"openai_base_url"`
+	// EmbeddingModel names the embeddings model to use.
+	EmbeddingModel string `yaml:"embedding_model"`
 }
 
 // ParseTrustedProxies turns the configured list into prefixes. "any" widens
@@ -172,6 +182,15 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("QUIRE_LOG_LEVEL"); v != "" {
 		cfg.LogLevel = v
+	}
+	if v := os.Getenv("QUIRE_OPENAI_API_KEY"); v != "" {
+		cfg.OpenAIAPIKey = v
+	}
+	if v := os.Getenv("QUIRE_OPENAI_BASE_URL"); v != "" {
+		cfg.OpenAIBaseURL = v
+	}
+	if v := os.Getenv("QUIRE_EMBEDDING_MODEL"); v != "" {
+		cfg.EmbeddingModel = v
 	}
 	if v := os.Getenv("QUIRE_GIT"); v != "" {
 		cfg.Git = v != "false" && v != "0"

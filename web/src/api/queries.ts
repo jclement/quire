@@ -8,14 +8,17 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { api, type ListDocumentsParams } from "./client.ts";
-import type { Task, TaskEdit, TaskView } from "./types.ts";
+import type { Task, TaskEdit, TaskView, SearchMode } from "./types.ts";
 import { useUi } from "../keys/UiContext.tsx";
 
 export const queryKeys = {
   health: ["health"] as const,
   documents: (params: ListDocumentsParams) => ["documents", params] as const,
   document: (path: string) => ["document", path] as const,
-  search: (q: string) => ["search", q] as const,
+  search: (q: string, mode: SearchMode = "text") =>
+    ["search", mode, q] as const,
+  related: (path: string) => ["related", path] as const,
+  semanticStatus: ["semantic-status"] as const,
   tasks: (view: TaskView, area = "") => ["tasks", view, area] as const,
   today: ["today"] as const,
   todayIn: (area: string) => ["today", area] as const,
@@ -76,15 +79,43 @@ export function useDocument(path: string) {
   });
 }
 
-export function useSearch(q: string) {
+export function useSearch(q: string, mode: SearchMode = "text") {
   const area = useEffectiveArea();
   // The search grammar carries the area itself, so a typed area: wins over
-  // the switcher and the URL stays the whole query.
-  const scoped = area && !/\barea:/.test(q) ? `${q} area:${area}` : q;
+  // the switcher and the URL stays the whole query. Semantic mode has no
+  // grammar; the area rides along as a query parameter instead.
+  const scoped =
+    mode === "text" && area && !/\barea:/.test(q) ? `${q} area:${area}` : q;
   return useQuery({
-    queryKey: queryKeys.search(scoped),
-    queryFn: () => api.search(scoped),
+    queryKey: queryKeys.search(
+      mode === "semantic" ? `${scoped}|${area}` : scoped,
+      mode,
+    ),
+    queryFn: () => api.search(scoped, mode, mode === "semantic" ? area : ""),
     enabled: q.trim().length > 0,
+  });
+}
+
+/** Whether the server has an embeddings key — gates every semantic UI. */
+export function useSemanticEnabled(): boolean {
+  return useHealth().data?.semantic_search === true;
+}
+
+export function useRelated(path: string, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.related(path),
+    queryFn: () => api.related(path),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useSemanticStatus(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.semanticStatus,
+    queryFn: api.semanticStatus,
+    enabled,
+    refetchInterval: (query) => (query.state.data?.pending ? 2_000 : false),
   });
 }
 

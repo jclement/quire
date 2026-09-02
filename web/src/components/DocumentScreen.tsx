@@ -28,7 +28,12 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { ApiError } from "../api/client.ts";
-import { useDocument, useToggleTask } from "../api/queries.ts";
+import {
+  useDocument,
+  useToggleTask,
+  useRelated,
+  useSemanticEnabled,
+} from "../api/queries.ts";
 import type { Document } from "../api/types.ts";
 import { formatRelativeTime } from "../lib/dates.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
@@ -116,6 +121,9 @@ function DocumentView({
     setDeleteDocPath,
   } = useUi();
   const save = useDocumentSave(path, doc);
+  // Related-by-meaning needs the embeddings pipeline; the hook stays
+  // disabled (no request) when it is off.
+  const related = useRelated(path, useSemanticEnabled() && mode === "read");
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const toggleTask = useToggleTask();
   // Editor buffer mirrored into state for the split preview and the outline
@@ -343,6 +351,7 @@ function DocumentView({
           activeLine={editorTopLine}
           onScrollToLine={(line) => editorRef.current?.scrollToLine(line)}
           backlinks={doc.backlinks}
+          related={related.data ?? []}
         />
       </div>
     </article>

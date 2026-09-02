@@ -349,6 +349,32 @@ Tags are one concept with two spellings — `#tag` in prose, `tags:` in frontmat
 merged at index time. `#tag` in prose renders as a link to the tag search; a purely
 numeric `#123` is not a tag, matching Obsidian.
 
+## Semantic search
+
+Opt-in, keyed on `QUIRE_OPENAI_API_KEY`, because it sends note text off the
+machine; with the key unset the pipeline, its routes' useful behaviour, the
+MCP tools and the UI toggle all vanish rather than degrade. `internal/semantic`
+owns it: an OpenAI-compatible `/embeddings` client, a chunker (one passage
+per heading section, long sections split at paragraphs, each prefixed with
+"Title › Heading" so the vector knows its context), and an embedder that
+hangs off the index's `Notify` hook.
+
+Vectors are `text-embedding-3-small` truncated to 512 dimensions (Matryoshka;
+the model is trained for it) and stored in index.db's `embeddings` table —
+derived data, so it is rebuilt after a reindex, at a cost of cents. Every
+chunk is fingerprinted by (model, text), so a warm start or an edit to one
+section re-embeds nothing it doesn't have to. Search is a brute-force dot
+product over an in-memory copy: 20k chunks is 40MB and a few milliseconds,
+and an ANN index would be complexity a personal vault doesn't need. Related
+documents reuse the document's own stored vectors (its centroid), so the
+rail costs no API call.
+
+Failures degrade to full-text: a 429 or 5xx re-queues the batch after a
+pause, a permanent error is logged and shown in Settings, and the document
+stays findable the ordinary way. Tests never touch OpenAI —
+`semantictest.Server` (Go) and `e2e/fake-openai.ts` (Playwright) serve a
+bag-of-words fake with the real request/response shape.
+
 ## Drawings
 
 An Excalidraw drawing is two vault files with one stem: `x.excalidraw` (the

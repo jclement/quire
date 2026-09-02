@@ -15,6 +15,7 @@ import (
 
 	"github.com/jclement/quire/internal/index"
 	"github.com/jclement/quire/internal/markdown"
+	"github.com/jclement/quire/internal/semantic"
 	"github.com/jclement/quire/internal/settings"
 	"github.com/jclement/quire/internal/vault"
 )
@@ -32,6 +33,8 @@ type Service struct {
 	// Settings holds the owner's app-level configuration (areas and their
 	// colours). Nil means defaults, which is what tests get.
 	Settings *settings.Store
+	// Semantic is the embedding pipeline; nil unless an API key is set.
+	Semantic *semantic.Embedder
 	// Now allows tests to pin the clock.
 	Now func() time.Time
 }

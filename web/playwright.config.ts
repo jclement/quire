@@ -13,6 +13,9 @@ const PORT = Number(process.env.QUIRE_E2E_PORT ?? 8351);
 // real WebAuthn authenticator (Chromium's virtual one) and a server that
 // actually demands a credential, which the auth-none instance cannot be.
 const AUTH_PORT = PORT + 1;
+// A fake OpenAI embeddings endpoint (e2e/fake-openai.ts) so semantic search
+// is exercised for real, against a server that never leaves this machine.
+const FAKE_OPENAI_PORT = PORT + 2;
 
 /** Every QUIRE_* a developer's mise.local.toml might set, neutralised.
  *  Playwright merges process.env, and a test suite must not be one leaked
@@ -28,6 +31,9 @@ const CLEAN_ENV = {
   QUIRE_DIGEST_TO: "",
   QUIRE_DIGEST_TIME: "",
   QUIRE_TRUSTED_PROXIES: "",
+  QUIRE_OPENAI_API_KEY: "",
+  QUIRE_OPENAI_BASE_URL: "",
+  QUIRE_EMBEDDING_MODEL: "",
   QUIRE_LOG_LEVEL: "warn",
 };
 
@@ -83,7 +89,15 @@ export default defineConfig({
         QUIRE_ADDR: `127.0.0.1:${PORT}`,
         QUIRE_BASE_URL: `http://127.0.0.1:${PORT}`,
         QUIRE_AUTH_MODE: "none",
+        QUIRE_OPENAI_API_KEY: "test-key",
+        QUIRE_OPENAI_BASE_URL: `http://127.0.0.1:${FAKE_OPENAI_PORT}/v1`,
       },
+    },
+    {
+      command: `bun e2e/fake-openai.ts`,
+      url: `http://127.0.0.1:${FAKE_OPENAI_PORT}/health`,
+      reuseExistingServer: false,
+      env: { FAKE_OPENAI_PORT: String(FAKE_OPENAI_PORT) },
     },
     {
       // Bound to 0.0.0.0 on purpose: the bootstrap enrollment gate is
