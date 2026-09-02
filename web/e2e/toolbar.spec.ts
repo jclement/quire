@@ -38,12 +38,11 @@ test("heading, task, details and callout act on the cursor line", async ({ page 
   await toolbar(page).getByRole("button", { name: "Heading" }).click();
   await page.getByRole("menuitem", { name: "Plain text" }).click();
 
+  // Task on prose: the line becomes a task and its details open at once.
   await toolbar(page).getByRole("button", { name: "Task", exact: true }).click();
   await expect(editor).toContainText("- [ ] call sarah");
-  await expect(toolbar(page).getByRole("button", { name: "Task", exact: true })).toBeDisabled();
-
-  await toolbar(page).getByRole("button", { name: "Task details" }).click();
   const details = page.getByRole("dialog", { name: "Task details" });
+  await expect(details).toBeVisible();
   await details.getByLabel("Due").fill("2026-09-10");
   await details.getByLabel("Priority").selectOption("1");
   await details.getByLabel("Waiting").check();
@@ -51,16 +50,17 @@ test("heading, task, details and callout act on the cursor line", async ({ page 
   await details.getByRole("button", { name: "Apply" }).click();
   await expect(editor).toContainText("- [ ] call sarah ⏫ 📅 2026-09-10 ⏳ 🔁 every week");
 
-  // Reopening shows what is on the line.
-  await toolbar(page).getByRole("button", { name: "Task details" }).click();
+  // Task on a task: just the details, showing what is on the line.
+  await toolbar(page).getByRole("button", { name: "Task", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Task details" }).getByLabel("Due")).toHaveValue("2026-09-10");
   await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Task details" })).toHaveCount(0);
 
   await editor.getByText("some prose").click();
   await toolbar(page).getByRole("button", { name: "Callout" }).click();
   await page.getByRole("menuitem", { name: "Warning" }).click();
   await expect(editor).toContainText("> [!warning]");
-  await expect(toolbar(page).getByRole("button", { name: "Callout" })).toContainText("Warning");
+  await expect(toolbar(page).getByRole("button", { name: "Callout" })).toHaveAttribute("data-tip", /warning/);
 
   await page.keyboard.press("ControlOrMeta+s");
   await expect.poll(() => diskText(page, path)).toContain("> [!warning]\n> some prose");

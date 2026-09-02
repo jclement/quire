@@ -468,3 +468,36 @@ select:focus-visible {
     outline: none;
   }
 }
+
+/* Tooltips for icon-only controls: the text lives in data-tip, appears
+   under the control after a short hover, and steps aside for any menu the
+   control has opened. */
+.tip[data-tip] {
+  position: relative;
+}
+.tip[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: var(--heading);
+  color: var(--surface);
+  font: 500 11px/1.2 var(--font-sans, system-ui, sans-serif);
+  padding: 3px 7px;
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+  z-index: 30;
+}
+.tip[data-tip]:hover::after,
+.tip[data-tip]:focus-visible::after {
+  opacity: 1;
+  transition-delay: 0.35s;
+}
+.tip[data-tip][aria-expanded="true"]::after,
+.tip[data-tip]:disabled::after {
+  display: none;
+}

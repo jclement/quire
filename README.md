@@ -160,10 +160,11 @@ read → edit → split, and Escape or Read flushes the save. In Split, the
 preview's checkboxes flip the task in the editor buffer, so they save with
 whatever else you are typing.
 
-A toolbar sits above the editor: Heading (H1–H3 or plain), Task (make the
-line a task), Details (due, defer, priority, waiting, repeat — the emoji
-grammar, written for you), Callout, Table (insert; Reformat and Edit as
-grid wake up inside one), and Drawing. Everything acts on the cursor line.
+A toolbar of icons sits above the editor (hover for what each does):
+Heading (H1–H3 or plain), Task (prose becomes a task and its details open;
+a task opens its details — due, defer, priority, waiting, repeat, the emoji
+grammar written for you), Callout, Table (insert; Reformat and Edit as grid
+wake up inside one), and Drawing. Everything acts on the cursor line.
 The properties strip — area, tags, people, companies — stays while editing:
 a change flushes the buffer, rewrites the file, and loads the result back
 into the editor, so nothing typed is lost.

@@ -5,13 +5,11 @@
 import type { EditorView } from "@codemirror/view";
 import {
   Check,
-  ChevronDown,
   CheckSquare,
   Heading as HeadingIcon,
   LayoutGrid,
   MessageSquareQuote,
   PenTool,
-  SlidersHorizontal,
   Table2,
   WrapText,
 } from "lucide-react";
@@ -35,7 +33,7 @@ interface EditorToolbarProps {
 }
 
 const BUTTON =
-  "flex h-7 items-center gap-1 rounded border border-border px-2 text-xs text-body hover:bg-hover hover:text-heading disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-body";
+  "flex size-7 items-center justify-center rounded border border-border text-body hover:bg-hover hover:text-heading disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-body";
 
 /** Keeps the editor focused through a click, so the command lands on the
  * cursor the person can see. Popovers with inputs opt out. */
@@ -48,70 +46,67 @@ export function EditorToolbar({
 }: EditorToolbarProps) {
   const [open, setOpen] = useState<"heading" | "callout" | "task" | null>(null);
   const task = context?.task ?? null;
-  const headingLabel = context?.headingLevel
-    ? `H${context.headingLevel}`
-    : "Heading";
-  const calloutLabel = context?.callout
-    ? capitalize(context.callout)
-    : "Callout";
+  const level = context?.headingLevel ?? 0;
+  const callout = context?.callout ?? null;
 
   return (
     <div
       role="toolbar"
       aria-label="Editor tools"
-      className="mb-1.5 flex flex-wrap items-center gap-1 border-b border-border pb-1.5 print:hidden"
+      className="mb-1.5 flex flex-wrap items-center gap-0.5 border-b border-border pb-1.5 print:hidden"
     >
       <Menu
         open={open === "heading"}
         onOpen={() => setOpen(open === "heading" ? null : "heading")}
         onClose={() => setOpen(null)}
         label="Heading"
-        icon={<HeadingIcon className="size-3.5" aria-hidden="true" />}
-        text={headingLabel}
+        tip={level ? `Heading ${level} — change level` : "Heading"}
+        active={level > 0}
+        icon={
+          level ? (
+            <span className="font-mono text-[11px] font-semibold">
+              H{level}
+            </span>
+          ) : (
+            <HeadingIcon className="size-4" aria-hidden="true" />
+          )
+        }
         disabled={!context}
       >
-        {[1, 2, 3].map((level) => (
+        {[1, 2, 3].map((n) => (
           <MenuItem
-            key={level}
-            selected={context?.headingLevel === level}
-            onClick={() => run((view) => setHeading(view, level))}
+            key={n}
+            selected={level === n}
+            onClick={() => run((view) => setHeading(view, n))}
           >
-            Heading {level}
+            Heading {n}
           </MenuItem>
         ))}
         <MenuItem
-          selected={context?.headingLevel === 0}
+          selected={level === 0}
           onClick={() => run((view) => setHeading(view, 0))}
         >
           Plain text
         </MenuItem>
       </Menu>
 
-      <button
-        type="button"
-        onMouseDown={keepFocus}
-        onClick={() => run(makeTask)}
-        disabled={!context || task !== null}
-        title="Make this line a task"
-        className={BUTTON}
-      >
-        <CheckSquare className="size-3.5" aria-hidden="true" />
-        Task
-      </button>
-
       <div className="relative">
-        <button
-          type="button"
-          onClick={() => setOpen(open === "task" ? null : "task")}
-          disabled={task === null}
-          aria-label="Task details"
-          aria-expanded={open === "task"}
-          title="Due date, priority, waiting, repeat"
-          className={BUTTON}
+        {/* One button for tasks: prose becomes a task and the details open;
+            a task just opens its details. */}
+        <IconButton
+          label="Task"
+          tip={task ? "Edit task" : "Make this line a task"}
+          onClick={() => {
+            if (!task) run(makeTask);
+            setOpen(open === "task" ? null : "task");
+          }}
+          disabled={!context}
+          active={task !== null}
+          expanded={open === "task"}
+          keepFocus={false}
         >
-          <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-          Details
-        </button>
+          <CheckSquare className="size-4" aria-hidden="true" />
+        </IconButton>
         {open === "task" && task && context ? (
           <TaskDetails
             task={task}
@@ -129,14 +124,15 @@ export function EditorToolbar({
         onOpen={() => setOpen(open === "callout" ? null : "callout")}
         onClose={() => setOpen(null)}
         label="Callout"
-        icon={<MessageSquareQuote className="size-3.5" aria-hidden="true" />}
-        text={calloutLabel}
+        tip={callout ? `Callout: ${callout} — change type` : "Callout"}
+        active={callout !== null}
+        icon={<MessageSquareQuote className="size-4" aria-hidden="true" />}
         disabled={!context}
       >
         {CALLOUT_TYPES.map((type) => (
           <MenuItem
             key={type}
-            selected={context?.callout === type}
+            selected={callout === type}
             onClick={() => run((view) => setCallout(view, type as CalloutType))}
           >
             {capitalize(type)}
@@ -144,56 +140,91 @@ export function EditorToolbar({
         ))}
       </Menu>
 
-      <span className="mx-1 h-4 border-l border-border" aria-hidden="true" />
+      <Divider />
 
-      <button
-        type="button"
-        onMouseDown={keepFocus}
+      <IconButton
+        label="Table"
+        tip="Insert a table"
         onClick={() => run(insertTable)}
         disabled={!context || context.inTable}
-        title="Insert a table here"
-        className={BUTTON}
       >
-        <Table2 className="size-3.5" aria-hidden="true" />
-        Table
-      </button>
-      <button
-        type="button"
-        onMouseDown={keepFocus}
+        <Table2 className="size-4" aria-hidden="true" />
+      </IconButton>
+      <IconButton
+        label="Reformat table"
+        tip="Reformat table (⌘⌥T)"
         onClick={() => run((view) => void formatTableAtCursor(view))}
         disabled={!context?.inTable}
-        title="Pad every column to its widest cell (⌘⌥T)"
-        className={BUTTON}
       >
-        <WrapText className="size-3.5" aria-hidden="true" />
-        Reformat table
-      </button>
-      <button
-        type="button"
-        onMouseDown={keepFocus}
+        <WrapText className="size-4" aria-hidden="true" />
+      </IconButton>
+      <IconButton
+        label="Edit as grid"
+        tip="Edit table as a grid"
         onClick={() => run((view) => void editTableAtCursor(view))}
         disabled={!context?.inTable}
-        title="Edit the cells in a visual grid"
-        className={BUTTON}
       >
-        <LayoutGrid className="size-3.5" aria-hidden="true" />
-        Edit as grid
-      </button>
+        <LayoutGrid className="size-4" aria-hidden="true" />
+      </IconButton>
 
-      <span className="mx-1 h-4 border-l border-border" aria-hidden="true" />
+      <Divider />
 
-      <button
-        type="button"
-        onMouseDown={keepFocus}
+      <IconButton
+        label="Drawing"
+        tip="Insert a drawing"
         onClick={onInsertDrawing}
         disabled={!context}
-        title="Insert an Excalidraw drawing here"
-        className={BUTTON}
       >
-        <PenTool className="size-3.5" aria-hidden="true" />
-        Drawing
-      </button>
+        <PenTool className="size-4" aria-hidden="true" />
+      </IconButton>
     </div>
+  );
+}
+
+function Divider() {
+  return (
+    <span className="mx-1 h-4 border-l border-border" aria-hidden="true" />
+  );
+}
+
+/**
+ * A square icon button with a tooltip (the accessible name doubles as the
+ * fallback tip). Keeps the editor focused through the click unless it
+ * opens something with inputs of its own.
+ */
+function IconButton({
+  label,
+  tip,
+  onClick,
+  disabled,
+  active = false,
+  expanded,
+  keepFocus: keep = true,
+  children,
+}: {
+  label: string;
+  tip: string;
+  onClick: () => void;
+  disabled: boolean;
+  active?: boolean;
+  expanded?: boolean;
+  keepFocus?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={expanded === undefined && active ? true : undefined}
+      aria-expanded={expanded}
+      data-tip={tip}
+      onMouseDown={keep ? keepFocus : undefined}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${BUTTON} tip ${active ? "text-accent" : ""}`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -206,8 +237,9 @@ function Menu({
   onOpen,
   onClose,
   label,
+  tip,
   icon,
-  text,
+  active,
   disabled,
   children,
 }: {
@@ -215,8 +247,9 @@ function Menu({
   onOpen: () => void;
   onClose: () => void;
   label: string;
+  tip: string;
   icon: ReactNode;
-  text: string;
+  active: boolean;
   disabled: boolean;
   children: ReactNode;
 }) {
@@ -231,11 +264,10 @@ function Menu({
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={BUTTON}
+        data-tip={tip}
+        className={`${BUTTON} tip ${active ? "text-accent" : ""}`}
       >
         {icon}
-        {text}
-        <ChevronDown className="size-3 text-muted" aria-hidden="true" />
       </button>
       {open ? (
         <>
