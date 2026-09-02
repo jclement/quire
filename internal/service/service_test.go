@@ -251,3 +251,43 @@ func TestCreateDocumentRespectsSuppliedFrontmatter(t *testing.T) {
 		t.Errorf("seed missing: %v", plain.Frontmatter)
 	}
 }
+
+// TestToggleTaskAnyMarker: the indexer accepts -, * and + bullets, so the
+// toggle must too. A `* [ ]` task was clickable and did nothing — the
+// bug behind "checking the box in read mode does nothing".
+func TestToggleTaskAnyMarker(t *testing.T) {
+	s := newTestService(t)
+	doc, err := s.CreateDocument(vault.TypeNote, "Markers", "* [ ] star task\n+ [ ] plus task\n- [ ] dash task\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Tasks) != 3 {
+		t.Fatalf("indexed %d tasks, want 3", len(doc.Tasks))
+	}
+	for _, task := range doc.Tasks {
+		done, err := s.ToggleTask(task.ID)
+		if err != nil {
+			t.Fatalf("toggle %q: %v", task.Text, err)
+		}
+		if !done.Done || done.CompletedOn == nil {
+			t.Errorf("%q should be done after one toggle: %+v", task.Text, done)
+		}
+	}
+	f, _ := s.Vault.Read(doc.Path)
+	for _, want := range []string{"* [x] star task ✅ ", "+ [x] plus task ✅ ", "- [x] dash task ✅ "} {
+		if !strings.Contains(string(f.Raw), want) {
+			t.Errorf("file should contain %q:\n%s", want, f.Raw)
+		}
+	}
+	// And back again, keeping each line's own marker.
+	after, _ := s.GetDocument(doc.Path)
+	for _, task := range after.Tasks {
+		if _, err := s.ToggleTask(task.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f, _ = s.Vault.Read(doc.Path)
+	if string(f.Raw) != "* [ ] star task\n+ [ ] plus task\n- [ ] dash task\n" {
+		t.Errorf("reopening should restore the original lines, got:\n%s", f.Raw)
+	}
+}

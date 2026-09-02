@@ -261,19 +261,24 @@ func findTaskLine(lines []string, row index.TaskRow) int {
 	return -1
 }
 
+// checkboxRe matches the checkbox of a task line with any list marker the
+// indexer accepts (see markdown.taskRe) — a vault written with `* [ ]`
+// used to index fine and then refuse to toggle, because this looked for
+// "- [ ]" alone and quietly wrote the line back unchanged.
+var checkboxRe = regexp.MustCompile(`^(\s*[-*+] )\[([ xX])\]`)
+
 // toggleTaskLine flips one checkbox line, maintaining the ✅ stamp.
 func toggleTaskLine(line, today string) (string, bool) {
-	if idx := strings.Index(line, "- [ ]"); idx >= 0 {
-		flipped := line[:idx] + "- [x]" + line[idx+len("- [ ]"):]
-		return flipped + " ✅ " + today, true
+	m := checkboxRe.FindStringSubmatchIndex(line)
+	if m == nil {
+		return line, false
 	}
-	for _, marker := range []string{"- [x]", "- [X]"} {
-		if idx := strings.Index(line, marker); idx >= 0 {
-			flipped := line[:idx] + "- [ ]" + line[idx+len(marker):]
-			return stripCompletionStamp(flipped), false
-		}
+	prefix := line[m[2]:m[3]]
+	rest := line[m[1]:]
+	if line[m[4]:m[5]] == " " {
+		return prefix + "[x]" + rest + " ✅ " + today, true
 	}
-	return line, false
+	return stripCompletionStamp(prefix + "[ ]" + rest), false
 }
 
 // stripCompletionStamp removes a trailing "✅ YYYY-MM-DD" (and tidies the
