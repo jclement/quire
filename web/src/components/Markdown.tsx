@@ -15,6 +15,7 @@ import {
   HelpCircle,
   Info,
   Lightbulb,
+  PenTool,
   StickyNote,
   Table2,
   type LucideIcon,
@@ -41,6 +42,12 @@ import type { CalloutType } from "../lib/callouts.ts";
 import { docHref } from "../lib/docs.ts";
 import { extractHeadings } from "../lib/headings.ts";
 import { findTables } from "../lib/tables.ts";
+import {
+  drawingSourceFor,
+  isDrawingRender,
+  requestDrawingEdit,
+  useDrawingVersion,
+} from "../lib/drawings.ts";
 import {
   remarkQuire,
   TAG_HREF_PREFIX,
@@ -355,11 +362,52 @@ function Blockquote(props: ComponentProps<"blockquote"> & ExtraProps) {
 // serves those bytes at /api/v1/files/<path>.
 function Img(props: ComponentProps<"img"> & ExtraProps) {
   const { node: _node, src, ...rest } = props;
-  let resolved = typeof src === "string" ? src : "";
+  const original = typeof src === "string" ? src : "";
+  let resolved = original;
   if (resolved && !/^(https?:|data:|\/)/.test(resolved)) {
     resolved = `/api/v1/files/${resolved}`;
   }
+  if (isDrawingRender(original)) {
+    return (
+      <DrawingImg
+        {...rest}
+        src={resolved}
+        scenePath={drawingSourceFor(original)}
+      />
+    );
+  }
   return <img {...rest} src={resolved} loading="lazy" />;
+}
+
+/**
+ * An embedded Excalidraw render: the plain image plus an "Edit drawing"
+ * button. The src carries a version so a save re-fetches it past the cache.
+ */
+function DrawingImg({
+  src,
+  scenePath,
+  ...rest
+}: ComponentProps<"img"> & { scenePath: string }) {
+  const version = useDrawingVersion(scenePath);
+  return (
+    <span className="group relative inline-block max-w-full">
+      <img
+        {...rest}
+        src={version ? `${src}?v=${version}` : src}
+        loading="lazy"
+        data-drawing={scenePath}
+      />
+      <button
+        type="button"
+        onClick={() => requestDrawingEdit(scenePath)}
+        className="absolute top-2 right-2 flex h-7 items-center gap-1 rounded border border-border bg-raised px-2 text-xs text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-heading focus-visible:opacity-100 print:hidden [@media(hover:none)]:opacity-100"
+        aria-label="Edit drawing"
+      >
+        <PenTool className="size-3.5" aria-hidden="true" />
+        Edit drawing
+      </button>
+    </span>
+  );
 }
 
 // ---- Tables ----

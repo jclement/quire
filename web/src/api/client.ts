@@ -29,6 +29,7 @@ import type {
   TaskView,
   TodayPayload,
   TokenInfo,
+  Drawing,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -310,6 +311,20 @@ export const api = {
       body: form,
     });
   },
+
+  /** A fresh, empty drawing; the server picks the path. */
+  createDrawing: (title?: string) =>
+    request<Drawing>(
+      "/api/v1/drawings",
+      jsonInit("POST", { title: title ?? "" }),
+    ),
+
+  /** Replaces a drawing's scene and SVG render. */
+  saveDrawing: (path: string, scene: Record<string, unknown>, svg: string) =>
+    request<Drawing>(
+      `/api/v1/drawings/${encodeVaultPath(path)}`,
+      jsonInit("PUT", { scene, svg }),
+    ),
 
   /** Photo→task capture: any of file/text/due, at least one of file/text. */
   capture: (input: { file?: File; text?: string; due?: string }) => {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -255,5 +256,81 @@ func TestHealth(t *testing.T) {
 	doJSON(t, "GET", ts.URL+"/api/v1/health", nil, http.StatusOK, &health)
 	if health.Status != "ok" || health.Version != "test" {
 		t.Errorf("health = %+v", health)
+	}
+}
+
+func TestDrawingsCreateSaveServe(t *testing.T) {
+	ts := newTestServer(t)
+
+	res, err := http.Post(ts.URL+"/api/v1/drawings", "application/json", strings.NewReader(`{"title":"Auth Flow"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", res.StatusCode)
+	}
+	var created struct {
+		Data service.Drawing `json:"data"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	d := created.Data
+	if !strings.HasSuffix(d.Path, ".excalidraw") || d.SVGPath != d.Path+".svg" {
+		t.Fatalf("drawing = %+v", d)
+	}
+	if d.Markdown != "![Auth Flow]("+d.SVGPath+")" {
+		t.Errorf("markdown = %q", d.Markdown)
+	}
+
+	// The render serves as an SVG with the no-script policy.
+	got, err := http.Get(ts.URL + "/api/v1/files/" + d.SVGPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Body.Close()
+	if got.Header.Get("Content-Type") != "image/svg+xml" {
+		t.Errorf("render content-type = %q", got.Header.Get("Content-Type"))
+	}
+	if csp := got.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'none'") || !strings.Contains(csp, "font-src data:") {
+		t.Errorf("render CSP = %q", csp)
+	}
+
+	// Save a real scene + render.
+	put := func(path, body string) int {
+		t.Helper()
+		req, _ := http.NewRequest("PUT", ts.URL+"/api/v1/drawings/"+path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+	if code := put(d.Path, `{"scene":{"type":"excalidraw","elements":[]},"svg":"<svg xmlns=\"http://www.w3.org/2000/svg\"><rect id=\"saved\"/></svg>"}`); code != http.StatusOK {
+		t.Fatalf("save = %d", code)
+	}
+	got, _ = http.Get(ts.URL + "/api/v1/files/" + d.SVGPath)
+	body, _ := io.ReadAll(got.Body)
+	got.Body.Close()
+	if !strings.Contains(string(body), `id="saved"`) {
+		t.Errorf("render after save = %q", body)
+	}
+
+	// Refusals are validation errors, not 500s, and never write.
+	for name, tc := range map[string]struct {
+		path, body string
+	}{
+		"script":    {d.Path, `{"scene":{"type":"excalidraw"},"svg":"<svg><script>1</script></svg>"}`},
+		"not scene": {d.Path, `{"scene":{"type":"nope"},"svg":"<svg/>"}`},
+		"wrong ext": {"notes/x.md", `{"scene":{"type":"excalidraw"},"svg":"<svg/>"}`},
+		"unknown":   {"attachments/ghost.excalidraw", `{"scene":{"type":"excalidraw"},"svg":"<svg/>"}`},
+		"bad json":  {d.Path, `{`},
+	} {
+		if code := put(tc.path, tc.body); code != http.StatusBadRequest {
+			t.Errorf("%s: save = %d, want 400", name, code)
+		}
 	}
 }

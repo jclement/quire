@@ -349,6 +349,30 @@ Tags are one concept with two spellings — `#tag` in prose, `tags:` in frontmat
 merged at index time. `#tag` in prose renders as a link to the tag search; a purely
 numeric `#123` is not a tag, matching Obsidian.
 
+## Drawings
+
+An Excalidraw drawing is two vault files with one stem: `x.excalidraw` (the
+scene JSON, what the editor reopens) and `x.excalidraw.svg` (a render). The
+note embeds only the render, as a plain `![](…svg)`, which is the whole
+point: every consumer that isn't quire — share pages, print, vim, Obsidian,
+GitHub — sees an image and needs no plugin, and the app recognises the
+suffix and offers an editor. Fidelity holds: the markdown is exactly what a
+person would have written by hand.
+
+`POST /api/v1/drawings` creates the pair (the server picks the path, like an
+upload) and `PUT /api/v1/drawings/{path}` replaces both. Saves are last-writer-
+wins; the scene has no mergeable structure and is edited in one modal at a
+time. The render is validated as a script-free SVG and served — by the files
+API and by shares alike — under a CSP that allows inline styles and data:
+fonts/images and nothing that can reach the network.
+
+The Excalidraw package is a lazy chunk, loaded on first use; its fonts are
+copied into the bundle by a small Vite plugin (all families but the 12MB
+CJK one) and pointed at via `EXCALIDRAW_ASSET_PATH`, so the app-level CSP
+stays `default-src 'self'`. The editor is a full-screen dialog rather than a
+`Modal`: Excalidraw owns Escape and single-key tools, so keys are stopped at
+the dialog root instead of reaching the global keymap.
+
 ## Sharing
 
 Shares live in auth.db (grants, not derivable from the vault): 16-char random token →

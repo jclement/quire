@@ -75,6 +75,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 
 	mux.HandleFunc("POST /api/v1/attachments", s.handleUploadAttachment)
 	mux.HandleFunc("POST /api/v1/capture", s.handleCapture)
+	mux.HandleFunc("POST /api/v1/drawings", s.handleCreateDrawing)
+	mux.HandleFunc("PUT /api/v1/drawings/{path...}", s.handleSaveDrawing)
 	mux.HandleFunc("GET /api/v1/files/{path...}", s.handleServeFile)
 
 	mux.HandleFunc("GET /api/v1/events", s.handleEvents)

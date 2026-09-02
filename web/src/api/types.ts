@@ -12,6 +12,7 @@ export type {
   AreaCount,
   AreaDef,
   Attachment,
+  Drawing,
   AuditEntry,
   DocType,
   Birthday,

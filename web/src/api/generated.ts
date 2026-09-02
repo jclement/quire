@@ -171,6 +171,23 @@ export interface Attachment {
   markdown: string;
 }
 /**
+ * Drawing is an Excalidraw drawing: the scene file and its SVG render.
+ */
+export interface Drawing {
+  /**
+   * Path is the .excalidraw scene, the file the editor reopens.
+   */
+  path: string;
+  /**
+   * SVGPath is the render the note embeds.
+   */
+  svg_path: string;
+  /**
+   * Markdown embeds the render; empty on a save (the note already has it).
+   */
+  markdown: string;
+}
+/**
  * RenameResult reports what a rename touched.
  */
 export interface RenameResult {

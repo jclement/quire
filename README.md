@@ -196,6 +196,18 @@ you. In the editor, a "Table" panel appears while the cursor is inside one,
 with **Reformat table** (⌘⌥T, pads every column to its widest cell), **Edit as
 grid**, and Tab moving between cells. Tables inside fenced code are left alone.
 
+### Drawings
+
+Run **Insert drawing** from the palette to drop an [Excalidraw](https://excalidraw.com)
+sketch into the note at the cursor (or onto the end, from read mode) and start
+drawing full-screen. Saving writes two files under `attachments/`: the
+`.excalidraw` scene and a `.excalidraw.svg` render. The note embeds the
+render as an ordinary image, so share pages, print, PDF export, vim and every
+other markdown viewer show the picture; the app also knows the SVG has a
+source next to it, so hovering it offers **Edit drawing**. Excalidraw's fonts
+are served from the binary — nothing is loaded from a CDN. The CJK face is
+left out to save 12MB; CJK text in a drawing falls back to a system font.
+
 ### Tags
 
 `#tags` in prose and `tags:` in frontmatter are the same thing. `/tags` lists
@@ -312,3 +324,6 @@ sends one on demand (cron-able).
 ## License
 
 MIT © 2026 Jeff Clement
+
+Bundles [Excalidraw](https://github.com/excalidraw/excalidraw) (MIT) for
+drawings.

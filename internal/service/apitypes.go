@@ -135,6 +135,16 @@ type Attachment struct {
 	Markdown string `json:"markdown"`
 }
 
+// Drawing is an Excalidraw drawing: the scene file and its SVG render.
+type Drawing struct {
+	// Path is the .excalidraw scene, the file the editor reopens.
+	Path string `json:"path"`
+	// SVGPath is the render the note embeds.
+	SVGPath string `json:"svg_path"`
+	// Markdown embeds the render; empty on a save (the note already has it).
+	Markdown string `json:"markdown"`
+}
+
 // RenameResult reports what a rename touched.
 type RenameResult struct {
 	Document  Document `json:"document"`

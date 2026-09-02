@@ -24,6 +24,7 @@ import {
 } from "./extensions.ts";
 import { imagePasteHandler } from "./imagePaste.ts";
 import { tableKeymap, tableTools } from "./tables.ts";
+import { onInsertTextRequest } from "../lib/insertText.ts";
 
 export interface MarkdownEditorHandle {
   /** Replaces the whole buffer (conflict resolution: "take disk"). */
@@ -90,7 +91,23 @@ export function MarkdownEditor({
     });
     viewRef.current = view;
     view.focus();
+    // Text pushed in from outside (the palette's "Insert drawing") lands on
+    // its own line at the cursor.
+    const stopInserts = onInsertTextRequest((request) => {
+      if (request.handled) return;
+      const { head } = view.state.selection.main;
+      const line = view.state.doc.lineAt(head);
+      const before = line.text.trim() === "" ? "" : "\n";
+      const insert = `${before}${request.text}\n`;
+      view.dispatch({
+        changes: { from: line.to, insert },
+        selection: { anchor: line.to + insert.length },
+        scrollIntoView: true,
+      });
+      request.handled = true;
+    });
     return () => {
+      stopInserts();
       viewRef.current = null;
       view.destroy();
     };

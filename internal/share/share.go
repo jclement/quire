@@ -148,7 +148,10 @@ func serveAttachment(w http.ResponseWriter, rel string, data []byte) {
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	if ctype == "image/svg+xml" {
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+		// Same policy as the app's files handler: inline styles and data:
+		// fonts/images (an Excalidraw render), nothing that can reach out.
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:")
 	}
 	_, _ = w.Write(data)
 }

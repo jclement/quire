@@ -58,6 +58,11 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusCreated, task)
 }
 
+// svgCSP is what an SVG served from the vault may do: no script, no network.
+// Inline styles, data: fonts and data: images are what an Excalidraw render
+// is made of, and none of them can reach out of the file.
+const svgCSP = "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:"
+
 func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {
 	rel := r.PathValue("path")
 	if strings.HasSuffix(rel, ".md") {
@@ -78,7 +83,7 @@ func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasSuffix(rel, ".svg") {
 		ctype = "image/svg+xml"
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+		w.Header().Set("Content-Security-Policy", svgCSP)
 	}
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("Cache-Control", "private, max-age=3600")

@@ -18,6 +18,7 @@ import {
   Trash2,
   type LucideIcon,
   Table2,
+  PenTool,
 } from "lucide-react";
 import {
   useMemo,
@@ -26,6 +27,8 @@ import {
 } from "react";
 import { api } from "../api/client.ts";
 import { formatAllTables } from "../lib/tables.ts";
+import { requestDrawingEdit } from "../lib/drawings.ts";
+import { requestInsertText } from "../lib/insertText.ts";
 import { queryKeys } from "../api/queries.ts";
 import type { DocMeta, DocType } from "../api/types.ts";
 import { todayISO } from "../lib/dates.ts";
@@ -191,6 +194,37 @@ function PaletteContent({ close }: { close: () => void }) {
               label: "Delete this document",
               icon: Trash2,
               run: (paletteUi) => paletteUi.setDeleteDocPath(docPath),
+            },
+            {
+              id: "insert-drawing",
+              label: "Insert drawing",
+              icon: PenTool,
+              // A new empty drawing goes in at the cursor when the editor is
+              // open, or onto the end of the document from read mode (a CAS
+              // round trip, like reformatting), then opens for drawing.
+              run: (paletteUi) => {
+                void (async () => {
+                  const drawing = await api.createDrawing();
+                  if (!requestInsertText(drawing.markdown)) {
+                    const doc = await api.getDocument(docPath);
+                    const gap = doc.markdown.endsWith("\n\n")
+                      ? ""
+                      : doc.markdown.endsWith("\n")
+                        ? "\n"
+                        : "\n\n";
+                    await api.putDocument(
+                      docPath,
+                      `${doc.markdown}${gap}${drawing.markdown}\n`,
+                      doc.sha256,
+                    );
+                  }
+                  requestDrawingEdit(drawing.path);
+                })().catch(() =>
+                  paletteUi.toast(
+                    "Couldn't create a drawing — reload and try again",
+                  ),
+                );
+              },
             },
             {
               id: "format-tables",
