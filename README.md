@@ -168,6 +168,19 @@ moment a document carries it. Daily notes never have an area — they belong to
 every one. `area:work` works in search too, and the CLI/MCP accept an area on
 listing and creation.
 
+### Templates
+
+Templates are ordinary markdown under `templates/`. `templates/meeting.md` shapes
+every new meeting (likewise `person`, `project`, `daily`); any other file with
+`for: note` in its frontmatter is offered by name in the New dialog. `{{title}}`,
+`{{date}}`, `{{time}}` and `{{datetime}}` expand; the template's remaining
+frontmatter (say `tags: [decision]`) is copied into the new document.
+
+**Settings → Install starter templates** writes a working set for someone who
+runs engineering — meeting, 1:1, decision record, project brief, incident
+review, weekly review, and a daily-note shape — without touching any template
+you already have.
+
 ### Journal
 
 `/journal` is every daily note on one scrolling page, today first, history

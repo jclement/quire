@@ -314,6 +314,22 @@ Chosen over fixed areas (a third one would need a code change) and over
 directory-based areas (`work/people/` collides with the type directories and
 breaks the imported-vault story). Decision made with the owner, 2026-09-02.
 
+## Templates
+
+`templates/` is a document type of its own, kept out of everyday listings and
+search unless asked for by type. Two conventions and nothing else:
+`templates/<type>.md` is that type's default and applies to any body-less
+creation of that type (so `templates/daily.md` shapes every new day, with
+`{{date}}` bound to the note's own day rather than to now); any other file
+declares `for: <type>` and is offered by name. A template's remaining
+frontmatter is copied in order into the new document, so a decision template
+can carry `tags: [decision]` — which is how PM/dev/CTO document kinds (decision
+records, incident reviews, 1:1s) exist without a new first-class type each.
+
+The starter set is installed only from Settings, never automatically, and never
+over an existing file: quire does not drop files into a vault unasked, and a
+user's edited template must survive a re-install.
+
 ## Journal and tags
 
 The journal (`/journal`) is a paged, newest-first read of daily notes, driven by
