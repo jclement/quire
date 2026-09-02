@@ -299,6 +299,21 @@ The last of those is the pattern worth naming: **the browser has repeatedly
 found what a green Go suite could not.** Unit tests assert the behaviour you
 thought about; the browser asserts the behaviour the user gets.
 
+## Areas
+
+An area is `area:` in frontmatter, lowercased on read. Discovered from the vault
+and merged with two seeds (`work`, `personal`) so the Nirvana split exists on day
+one; a third area is just frontmatter. `documents.area` is a column (schema v3)
+so every listing, the task views (through their existing documents join) and
+Today narrow with one `AND d.area = ?`. "Unclassified" is `area = '' AND type !=
+'daily'`: daily notes are the capture spine and belong to every area, never to
+none. The switcher is a per-device preference like the theme, and a typed
+`area:` in the search grammar outranks it so a URL stays a whole query.
+
+Chosen over fixed areas (a third one would need a code change) and over
+directory-based areas (`work/people/` collides with the type directories and
+breaks the imported-vault story). Decision made with the owner, 2026-09-02.
+
 ## Journal and tags
 
 The journal (`/journal`) is a paged, newest-first read of daily notes, driven by
