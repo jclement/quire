@@ -25,7 +25,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListDocuments(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	docs, err := s.Service.ListDocuments(r.URL.Query().Get("type"), r.URL.Query().Get("q"), limit)
+	docs, err := s.Service.ListDocuments(r.URL.Query().Get("type"), r.URL.Query().Get("q"), r.URL.Query().Get("area"), limit)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -63,6 +63,7 @@ func (s *Server) handleCreateDocument(w http.ResponseWriter, r *http.Request) {
 		Type     string `json:"type"`
 		Title    string `json:"title"`
 		Markdown string `json:"markdown"`
+		Area     string `json:"area"`
 	}
 	if !decodeBody(w, r, &body) {
 		return
@@ -78,7 +79,7 @@ func (s *Server) handleCreateDocument(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "title is required")
 		return
 	}
-	doc, err := s.Service.CreateDocument(docType, body.Title, body.Markdown)
+	doc, err := s.Service.CreateDocumentIn(docType, body.Title, body.Markdown, body.Area)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -174,7 +175,7 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	if view == "" {
 		view = "today"
 	}
-	tasks, err := s.Service.Tasks(view)
+	tasks, err := s.Service.TasksIn(view, r.URL.Query().Get("area"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "unknown task view")
 		return
@@ -278,7 +279,7 @@ func (s *Server) handleSetGuidance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleToday(w http.ResponseWriter, r *http.Request) {
-	payload, err := s.Service.Today()
+	payload, err := s.Service.TodayIn(r.URL.Query().Get("area"))
 	if err != nil {
 		writeServiceError(w, err)
 		return

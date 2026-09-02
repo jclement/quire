@@ -54,7 +54,7 @@ func TestImportExistingVault(t *testing.T) {
 	// behaviour under test is the same either way; the path spelling is not.
 	types := map[string]string{}
 	paths := map[string]string{}
-	docs, err := svc.ListDocuments("", "", 100)
+	docs, err := svc.ListDocuments("", "", "", 100)
 	if err != nil {
 		t.Fatal(err)
 	}

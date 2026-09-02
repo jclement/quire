@@ -12,7 +12,7 @@ import (
 )
 
 // schemaVersion is stored in PRAGMA user_version. Bump on any schema change.
-const schemaVersion = 2
+const schemaVersion = 3 // v3: documents.area
 
 const schema = `
 CREATE TABLE documents (
@@ -22,8 +22,13 @@ CREATE TABLE documents (
 	mtime            INTEGER NOT NULL,
 	size             INTEGER NOT NULL,
 	sha256           TEXT NOT NULL,
-	frontmatter_json TEXT NOT NULL DEFAULT '{}'
+	frontmatter_json TEXT NOT NULL DEFAULT '{}',
+	-- Area is the frontmatter area: value (work, personal, ...) lowercased;
+	-- '' for unclassified, and always '' for daily notes, which belong to
+	-- every area.
+	area             TEXT NOT NULL DEFAULT ''
 );
+CREATE INDEX documents_area ON documents(area);
 
 -- One row per name a document answers to: lowered title, filename stem,
 -- slug, aliases, and the path itself. Wikilink resolution is a join through

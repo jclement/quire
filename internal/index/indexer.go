@@ -59,6 +59,7 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 	fm := vault.ParseFrontmatter(f.Raw)
 	docType := effectiveType(rel, fm)
 	title := effectiveTitle(rel, doc.Title, fm)
+	area := areaOf(docType, fm)
 
 	fmJSON, err := json.Marshal(orEmptyMap(fm))
 	if err != nil {
@@ -77,9 +78,9 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 		return false, err
 	}
 
-	_, err = tx.Exec(`INSERT INTO documents (path, type, title, mtime, size, sha256, frontmatter_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		rel, string(docType), title, f.ModTime.Unix(), len(f.Raw), f.SHA256, string(fmJSON))
+	_, err = tx.Exec(`INSERT INTO documents (path, type, title, mtime, size, sha256, frontmatter_json, area)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		rel, string(docType), title, f.ModTime.Unix(), len(f.Raw), f.SHA256, string(fmJSON), area)
 	if err != nil {
 		return false, fmt.Errorf("inserting document %s: %w", rel, err)
 	}
@@ -351,6 +352,19 @@ func orEmptyList(l []string) []string {
 	}
 	return l
 }
+
+// areaOf reads the document's area from frontmatter, normalized. Daily notes
+// are the capture spine for every area and never carry one.
+func areaOf(docType vault.DocType, fm map[string]any) string {
+	if docType == vault.TypeDaily {
+		return ""
+	}
+	return NormalizeArea(stringValue(fm["area"]))
+}
+
+// NormalizeArea is the one spelling an area has: trimmed and lowercased, so
+// "Work" and "work" are the same area and a switcher can match either.
+func NormalizeArea(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
 func effectiveType(rel string, fm map[string]any) vault.DocType {
 	if t := stringValue(fm["type"]); t != "" {

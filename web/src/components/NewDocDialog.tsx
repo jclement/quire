@@ -3,6 +3,7 @@
 // lives in UiContext so it survives the palette closing). The server picks the
 // path; on success we navigate straight into the new document. The form mounts
 // fresh per open.
+import { isRealArea } from "../lib/area.ts";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -32,12 +33,19 @@ export function NewDocDialog() {
 
 function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
   const navigate = useNavigate();
+  const { area } = useUi();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
 
   const create = useMutation({
+    // A document made while looking at Work is a Work document.
     mutationFn: (input: { title: string }) =>
-      api.createDocument(type, input.title),
+      api.createDocument(
+        type,
+        input.title,
+        undefined,
+        isRealArea(area) ? area : undefined,
+      ),
     onSuccess: (doc) => {
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
       close();

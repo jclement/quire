@@ -10,6 +10,15 @@ import (
 	"github.com/jclement/quire/internal/service"
 )
 
+func (s *Server) handleListAreas(w http.ResponseWriter, r *http.Request) {
+	areas, err := s.Service.Areas()
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, areas)
+}
+
 func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 	tags, err := s.Service.Tags()
 	if err != nil {

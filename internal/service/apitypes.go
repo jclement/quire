@@ -15,6 +15,15 @@ type DocMeta struct {
 	Mtime  string   `json:"mtime"`
 	SHA256 string   `json:"sha256"`
 	Tags   []string `json:"tags"`
+	// Area is the document's frontmatter area:, lowercased; "" when
+	// unclassified. Daily notes are always "".
+	Area string `json:"area"`
+}
+
+// AreaCount is one area (work, personal, …) with its document count.
+type AreaCount struct {
+	Area  string `json:"area"`
+	Count int    `json:"count"`
 }
 
 // Link is a wikilink with its resolution ("" target = dangling → null).

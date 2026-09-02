@@ -27,8 +27,11 @@ type TaskEdit struct {
 }
 
 // TaskView re-exports the index views for transports.
-func (s *Service) Tasks(view string) ([]Task, error) {
-	rows, err := s.Index.Tasks(index.TaskView(view), s.today())
+func (s *Service) Tasks(view string) ([]Task, error) { return s.TasksIn(view, "") }
+
+// TasksIn is a task view narrowed to an area ("" = all, "none" = unclassified).
+func (s *Service) TasksIn(view, area string) ([]Task, error) {
+	rows, err := s.Index.Tasks(index.TaskView(view), s.today(), area)
 	if err != nil {
 		return nil, err
 	}

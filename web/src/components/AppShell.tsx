@@ -2,6 +2,8 @@
 // sidebar, mobile bottom nav with a center capture button, and the slide-over
 // drawer. Routed pages render into <main> via children. Version and update
 // status live in Settings, not in page furniture.
+import { useAreas } from "../api/queries.ts";
+import { AREA_ALL, AREA_NONE, areaLabel } from "../lib/area.ts";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   CalendarRange,
@@ -13,6 +15,7 @@ import {
   Settings,
   BookOpen,
   Hash,
+  Layers,
   Sunrise,
   X,
   type LucideIcon,
@@ -105,9 +108,42 @@ function NavLink({
   );
 }
 
+/**
+ * The area switcher: All · Work · Personal · … · Unclassified. Narrows
+ * Browse, Search, Tasks and Today; the journal and calendar are by date and
+ * stay whole. New documents file under the chosen area.
+ */
+function AreaSwitcher() {
+  const { area, setArea } = useUi();
+  const areas = useAreas();
+  const choices = [
+    AREA_ALL,
+    ...(areas.data ?? []).map((a) => a.area),
+    AREA_NONE,
+  ];
+  return (
+    <label className="mb-1 flex items-center gap-1.5 px-2">
+      <Layers className="size-4 shrink-0 text-muted" aria-hidden="true" />
+      <select
+        aria-label="Area"
+        value={area}
+        onChange={(event) => setArea(event.target.value)}
+        className="field-bare h-8 min-w-0 flex-1 rounded border border-border bg-raised px-1.5 text-sm text-heading outline-none focus:border-accent"
+      >
+        {choices.map((choice) => (
+          <option key={choice || "all"} value={choice}>
+            {areaLabel(choice)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function NavSections({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col gap-0.5 p-2">
+      <AreaSwitcher />
       {PRIMARY_NAV.map((entry) => (
         <NavLink key={entry.to} entry={entry} onNavigate={onNavigate} />
       ))}

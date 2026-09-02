@@ -83,7 +83,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 	// Reading the vault.
 	if allows(auth.ScopeRead) {
 		sdk.AddTool(s, &sdk.Tool{Name: "search", Annotations: readOnly,
-			Description: "Search the vault. Bare words are full-text (title and body, ranked); filters combine with them: type:<note|person|company|project|meeting|daily>, tag:<tag>, is:task (search tasks instead of documents), due:today | due:overdue | due:week | due:YYYY-MM-DD. Returns paths — use get_document for content. Always search before guessing a path."},
+			Description: "Search the vault. Bare words are full-text (title and body, ranked); filters combine with them: type:<note|person|company|project|meeting|daily>, tag:<tag>, area:<work|personal|none>, is:task (search tasks instead of documents), due:today | due:overdue | due:week | due:YYYY-MM-DD. Returns paths — use get_document for content. Always search before guessing a path."},
 			t.search)
 		sdk.AddTool(s, &sdk.Tool{Name: "list_documents", Annotations: readOnly,
 			Description: "Browse documents by type, most recently modified first, optionally filtered by a title substring. Use this to see what exists (all people, recent meetings, every project) when you have no search term; use search when you do."},
@@ -97,6 +97,9 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 		sdk.AddTool(s, &sdk.Tool{Name: "list_tasks", Annotations: readOnly,
 			Description: "List tasks by view: inbox (no date, unprocessed), today (due, overdue, or available now), upcoming (deferred or due later), waiting (delegated ⏳), logbook (completed). Each task carries the id complete_task and edit_task take."},
 			t.listTasks)
+		sdk.AddTool(s, &sdk.Tool{Name: "list_areas", Annotations: readOnly,
+			Description: "The areas documents are filed under (work, personal, and any the owner has added) with counts. Areas partition everything except daily notes; pass one to search, list_documents, list_tasks or today to narrow to it, and to create_document to file under it."},
+			t.listAreas)
 		sdk.AddTool(s, &sdk.Tool{Name: "list_tags", Annotations: readOnly,
 			Description: "Every tag in the vault with how many documents carry it, most-used first. Use it to pick an existing tag rather than inventing a near-duplicate."},
 			t.listTags)
@@ -191,6 +194,7 @@ type createDocIn struct {
 	Type  string `json:"type" jsonschema:"one of: note, person, company, project, meeting"`
 	Title string `json:"title" jsonschema:"document title, e.g. 'Sarah Chen'"`
 	Body  string `json:"body,omitempty" jsonschema:"optional markdown body; defaults to a heading"`
+	Area  string `json:"area,omitempty" jsonschema:"area to file it under (work, personal, …); omit for unclassified"`
 }
 
 type updateDocIn struct {
@@ -207,6 +211,11 @@ type appendIn struct {
 
 type listTasksIn struct {
 	View string `json:"view" jsonschema:"one of: inbox, today, upcoming, waiting, logbook"`
+	Area string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; omit for all"`
+}
+
+type areasOut struct {
+	Areas []service.AreaCount `json:"areas"`
 }
 
 type createTaskIn struct {
@@ -222,7 +231,15 @@ type editTaskIn struct {
 	Priority *int    `json:"priority,omitempty" jsonschema:"0 none, 1 high, 2 medium, 3 low; omit to leave unchanged"`
 }
 
+// areaDoc is the shared description of the area parameter.
+const areaDoc = "area to narrow to (e.g. work, personal), or none for unclassified; omit for all"
+
+type areaIn struct {
+	Area string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; omit for all"`
+}
+
 type listDocsIn struct {
+	Area  string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; omit for all"`
 	Type  string `json:"type,omitempty" jsonschema:"filter by type: note, person, company, project, meeting, daily; omit for all"`
 	Title string `json:"title,omitempty" jsonschema:"optional title substring, case-insensitive"`
 	Limit int    `json:"limit,omitempty" jsonschema:"max results (default 50)"`
@@ -296,7 +313,7 @@ func (t *tools) createDocument(_ context.Context, _ *sdk.CallToolRequest, in cre
 	default:
 		return nil, service.Document{}, fmt.Errorf("invalid type %q (want note|person|company|project|meeting)", in.Type)
 	}
-	doc, err := t.svc.CreateDocument(docType, in.Title, in.Body)
+	doc, err := t.svc.CreateDocumentIn(docType, in.Title, in.Body, in.Area)
 	t.record("create_document", doc.Path, in.Type+": "+in.Title, err)
 	return nil, doc, err
 }
@@ -343,7 +360,7 @@ func (t *tools) listDocuments(_ context.Context, _ *sdk.CallToolRequest, in list
 	if limit <= 0 {
 		limit = 50
 	}
-	docs, err := t.svc.ListDocuments(in.Type, in.Title, limit)
+	docs, err := t.svc.ListDocuments(in.Type, in.Title, in.Area, limit)
 	if err != nil {
 		return nil, docListOut{}, err
 	}
@@ -351,6 +368,14 @@ func (t *tools) listDocuments(_ context.Context, _ *sdk.CallToolRequest, in list
 		docs = []service.DocMeta{}
 	}
 	return nil, docListOut{Documents: docs}, nil
+}
+
+func (t *tools) listAreas(_ context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, areasOut, error) {
+	areas, err := t.svc.Areas()
+	if err != nil {
+		return nil, areasOut{}, err
+	}
+	return nil, areasOut{Areas: areas}, nil
 }
 
 func (t *tools) listTags(_ context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, tagsOut, error) {
@@ -389,7 +414,7 @@ func firstLine(s string) string {
 }
 
 func (t *tools) listTasks(_ context.Context, _ *sdk.CallToolRequest, in listTasksIn) (*sdk.CallToolResult, taskListOut, error) {
-	tasks, err := t.svc.Tasks(in.View)
+	tasks, err := t.svc.TasksIn(in.View, in.Area)
 	if err != nil {
 		return nil, taskListOut{}, err
 	}
@@ -418,8 +443,8 @@ func (t *tools) completeTask(_ context.Context, _ *sdk.CallToolRequest, in taskI
 	return nil, task, nil
 }
 
-func (t *tools) today(_ context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, service.TodayPayload, error) {
-	payload, err := t.svc.Today()
+func (t *tools) today(_ context.Context, _ *sdk.CallToolRequest, in areaIn) (*sdk.CallToolResult, service.TodayPayload, error) {
+	payload, err := t.svc.TodayIn(in.Area)
 	return nil, payload, err
 }
 

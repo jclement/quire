@@ -45,7 +45,7 @@ func newTestIndex(t *testing.T) *Index {
 func TestFullScanAndBacklinks(t *testing.T) {
 	ix := newTestIndex(t)
 
-	docs, err := ix.ListDocuments("", "", 0)
+	docs, err := ix.ListDocuments("", "", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestTaskViews(t *testing.T) {
 		ViewLogbook: {"Book room"},
 	}
 	for view, want := range views {
-		tasks, err := ix.Tasks(view, today)
+		tasks, err := ix.Tasks(view, today, "")
 		if err != nil {
 			t.Fatalf("%s: %v", view, err)
 		}
@@ -107,7 +107,7 @@ func TestTaskViews(t *testing.T) {
 	}
 
 	// Upcoming (from Sep 1): the Apollo task due Sep 3.
-	up, err := ix.Tasks(ViewUpcoming, "2026-09-02")
+	up, err := ix.Tasks(ViewUpcoming, "2026-09-02", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestMeetingTaskProjectRollup(t *testing.T) {
 	ix := newTestIndex(t)
 	// The meeting task links [[Sarah Chen]] (a person) and its doc has
 	// project: [[Project Apollo]] — the project join must pick the project.
-	tasks, err := ix.Tasks(ViewToday, "2026-09-02")
+	tasks, err := ix.Tasks(ViewToday, "2026-09-02", "")
 	if err != nil {
 		t.Fatal(err)
 	}

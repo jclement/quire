@@ -38,6 +38,18 @@ export interface DocMeta {
   mtime: string;
   sha256: string;
   tags: string[];
+  /**
+   * Area is the document's frontmatter area:, lowercased; "" when
+   * unclassified. Daily notes are always "".
+   */
+  area: string;
+}
+/**
+ * AreaCount is one area (work, personal, …) with its document count.
+ */
+export interface AreaCount {
+  area: string;
+  count: number /* int */;
 }
 /**
  * Link is a wikilink with its resolution ("" target = dangling → null).

@@ -81,7 +81,7 @@ func TestToolsAreScoped(t *testing.T) {
 		write = auth.ScopeWrite
 		tasks = auth.ScopeTasks
 	)
-	readTools := []string{"search", "list_documents", "get_document", "get_daily", "list_tasks", "list_tags", "today", "person_context"}
+	readTools := []string{"search", "list_documents", "get_document", "get_daily", "list_tasks", "list_tags", "list_areas", "today", "person_context"}
 	writeTools := []string{"create_document", "update_document", "append_to_document", "link_entity", "set_frontmatter"}
 	taskTools := []string{"create_task", "complete_task", "edit_task"}
 

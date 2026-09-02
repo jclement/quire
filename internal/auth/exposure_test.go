@@ -65,6 +65,7 @@ var dataRoutes = []struct{ method, path string }{
 	{"GET", "/api/v1/daily"}, // the journal: every daily note
 	{"GET", "/api/v1/daily/2026-09-01"},
 	{"GET", "/api/v1/tags"},
+	{"GET", "/api/v1/areas"},
 	{"GET", "/api/v1/audit"}, // what agents did, by name
 	{"POST", "/api/v1/daily/2026-09-01"},
 	{"GET", "/api/v1/events"},                  // SSE: streams every vault change

@@ -3,6 +3,7 @@
 // extra single-key actions pages register (e.g. `e` on a document). Handlers
 // live in refs so registering a list never re-renders the app; only overlay
 // visibility is React state.
+import { loadArea, storeArea } from "../lib/area.ts";
 import {
   createContext,
   useCallback,
@@ -48,6 +49,10 @@ interface UiContextValue {
   /** Transient confirmations ("Link copied"); auto-dismissed. */
   toasts: Toast[];
   toast: (message: string) => void;
+
+  /** The area switcher's value: "" (all), "none" (unclassified), or a name. */
+  area: string;
+  setArea: (area: string) => void;
   /** The list currently receiving j/k/Enter/x — set by useListNav. */
   listNavRef: RefObject<ListNavHandlers | null>;
   /** Escape pops the most recently pushed handler (one level out). */
@@ -75,6 +80,11 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [renameDocPath, setRenameDocPath] = useState<string | null>(null);
   const [deleteDocPath, setDeleteDocPath] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [area, setAreaState] = useState<string>(loadArea);
+  const setArea = useCallback((next: string) => {
+    storeArea(next);
+    setAreaState(next);
+  }, []);
   const nextToastId = useRef(0);
   const listNavRef = useRef<ListNavHandlers | null>(null);
   const escapeStackRef = useRef<(() => void)[]>([]);
@@ -127,6 +137,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
       setDeleteDocPath,
       toasts,
       toast,
+      area,
+      setArea,
       listNavRef,
       escapeStackRef,
       pushEscape,
@@ -142,6 +154,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
       deleteDocPath,
       toasts,
       toast,
+      area,
+      setArea,
       pushEscape,
       registerKey,
     ],

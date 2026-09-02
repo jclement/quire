@@ -199,6 +199,14 @@ paths:
     delete:
       summary: Revoke a share link
       responses: { "204": { description: revoked } }
+  /api/v1/areas:
+    get:
+      summary: Areas documents are filed under (work, personal, …), seeded plus discovered, with counts
+      description: >
+        An area is the frontmatter `area:` key, lowercased. Daily notes carry
+        none and belong to every area. Pass ?area=<name> to /documents,
+        /tasks and /today to narrow them, or ?area=none for unclassified.
+      responses: { "200": { description: "data: AreaCount[] — area, count" } }
   /api/v1/tags:
     get:
       summary: Every tag with its document count, most-used first

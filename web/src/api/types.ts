@@ -9,6 +9,7 @@
 // (the small /auth/* payloads) and types that exist only in the client.
 export type {
   AgentGuidanceResponse,
+  AreaCount,
   Attachment,
   AuditEntry,
   DocType,

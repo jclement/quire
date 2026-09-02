@@ -31,6 +31,7 @@ function invalidateForDocEvent(
   // stale after an external edit — caught by its own E2E test.
   void queryClient.invalidateQueries({ queryKey: ["journal"] });
   void queryClient.invalidateQueries({ queryKey: ["tags"] });
+  void queryClient.invalidateQueries({ queryKey: ["areas"] });
 }
 
 /** Mount once (in App). Owns the EventSource for the whole app lifetime. */

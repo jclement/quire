@@ -54,6 +54,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /api/v1/search", s.handleSearch)
 	mux.HandleFunc("GET /api/v1/tags", s.handleListTags)
+	mux.HandleFunc("GET /api/v1/areas", s.handleListAreas)
 
 	mux.HandleFunc("GET /api/v1/tasks", s.handleListTasks)
 	mux.HandleFunc("POST /api/v1/tasks", s.handleCreateTask)

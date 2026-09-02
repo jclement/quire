@@ -77,7 +77,7 @@ test("the palette reformats every table from read mode", async ({ page }) => {
 
   await page.keyboard.press("ControlOrMeta+k");
   await page.getByLabel("Command palette input").fill(">reformat");
-  await page.getByRole("option").filter({ hasText: /reformat all tables/i }).first().click();
+  await page.getByRole("listbox").getByRole("option").filter({ hasText: /reformat all tables/i }).first().click();
 
   await expect
     .poll(async () => (await page.request.get(`/api/v1/documents/${data.path}`)).text())

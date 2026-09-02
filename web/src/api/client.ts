@@ -4,6 +4,7 @@
 // without string-matching messages.
 import type {
   AgentGuidanceResponse,
+  AreaCount,
   AttachmentUpload,
   AuditEntry,
   AuthStatus,
@@ -103,6 +104,8 @@ export interface ListDocumentsParams {
   type?: DocType;
   q?: string;
   limit?: number;
+  /** "" = every area, "none" = unclassified, else an area name. */
+  area?: string;
 }
 
 export const api = {
@@ -113,6 +116,7 @@ export const api = {
     if (params.type) query.set("type", params.type);
     if (params.q) query.set("q", params.q);
     if (params.limit) query.set("limit", String(params.limit));
+    if (params.area) query.set("area", params.area);
     const suffix = query.size > 0 ? `?${query}` : "";
     return request<DocMeta[]>(`/api/v1/documents${suffix}`);
   },
@@ -126,11 +130,30 @@ export const api = {
       jsonInit("PUT", { markdown, base_sha256: baseSha256 }),
     ),
 
-  createDocument: (type: DocType, title: string, markdown?: string) =>
+  createDocument: (
+    type: DocType,
+    title: string,
+    markdown?: string,
+    area?: string,
+  ) =>
     request<Document>(
       "/api/v1/documents",
-      jsonInit("POST", { type, title, ...(markdown ? { markdown } : {}) }),
+      jsonInit("POST", {
+        type,
+        title,
+        ...(markdown ? { markdown } : {}),
+        ...(area ? { area } : {}),
+      }),
     ),
+
+  /** Sets frontmatter keys surgically; a null value removes the key. */
+  setFrontmatter: (path: string, values: Record<string, unknown>) =>
+    request<Document>(
+      `/api/v1/documents/${encodeVaultPath(path)}`,
+      jsonInit("PATCH", { set: values }),
+    ),
+
+  listAreas: () => request<AreaCount[]>("/api/v1/areas"),
 
   deleteDocument: (path: string) =>
     request<void>(`/api/v1/documents/${encodeVaultPath(path)}`, {
@@ -151,7 +174,10 @@ export const api = {
   search: (q: string) =>
     request<SearchResult[]>(`/api/v1/search?q=${encodeURIComponent(q)}`),
 
-  listTasks: (view: TaskView) => request<Task[]>(`/api/v1/tasks?view=${view}`),
+  listTasks: (view: TaskView, area = "") =>
+    request<Task[]>(
+      `/api/v1/tasks?view=${view}${area ? `&area=${encodeURIComponent(area)}` : ""}`,
+    ),
 
   createTask: (text: string, due?: string, defer?: string) =>
     request<Task>(
@@ -190,7 +216,10 @@ export const api = {
   createDaily: (date: string) =>
     request<Document>(`/api/v1/daily/${date}`, { method: "POST" }),
 
-  today: () => request<TodayPayload>("/api/v1/today"),
+  today: (area = "") =>
+    request<TodayPayload>(
+      `/api/v1/today${area ? `?area=${encodeURIComponent(area)}` : ""}`,
+    ),
 
   /** One month of days ("YYYY-MM"), each with its notes, meetings and tasks. */
   calendar: (month: string) =>

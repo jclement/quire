@@ -20,6 +20,47 @@ type DocRow struct {
 	SHA256      string
 	Tags        []string
 	Frontmatter json.RawMessage
+	Area        string
+}
+
+// AreaUnclassified is the filter value meaning "documents with no area".
+// Daily notes are excluded from it: they belong to every area, not none.
+const AreaUnclassified = "none"
+
+// areaClause restricts documents alias `d` to an area. "" is no filter.
+func areaClause(area string) (string, []any) {
+	switch NormalizeArea(area) {
+	case "":
+		return "", nil
+	case AreaUnclassified:
+		return " AND d.area = '' AND d.type != 'daily'", nil
+	default:
+		return " AND d.area = ?", []any{NormalizeArea(area)}
+	}
+}
+
+// AreaCount is one area with how many documents are filed under it.
+type AreaCount struct {
+	Area  string
+	Count int
+}
+
+// Areas returns every area in use with its document count, most-used first.
+func (ix *Index) Areas() ([]AreaCount, error) {
+	rows, err := ix.DB.Query(`SELECT area, COUNT(*) FROM documents WHERE area != '' GROUP BY area ORDER BY 2 DESC, area`)
+	if err != nil {
+		return nil, fmt.Errorf("listing areas: %w", err)
+	}
+	defer rows.Close()
+	var out []AreaCount
+	for rows.Next() {
+		var a AreaCount
+		if err := rows.Scan(&a.Area, &a.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }
 
 // TaskRow is a task with its rollup joins resolved.
@@ -51,14 +92,15 @@ type SearchHit struct {
 
 const docSelect = `
 	SELECT d.path, d.type, d.title, d.mtime, d.sha256, d.frontmatter_json,
-	       COALESCE((SELECT group_concat(t.tag) FROM tags t WHERE t.path = d.path), '')
+	       COALESCE((SELECT group_concat(t.tag) FROM tags t WHERE t.path = d.path), ''),
+	       d.area
 	FROM documents d`
 
 func scanDocRow(rows interface{ Scan(...any) error }) (DocRow, error) {
 	var d DocRow
 	var mtime int64
 	var fm, tags string
-	if err := rows.Scan(&d.Path, &d.Type, &d.Title, &mtime, &d.SHA256, &fm, &tags); err != nil {
+	if err := rows.Scan(&d.Path, &d.Type, &d.Title, &mtime, &d.SHA256, &fm, &tags, &d.Area); err != nil {
 		return DocRow{}, err
 	}
 	d.Mtime = time.Unix(mtime, 0)
@@ -73,9 +115,13 @@ func scanDocRow(rows interface{ Scan(...any) error }) (DocRow, error) {
 
 // ListDocuments returns documents, optionally filtered by type and a
 // case-insensitive title substring, newest first.
-func (ix *Index) ListDocuments(docType, titleQuery string, limit int) ([]DocRow, error) {
+func (ix *Index) ListDocuments(docType, titleQuery, area string, limit int) ([]DocRow, error) {
 	where := "WHERE 1=1"
 	args := []any{}
+	if clause, a := areaClause(area); clause != "" {
+		where += clause
+		args = append(args, a...)
+	}
 	if docType != "" {
 		where += " AND d.type = ?"
 		args = append(args, docType)
@@ -132,11 +178,12 @@ func (ix *Index) ResolveLink(raw string) string {
 
 // MeetingsOn returns meeting documents whose frontmatter date falls on day
 // (YYYY-MM-DD), ordered by that date (so times sort naturally).
-func (ix *Index) MeetingsOn(day string) ([]DocRow, error) {
+func (ix *Index) MeetingsOn(day, area string) ([]DocRow, error) {
+	areaWhere, areaArgs := areaClause(area)
 	rows, err := ix.DB.Query(docSelect+`
 		WHERE d.type = 'meeting'
-		  AND json_extract(d.frontmatter_json, '$.date') LIKE ?
-		ORDER BY json_extract(d.frontmatter_json, '$.date')`, day+"%")
+		  AND json_extract(d.frontmatter_json, '$.date') LIKE ?`+areaWhere+`
+		ORDER BY json_extract(d.frontmatter_json, '$.date')`, append([]any{day + "%"}, areaArgs...)...)
 	if err != nil {
 		return nil, fmt.Errorf("meetings on %s: %w", day, err)
 	}
@@ -229,9 +276,10 @@ const (
 
 // Tasks returns the tasks for a view; today is the local YYYY-MM-DD used for
 // all date comparisons (passed in for testability).
-func (ix *Index) Tasks(view TaskView, today string) ([]TaskRow, error) {
+func (ix *Index) Tasks(view TaskView, today, area string) ([]TaskRow, error) {
 	var where, order string
 	args := []any{}
+	areaWhere, areaArgs := areaClause(area)
 	switch view {
 	case ViewInbox:
 		where = "t.done = 0 AND t.due = '' AND t.defer_date = '' AND t.waiting = 0 AND t.project_norm = ''"
@@ -255,7 +303,7 @@ func (ix *Index) Tasks(view TaskView, today string) ([]TaskRow, error) {
 	default:
 		return nil, fmt.Errorf("unknown task view %q", view)
 	}
-	rows, err := ix.DB.Query(taskSelect+" WHERE "+where+" ORDER BY "+order, args...)
+	rows, err := ix.DB.Query(taskSelect+" WHERE "+where+areaWhere+" ORDER BY "+order, append(args, areaArgs...)...)
 	if err != nil {
 		return nil, fmt.Errorf("task view %s: %w", view, err)
 	}
@@ -298,8 +346,9 @@ func (ix *Index) TasksMentioning(path string) ([]TaskRow, error) {
 
 // OpenTasksDue returns open tasks with due <= day (the Today screen's
 // overdue + due-today sections split by the caller).
-func (ix *Index) OpenTasksDue(day string) ([]TaskRow, error) {
-	rows, err := ix.DB.Query(taskSelect+" WHERE t.done = 0 AND t.due != '' AND t.due <= ? ORDER BY t.due, t.priority = 0, t.priority", day)
+func (ix *Index) OpenTasksDue(day, area string) ([]TaskRow, error) {
+	areaWhere, areaArgs := areaClause(area)
+	rows, err := ix.DB.Query(taskSelect+" WHERE t.done = 0 AND t.due != '' AND t.due <= ?"+areaWhere+" ORDER BY t.due, t.priority = 0, t.priority", append([]any{day}, areaArgs...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -318,10 +367,12 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 		limit = 50
 	}
 	var terms []string
-	var docType, tag, due string
+	var docType, tag, due, area string
 	isTask := false
 	for _, tok := range strings.Fields(query) {
 		switch {
+		case strings.HasPrefix(tok, "area:"):
+			area = strings.TrimPrefix(tok, "area:")
 		case tok == "is:task":
 			isTask = true
 		case strings.HasPrefix(tok, "due:"):
@@ -336,11 +387,15 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 		}
 	}
 	if isTask {
-		return ix.searchTasks(terms, tag, due, today, limit)
+		return ix.searchTasks(terms, tag, due, area, today, limit)
 	}
 
 	where := "WHERE 1=1"
 	args := []any{}
+	if clause, a := areaClause(area); clause != "" {
+		where += clause
+		args = append(args, a...)
+	}
 	join := ""
 	if len(terms) > 0 {
 		join = "JOIN fts ON fts.path = d.path"
@@ -385,9 +440,13 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 // searchTasks answers `is:task` queries against the task index: substring
 // terms over the display text, tag/due filters. Hits carry the task text as
 // the title and the source document as the snippet.
-func (ix *Index) searchTasks(terms []string, tag, due, today string, limit int) ([]SearchHit, error) {
+func (ix *Index) searchTasks(terms []string, tag, due, area, today string, limit int) ([]SearchHit, error) {
 	where := "t.done = 0"
 	args := []any{}
+	if clause, a := areaClause(area); clause != "" {
+		where += clause
+		args = append(args, a...)
+	}
 	for _, term := range terms {
 		where += " AND t.text LIKE ? COLLATE NOCASE"
 		args = append(args, "%"+term+"%")

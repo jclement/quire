@@ -21,7 +21,9 @@ test("the command palette finds and opens a document", async ({ page }) => {
   await expect(input).toBeVisible();
   await input.fill("palette target");
 
-  const option = page.getByRole("option").filter({ hasText: /palette target/i }).first();
+  // Scoped to the palette's listbox: the area switcher's <select> also has
+  // <option>s, and they are hidden.
+  const option = page.getByRole("listbox").getByRole("option").filter({ hasText: /palette target/i }).first();
   await expect(option).toBeVisible();
   await page.keyboard.press("Enter");
 
@@ -33,7 +35,7 @@ test("the palette exposes commands behind >", async ({ page }) => {
   await page.goto("/");
   await page.keyboard.press("ControlOrMeta+k");
   await page.getByLabel("Command palette input").fill(">");
-  await expect(page.getByRole("option").first()).toBeVisible();
+  await expect(page.getByRole("listbox").getByRole("option").first()).toBeVisible();
 });
 
 test("Escape closes the palette without navigating", async ({ page }) => {

@@ -1,3 +1,5 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys, useAreas } from "../api/queries.ts";
 // The properties strip under a document's title: frontmatter as dense
 // key:value chips, never rendered as markdown. The relationship keys for this
 // document's type (a meeting's people/project/company, a person's company)
@@ -45,7 +47,8 @@ export function FrontmatterStrip({ doc }: { doc: Document }) {
   const entries = Object.entries(doc.frontmatter).filter(
     ([key]) => key !== "title" && !editable.has(key),
   );
-  if (linkKeys.length === 0 && entries.length === 0) return null;
+  const showArea = doc.type !== "daily";
+  if (linkKeys.length === 0 && entries.length === 0 && !showArea) return null;
 
   const resolved = resolvedTargets(doc.links);
   const apply = (key: string, target: string, remove = false) => {
@@ -58,6 +61,7 @@ export function FrontmatterStrip({ doc }: { doc: Document }) {
 
   return (
     <div className="mb-3 flex flex-wrap items-start gap-1.5 border-b border-border pb-3">
+      {showArea ? <AreaChip doc={doc} /> : null}
       {linkKeys.map((linkKey) => (
         <LinkKeyChips
           key={linkKey.key}
@@ -304,5 +308,50 @@ function AddLinkPopover({
         ) : null}
       </div>
     </>
+  );
+}
+
+/**
+ * Which area the document files under, changeable in place. Rendered for
+ * every non-daily document — including ones with no frontmatter at all —
+ * because filing is the thing you most want to do to an unfiled note.
+ */
+function AreaChip({ doc }: { doc: Document }) {
+  const queryClient = useQueryClient();
+  const { toast } = useUi();
+  const areas = useAreas();
+  const setArea = useMutation({
+    mutationFn: (area: string) =>
+      api.setFrontmatter(doc.path, { area: area || null }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.document(doc.path), updated);
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({ queryKey: ["areas"] });
+    },
+    onError: (error) => toast(errorMessage(error)),
+  });
+  const choices = Array.from(
+    new Set(
+      [...(areas.data ?? []).map((a) => a.area), doc.area].filter(Boolean),
+    ),
+  );
+  return (
+    <label className="flex h-7 items-center gap-1 rounded border border-border bg-raised px-1.5 text-xs text-muted">
+      <span>area</span>
+      <select
+        aria-label="Document area"
+        value={doc.area}
+        disabled={setArea.isPending}
+        onChange={(event) => setArea.mutate(event.target.value)}
+        className="field-bare bg-transparent text-xs text-heading outline-none"
+      >
+        <option value="">unclassified</option>
+        {choices.map((choice) => (
+          <option key={choice} value={choice}>
+            {choice}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

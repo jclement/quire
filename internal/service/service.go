@@ -49,7 +49,33 @@ func metaFromRow(d index.DocRow) DocMeta {
 		Mtime:  d.Mtime.Format(time.RFC3339),
 		SHA256: d.SHA256,
 		Tags:   d.Tags,
+		Area:   d.Area,
 	}
+}
+
+// SeedAreas always appear as choices even before any document carries them,
+// so a fresh vault offers the Nirvana-style split from day one. Any other
+// area is just frontmatter and shows up once used.
+var SeedAreas = []string{"work", "personal"}
+
+// Areas returns the areas in use merged with the seeds, most-used first.
+func (s *Service) Areas() ([]AreaCount, error) {
+	rows, err := s.Index.Areas()
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	out := make([]AreaCount, 0, len(rows)+len(SeedAreas))
+	for _, r := range rows {
+		seen[r.Area] = true
+		out = append(out, AreaCount{Area: r.Area, Count: r.Count})
+	}
+	for _, seed := range SeedAreas {
+		if !seen[seed] {
+			out = append(out, AreaCount{Area: seed})
+		}
+	}
+	return out, nil
 }
 
 func metasFromRows(rows []index.DocRow) []DocMeta {
@@ -98,8 +124,10 @@ func tasksFromRows(rows []index.TaskRow) []Task {
 
 // ListDocuments lists document metadata, optionally filtered by type and a
 // title substring.
-func (s *Service) ListDocuments(docType, q string, limit int) ([]DocMeta, error) {
-	rows, err := s.Index.ListDocuments(docType, q, limit)
+// ListDocuments lists by type and title substring within an area ("" = all,
+// "none" = unclassified), most recently modified first.
+func (s *Service) ListDocuments(docType, q, area string, limit int) ([]DocMeta, error) {
+	rows, err := s.Index.ListDocuments(docType, q, area, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +152,11 @@ func (s *Service) buildDocument(f vault.File) (Document, error) {
 	}
 
 	meta := DocMeta{Path: f.Path, SHA256: f.SHA256, Mtime: f.ModTime.Format(time.RFC3339)}
+	// The area comes from the file, exactly as the indexer reads it, so a
+	// document returned straight after a write agrees with the index.
+	if area, ok := fm["area"].(string); ok && vault.InferType(f.Path) != vault.TypeDaily {
+		meta.Area = index.NormalizeArea(area)
+	}
 	// Prefer the indexed row for type/title/tags (it applies the same
 	// inference rules); fall back to a direct scan for not-yet-indexed files.
 	if row, err := s.Index.GetDocMeta(f.Path); err == nil {
@@ -187,6 +220,11 @@ func (s *Service) UpdateDocument(path, content, baseSHA string) (Document, error
 // CreateDocument creates a new typed document, picking its path and seeding
 // type-appropriate frontmatter. Duplicate titles get a numeric suffix.
 func (s *Service) CreateDocument(docType vault.DocType, title, body string) (Document, error) {
+	return s.CreateDocumentIn(docType, title, body, "")
+}
+
+// CreateDocumentIn creates a document filed under an area ("" for none).
+func (s *Service) CreateDocumentIn(docType vault.DocType, title, body, area string) (Document, error) {
 	if title == "" {
 		return Document{}, fmt.Errorf("title is required")
 	}
@@ -202,7 +240,7 @@ func (s *Service) CreateDocument(docType vault.DocType, title, body string) (Doc
 	if body == "" {
 		body = "# " + title + "\n\n"
 	}
-	content := s.seedFrontmatter(docType, body)
+	content := s.seedFrontmatter(docType, body, area)
 
 	f, err := s.Vault.Write(path, content, "")
 	if err != nil {
@@ -222,7 +260,7 @@ func (s *Service) CreateDocument(docType vault.DocType, title, body string) (Doc
 // we only fill in seed keys it doesn't already set. Prepending a second block
 // produced a file with two `---` fences, the second of which rendered as body
 // text.
-func (s *Service) seedFrontmatter(docType vault.DocType, body string) []byte {
+func (s *Service) seedFrontmatter(docType vault.DocType, body, area string) []byte {
 	var seed [][2]string
 	switch docType {
 	case vault.TypeProject:
@@ -231,6 +269,11 @@ func (s *Service) seedFrontmatter(docType vault.DocType, body string) []byte {
 		seed = [][2]string{{"date", s.Now().Format("2006-01-02T15:04")}, {"people", "[]"}}
 	default:
 		seed = nil
+	}
+	// The area a document is created in is the one it files under; daily
+	// notes never carry one.
+	if area = index.NormalizeArea(area); area != "" && area != index.AreaUnclassified && docType != vault.TypeDaily {
+		seed = append(seed, [2]string{"area", area})
 	}
 	if seed == nil {
 		return []byte(body)
@@ -355,7 +398,11 @@ func (s *Service) EnsureDaily(date string) (Document, error) {
 // Today composes the home-screen payload: meetings, task buckets, recent
 // documents, and the daily note if it exists (nil, not auto-created — files
 // appear when the user writes, DESIGN.md decision 9).
-func (s *Service) Today() (TodayPayload, error) {
+// Today composes the "what matters now" payload. An area narrows the tasks,
+// meetings and recent documents; the daily note and birthdays are shared.
+func (s *Service) Today() (TodayPayload, error) { return s.TodayIn("") }
+
+func (s *Service) TodayIn(area string) (TodayPayload, error) {
 	day := s.today()
 	payload := TodayPayload{Date: day}
 
@@ -363,13 +410,13 @@ func (s *Service) Today() (TodayPayload, error) {
 		payload.Daily = &doc
 	}
 
-	meetings, err := s.Index.MeetingsOn(day)
+	meetings, err := s.Index.MeetingsOn(day, area)
 	if err != nil {
 		return payload, err
 	}
 	payload.Meetings = metasFromRows(meetings)
 
-	dueRows, err := s.Index.OpenTasksDue(day)
+	dueRows, err := s.Index.OpenTasksDue(day, area)
 	if err != nil {
 		return payload, err
 	}
@@ -382,7 +429,7 @@ func (s *Service) Today() (TodayPayload, error) {
 		}
 	}
 
-	todayRows, err := s.Index.Tasks(index.ViewToday, day)
+	todayRows, err := s.Index.Tasks(index.ViewToday, day, area)
 	if err != nil {
 		return payload, err
 	}
@@ -395,7 +442,7 @@ func (s *Service) Today() (TodayPayload, error) {
 		}
 	}
 
-	waitingRows, err := s.Index.Tasks(index.ViewWaiting, day)
+	waitingRows, err := s.Index.Tasks(index.ViewWaiting, day, area)
 	if err != nil {
 		return payload, err
 	}
@@ -406,7 +453,7 @@ func (s *Service) Today() (TodayPayload, error) {
 		return payload, err
 	}
 
-	recent, err := s.Index.ListDocuments("", "", 8)
+	recent, err := s.Index.ListDocuments("", "", area, 8)
 	if err != nil {
 		return payload, err
 	}

@@ -9,14 +9,17 @@ import {
 } from "@tanstack/react-query";
 import { api, type ListDocumentsParams } from "./client.ts";
 import type { Task, TaskEdit, TaskView } from "./types.ts";
+import { useUi } from "../keys/UiContext.tsx";
 
 export const queryKeys = {
   health: ["health"] as const,
   documents: (params: ListDocumentsParams) => ["documents", params] as const,
   document: (path: string) => ["document", path] as const,
   search: (q: string) => ["search", q] as const,
-  tasks: (view: TaskView) => ["tasks", view] as const,
+  tasks: (view: TaskView, area = "") => ["tasks", view, area] as const,
   today: ["today"] as const,
+  todayIn: (area: string) => ["today", area] as const,
+  areas: ["areas"] as const,
   calendar: (month: string) => ["calendar", month] as const,
   shares: ["shares"] as const,
 };
@@ -31,12 +34,19 @@ export function useHealth() {
   });
 }
 
+/** Lists within the current area unless the caller sets one explicitly. */
 export function useDocumentList(params: ListDocumentsParams, enabled = true) {
+  const { area } = useUi();
+  const scoped = { ...params, area: params.area ?? area };
   return useQuery({
-    queryKey: queryKeys.documents(params),
-    queryFn: () => api.listDocuments(params),
+    queryKey: queryKeys.documents(scoped),
+    queryFn: () => api.listDocuments(scoped),
     enabled,
   });
+}
+
+export function useAreas() {
+  return useQuery({ queryKey: queryKeys.areas, queryFn: api.listAreas });
 }
 
 export function useDocument(path: string) {
@@ -47,22 +57,31 @@ export function useDocument(path: string) {
 }
 
 export function useSearch(q: string) {
+  const { area } = useUi();
+  // The search grammar carries the area itself, so a typed area: wins over
+  // the switcher and the URL stays the whole query.
+  const scoped = area && !/\barea:/.test(q) ? `${q} area:${area}` : q;
   return useQuery({
-    queryKey: queryKeys.search(q),
-    queryFn: () => api.search(q),
+    queryKey: queryKeys.search(scoped),
+    queryFn: () => api.search(scoped),
     enabled: q.trim().length > 0,
   });
 }
 
 export function useTasks(view: TaskView) {
+  const { area } = useUi();
   return useQuery({
-    queryKey: queryKeys.tasks(view),
-    queryFn: () => api.listTasks(view),
+    queryKey: queryKeys.tasks(view, area),
+    queryFn: () => api.listTasks(view, area),
   });
 }
 
 export function useToday() {
-  return useQuery({ queryKey: queryKeys.today, queryFn: api.today });
+  const { area } = useUi();
+  return useQuery({
+    queryKey: queryKeys.todayIn(area),
+    queryFn: () => api.today(area),
+  });
 }
 
 /** One month of the calendar; the month key ("YYYY-MM") is the cache key. */
