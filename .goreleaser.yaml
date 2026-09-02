@@ -54,13 +54,16 @@ homebrew_casks:
     repository:
       owner: jclement
       name: homebrew-tap
-      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
-    # `index .Env "X"`, not `.Env.X` and not `envOrDefault`. .Env.X is a hard
-    # template error when the key is absent, which breaks a local snapshot
-    # build for anyone without the tap token; envOrDefault only exists in
-    # newer goreleaser than the release action pins, and cost a release when
-    # it turned out CI runs 2.18. `index` is a Go stdlib template function,
-    # available everywhere, and yields "" for a missing key.
+      # goreleaser validates this field's *form*: it must be exactly
+      # {{ .Env.VAR }}, with no other interpolation. Not evaluated unless an
+      # upload is actually attempted, so a snapshot build without the
+      # variable is fine.
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    # skip_upload is an ordinary template, so it can be defensive: `index`
+    # yields "" for an absent key where `.Env.X` would be a hard error, and
+    # unlike envOrDefault it exists in every goreleaser version (assuming it
+    # did cost two releases). An unset token therefore skips the formula
+    # rather than failing the release.
     skip_upload: '{{ if index .Env "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
     homepage: https://github.com/jclement/quire
     description: Self-hosted personal knowledge and work hub — markdown on disk, agent-operable over MCP
