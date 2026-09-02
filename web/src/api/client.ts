@@ -74,6 +74,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body.data as T;
 }
 
+// enrollQuery renders the optional bootstrap enrollment code as a query
+// fragment, or "" when there is none to send.
+function enrollQuery(code?: string): string {
+  const trimmed = code?.trim();
+  return trimmed ? `?enroll_code=${encodeURIComponent(trimmed)}` : "";
+}
+
 function jsonInit(method: string, payload: unknown): RequestInit {
   return {
     method,
@@ -233,14 +240,20 @@ export const api = {
   authStatus: () => request<AuthStatus>("/api/v1/auth/status"),
 
   /** WebAuthn creation options in JSON form; api/auth.ts decodes and calls. */
-  authRegisterBegin: () =>
-    request<Record<string, unknown>>("/api/v1/auth/register/begin", {
-      method: "POST",
-    }),
+  authRegisterBegin: (enrollCode?: string) =>
+    request<Record<string, unknown>>(
+      `/api/v1/auth/register/begin${enrollQuery(enrollCode)}`,
+      { method: "POST" },
+    ),
 
-  authRegisterFinish: (name: string, credential: unknown) =>
+  authRegisterFinish: (
+    name: string,
+    credential: unknown,
+    enrollCode?: string,
+  ) =>
     request<RegisterFinishResult>(
-      `/api/v1/auth/register/finish?name=${encodeURIComponent(name)}`,
+      `/api/v1/auth/register/finish?name=${encodeURIComponent(name)}` +
+        enrollQuery(enrollCode).replace("?", "&"),
       jsonInit("POST", credential),
     ),
 

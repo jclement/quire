@@ -104,9 +104,15 @@ func (s *Store) RevokeToken(prefix string) error {
 	return nil
 }
 
-// authenticateBearer resolves the Authorization header to a principal.
+// authenticateBearer resolves the Authorization header to a principal. The
+// "Bearer " scheme is required rather than optional: lax credential parsing
+// is how bypasses get built later, and every client here already sends it.
 func (s *Store) authenticateBearer(r *http.Request) (Principal, error) {
-	raw := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	header := r.Header.Get("Authorization")
+	raw, ok := strings.CutPrefix(header, "Bearer ")
+	if !ok {
+		return Principal{}, fmt.Errorf("missing bearer token")
+	}
 	if strings.HasPrefix(raw, oauthAccessPrefix) {
 		return s.oauthAccessPrincipal(raw)
 	}

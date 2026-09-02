@@ -197,6 +197,7 @@ export function WelcomeScreen({ onAuthed }: ScreenProps) {
         yours.
       </p>
       <RegisterPanel
+        needsEnrollCode
         onDone={(recoveryCodes) => {
           if (recoveryCodes) setCodes(recoveryCodes);
           else onAuthed();
@@ -206,13 +207,21 @@ export function WelcomeScreen({ onAuthed }: ScreenProps) {
   );
 }
 
-/** Name + create-passkey button; used by first-run, recovery, and Settings. */
+/**
+ * Name + create-passkey button; used by first-run, recovery, and Settings.
+ * needsEnrollCode adds the claim code field — required only when claiming an
+ * unowned instance that is reachable from off-box, so the field is offered
+ * on first run and the server decides whether it matters.
+ */
 export function RegisterPanel({
   onDone,
+  needsEnrollCode = false,
 }: {
   onDone: (recoveryCodes: string[] | null) => void;
+  needsEnrollCode?: boolean;
 }) {
   const [name, setName] = useState("My passkey");
+  const [enrollCode, setEnrollCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -221,7 +230,10 @@ export function RegisterPanel({
     setBusy(true);
     setError(null);
     try {
-      const codes = await registerPasskey(name.trim() || "Passkey");
+      const codes = await registerPasskey(
+        name.trim() || "Passkey",
+        needsEnrollCode ? enrollCode : undefined,
+      );
       onDone(codes);
     } catch (caught) {
       setError(ceremonyError(caught));
@@ -232,6 +244,27 @@ export function RegisterPanel({
 
   return (
     <div>
+      {needsEnrollCode ? (
+        <>
+          <label
+            className="mb-1.5 block text-xs text-muted"
+            htmlFor="enroll-code"
+          >
+            Enrollment code
+          </label>
+          <input
+            id="enroll-code"
+            value={enrollCode}
+            onChange={(event) => setEnrollCode(event.target.value)}
+            placeholder="From the server log at startup"
+            {...noAutofill("enroll-code")}
+            className="mb-1 h-10 w-full rounded border border-border bg-raised px-2.5 font-mono text-sm uppercase text-heading outline-none placeholder:font-sans placeholder:normal-case placeholder:text-muted focus:border-accent"
+          />
+          <p className="mb-3 text-xs text-muted">
+            Leave blank if this quire only listens on localhost.
+          </p>
+        </>
+      ) : null}
       <label className="mb-1.5 block text-xs text-muted" htmlFor="passkey-name">
         Passkey name
       </label>

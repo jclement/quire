@@ -6,14 +6,32 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
 // SessionCookie is the session cookie name.
 const SessionCookie = "quire_session"
+
+// NewEnrollCode returns the one-time code that authorizes claiming an
+// un-bootstrapped instance. Without it, the first anonymous visitor to a
+// publicly-reachable quire could register the owner passkey and take the
+// vault — /api/v1/auth/status even advertises that the window is open. The
+// code is minted at startup, printed to the server log, and never stored,
+// so a restart invalidates it and a claimed instance stops accepting one.
+func NewEnrollCode() (string, error) {
+	raw := make([]byte, 10) // 80 bits
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("generating enrollment code: %w", err)
+	}
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw), nil
+}
 
 // HTTPConfig configures the auth endpoints.
 type HTTPConfig struct {
@@ -21,6 +39,10 @@ type HTTPConfig struct {
 	// SecureCookies marks cookies Secure — true whenever the deployment is
 	// reached over HTTPS (base URL scheme).
 	SecureCookies bool
+
+	// EnrollCode gates bootstrap registration (see NewEnrollCode). Empty
+	// disables the gate, which is only correct on a loopback-only listener.
+	EnrollCode string
 
 	limiter *rateLimiter
 }
@@ -44,6 +66,42 @@ func (h *HTTPConfig) Routes(mux *http.ServeMux) {
 }
 
 func (h *HTTPConfig) store() *Store { return h.Passkeys.Store }
+
+// allowRegister reports whether this request may register a passkey, and
+// writes the refusal if not. Two ways in: an existing session (adding a
+// second passkey), or — only while no passkey exists at all — the startup
+// enrollment code.
+func (h *HTTPConfig) allowRegister(w http.ResponseWriter, r *http.Request) bool {
+	count, err := h.store().PasskeyCount()
+	if err != nil {
+		authError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal error")
+		return false
+	}
+	if count > 0 {
+		if !h.hasSession(r) {
+			authError(w, http.StatusUnauthorized, "UNAUTHORIZED", "log in before adding another passkey")
+			return false
+		}
+		return true
+	}
+	if h.EnrollCode == "" {
+		return true // loopback-only deployment; nothing remote can reach this
+	}
+	supplied := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("enroll_code")))
+	if subtle.ConstantTimeCompare([]byte(supplied), []byte(h.EnrollCode)) != 1 {
+		authError(w, http.StatusUnauthorized, "UNAUTHORIZED",
+			"enrollment code required — it is printed in the server log at startup")
+		return false
+	}
+	return true
+}
+
+// bootstrapping reports whether no passkey exists yet (errors count as
+// "not bootstrapping", so a database problem cannot mint a session).
+func (h *HTTPConfig) bootstrapping() bool {
+	count, err := h.store().PasskeyCount()
+	return err == nil && count == 0
+}
 
 // hasSession reports whether the request carries a valid session.
 func (h *HTTPConfig) hasSession(r *http.Request) bool {
@@ -80,15 +138,7 @@ func (h *HTTPConfig) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPConfig) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
-	count, err := h.store().PasskeyCount()
-	if err != nil {
-		authError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal error")
-		return
-	}
-	// Bootstrap: the very first passkey needs no session (there is no way to
-	// have one). After that, adding passkeys requires being logged in.
-	if count > 0 && !h.hasSession(r) {
-		authError(w, http.StatusUnauthorized, "UNAUTHORIZED", "log in before adding another passkey")
+	if !h.allowRegister(w, r) {
 		return
 	}
 	options, err := h.Passkeys.BeginRegistration()
@@ -100,22 +150,18 @@ func (h *HTTPConfig) handleRegisterBegin(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *HTTPConfig) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
-	count, err := h.store().PasskeyCount()
-	if err != nil {
-		authError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal error")
+	if !h.allowRegister(w, r) {
 		return
 	}
-	if count > 0 && !h.hasSession(r) {
-		authError(w, http.StatusUnauthorized, "UNAUTHORIZED", "log in before adding another passkey")
-		return
-	}
+	// Read before the write: FinishRegistration is what makes count non-zero.
+	bootstrap := h.bootstrapping()
 	codes, err := h.Passkeys.FinishRegistration(r, r.URL.Query().Get("name"))
 	if err != nil {
 		authError(w, http.StatusBadRequest, "VALIDATION_ERROR", "passkey registration failed — try again")
 		return
 	}
 	// Bootstrap registration logs the new passkey straight in.
-	if count == 0 {
+	if bootstrap {
 		token, err := h.store().CreateSession()
 		if err != nil {
 			authError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal error")

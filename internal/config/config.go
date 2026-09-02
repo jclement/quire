@@ -87,7 +87,7 @@ func Load() (Config, error) {
 
 	// The whole safety story of auth mode "none" is this invariant: it can
 	// only ever listen on loopback. There is deliberately no override flag.
-	if cfg.AuthMode == AuthNone && !isLoopback(cfg.Addr) {
+	if cfg.AuthMode == AuthNone && !IsLoopback(cfg.Addr) {
 		return Config{}, fmt.Errorf(
 			"auth mode \"none\" requires a loopback listen address, got %q — set QUIRE_AUTH_MODE=passkey (or token-only) to listen on %s",
 			cfg.Addr, cfg.Addr)
@@ -119,9 +119,9 @@ func applyEnv(cfg *Config) {
 	}
 }
 
-// isLoopback reports whether addr's host part is a loopback address or
+// IsLoopback reports whether addr's host part is a loopback address or
 // localhost. Unparseable addresses are treated as non-loopback: fail closed.
-func isLoopback(addr string) bool {
+func IsLoopback(addr string) bool {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return false

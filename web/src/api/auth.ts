@@ -20,12 +20,18 @@ function wrapPublicKey<T>(options: Record<string, unknown>): T {
  * was the very first passkey (show them immediately — they are never shown
  * again), else null. Also establishes the session cookie.
  */
-export async function registerPasskey(label: string): Promise<string[] | null> {
-  const options = await api.authRegisterBegin();
+// enrollCode is required only when claiming an un-bootstrapped instance that
+// listens on a non-loopback address; the server prints it at startup. Both
+// legs of the ceremony carry it, because both check.
+export async function registerPasskey(
+  label: string,
+  enrollCode?: string,
+): Promise<string[] | null> {
+  const options = await api.authRegisterBegin(enrollCode);
   const credential = await create(
     wrapPublicKey<CredentialCreationOptionsJSON>(options),
   );
-  const result = await api.authRegisterFinish(label, credential);
+  const result = await api.authRegisterFinish(label, credential, enrollCode);
   return result.recovery_codes;
 }
 

@@ -202,6 +202,25 @@ func runServe() error {
 			return err
 		}
 		authHTTP := &auth.HTTPConfig{Passkeys: passkeys, SecureCookies: baseURL.Scheme == "https"}
+		// An un-bootstrapped instance is claimable by whoever reaches it
+		// first, so gate the first registration behind a code only someone
+		// with server access can read. Loopback listeners skip it: there is
+		// no remote to race.
+		count, err := authStore.PasskeyCount()
+		if err != nil {
+			return err
+		}
+		if count == 0 && !config.IsLoopback(cfg.Addr) {
+			code, err := auth.NewEnrollCode()
+			if err != nil {
+				return err
+			}
+			authHTTP.EnrollCode = code
+			slog.Warn("no passkey registered yet — this instance is unclaimed. "+
+				"Enter this enrollment code in the browser to register the owner passkey. "+
+				"It changes on every restart and stops working once a passkey exists.",
+				"enrollment_code", code)
+		}
 		authHTTP.Routes(mux)
 		slog.Info("passkey auth enabled", "rp_id", baseURL.Hostname())
 	} else {
@@ -392,6 +411,17 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		// The SPA's own bundle only. 'unsafe-inline' for styles is forced by
+		// CodeMirror and Mermaid, which inject stylesheets at runtime; the
+		// pre-paint theme script in index.html forces it for scripts too.
+		// Share pages override this with a far stricter policy of their own.
+		if !strings.HasPrefix(r.URL.Path, "/s/") {
+			h.Set("Content-Security-Policy",
+				"default-src 'self'; img-src 'self' data: blob:; "+
+					"style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "+
+					"connect-src 'self'; base-uri 'self'; frame-ancestors 'none'; "+
+					"object-src 'none'; form-action 'self'")
+		}
 		next.ServeHTTP(w, r)
 	})
 }

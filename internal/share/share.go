@@ -106,6 +106,13 @@ func (m *Manager) handlePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Robots-Tag", "noindex")
 	w.Header().Set("Referrer-Policy", "no-referrer")
+	// Share pages are the one surface anonymous strangers render, and they
+	// carry no JavaScript at all — so they get a policy that says exactly
+	// that. If a markdown-injected script ever survived escaping, this is
+	// what stops it running.
+	w.Header().Set("Content-Security-Policy",
+		"default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; "+
+			"base-uri 'self'; form-action 'none'; frame-ancestors 'none'")
 	_, _ = w.Write(page)
 }
 
@@ -124,7 +131,7 @@ func (m *Manager) handleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	doc, err := m.Service.GetDocument(sh.DocPath)
-	if err != nil || !strings.Contains(doc.Markdown, rel) {
+	if err != nil || !referencedFiles(doc.Markdown)[rel] {
 		http.NotFound(w, r)
 		return
 	}
