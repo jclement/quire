@@ -1,4 +1,6 @@
-# CI: the same gate as local development — `mise run check` (lint + tests).
+# CI: the same gate as local development — `mise run check` (lint + tests) —
+# plus the browser end-to-end suite, which needs a Chromium download and so
+# is kept out of the fast local loop.
 name: ci
 on:
   push:
@@ -14,3 +16,24 @@ jobs:
       - run: mise run setup
       - run: mise run check
       - run: mise run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise run setup
+      - name: Install Playwright's browser
+        run: bunx --bun playwright install --with-deps chromium
+        working-directory: web
+      - run: mise run test:e2e
+      # Traces and screenshots are only written for failures, and they are
+      # what makes a red CI run diagnosable without reproducing locally.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            web/test-results/
+            web/playwright-report/
+          retention-days: 7

@@ -186,6 +186,14 @@ func runServe() error {
 	// Consent is a browser flow, so it needs a browser-shaped credential.
 	// token-only has none, which makes /oauth/authorize unapprovable — the
 	// connector fails at the last step with nothing to explain it.
+	// Rate limiting buckets by client IP, so behind a proxy it needs to be
+	// told which peer's forwarding headers to believe — otherwise every
+	// caller shares one bucket and a stranger can lock the owner out.
+	if len(cfg.TrustedProxies) == 0 && !config.IsLoopback(cfg.Addr) {
+		slog.Info("QUIRE_TRUSTED_PROXIES is unset: rate limiting will treat every request as one client " +
+			"if quire is behind a proxy or tunnel — set it to the proxy's address (or \"any\" when nothing " +
+			"else can reach this listener)")
+	}
 	if cfg.AuthMode == config.AuthTokenOnly {
 		slog.Warn("auth mode \"token-only\": bearer tokens work, but OAuth consent cannot be approved " +
 			"(no browser login) — use QUIRE_AUTH_MODE=passkey if you want claude.ai connectors")
@@ -208,7 +216,11 @@ func runServe() error {
 		if err != nil {
 			return err
 		}
-		authHTTP := &auth.HTTPConfig{Passkeys: passkeys, SecureCookies: baseURL.Scheme == "https"}
+		authHTTP := &auth.HTTPConfig{
+			Passkeys:       passkeys,
+			SecureCookies:  baseURL.Scheme == "https",
+			TrustedProxies: cfg.TrustedProxies,
+		}
 		// An un-bootstrapped instance is claimable by whoever reaches it
 		// first, so gate the first registration behind a code only someone
 		// with server access can read. Loopback listeners skip it: there is

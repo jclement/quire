@@ -218,6 +218,28 @@ Removing tsnet also dropped 318 of 819 Go packages (196 of them Tailscale's) and
 of binary — 65.5 MB to 41.7 MB, a third of the artifact. A sidecar gives back the same
 TLS and MagicDNS, with the trust boundary at the proxy where it can be reasoned about.
 
+## Testing
+
+Three layers, each for what only it can see:
+
+- **Go unit and integration tests** — the service layer, the index, the
+  markdown scanner, and every authorization decision. `internal/auth/exposure_test.go`
+  is the fail-closed route inventory: anything touching the vault must be
+  Protected(), and a new route that is not listed fails the suite rather than
+  being assumed safe.
+- **Frontend unit tests** (bun) — pure logic in `web/src/lib`.
+- **Browser end-to-end** (Playwright, `mise run test:e2e`) — runs against a
+  real built binary serving the embedded SPA, in auth-none mode. This layer
+  exists for the seam between browser, SPA and Go, which is where several of
+  this project's real bugs have lived: a document rendering two frontmatter
+  blocks, a checkbox that updated the file but not the view, a CSP that
+  silently blocked the bundled fonts, and `due: "today"` reaching the
+  markdown as the literal word.
+
+The last of those is the pattern worth naming: **the browser has repeatedly
+found what a green Go suite could not.** Unit tests assert the behaviour you
+thought about; the browser asserts the behaviour the user gets.
+
 ## Sharing
 
 Shares live in auth.db (grants, not derivable from the vault): 16-char random token →

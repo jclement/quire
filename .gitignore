@@ -20,3 +20,8 @@ internal/webui/dist/
 deploy/*/.env
 deploy/*/data/
 deploy/*/ts-state/
+
+# Playwright output
+web/test-results/
+web/playwright-report/
+web/blob-report/

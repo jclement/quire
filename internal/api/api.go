@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/jclement/quire/internal/auth"
 	"github.com/jclement/quire/internal/service"
@@ -113,6 +114,11 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 // leak internals).
 func writeServiceError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, service.ErrValidation):
+		// A caller mistake, and the message is written for the caller, so
+		// pass it through rather than hiding it behind a generic 400.
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR",
+			strings.TrimPrefix(err.Error(), "validation: "))
 	case errors.Is(err, vault.ErrNotFound):
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "not found")
 	case errors.Is(err, vault.ErrConflict):

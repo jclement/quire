@@ -6,8 +6,10 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/goccy/go-yaml"
 )
@@ -49,6 +51,48 @@ type Config struct {
 	// to opt out, because a self-hosted app phoning a third party should be
 	// something you can decline.
 	UpdateCheck bool `yaml:"update_check"`
+
+	// TrustedProxies are the peers whose X-Forwarded-For / X-Real-IP headers
+	// may be believed when attributing a request to a client IP (the rate
+	// limiter buckets by it). Empty means trust nothing, which is right for
+	// a directly-exposed listener. Behind a tunnel or reverse proxy this
+	// must be set, or every request looks like one client and a stranger
+	// can rate-limit the owner out of their own vault.
+	//
+	// Accepts IPs and CIDRs; the special value "any" trusts whatever peer
+	// connects, which is only safe when nothing but the proxy can reach the
+	// listen address at all.
+	TrustedProxies []netip.Prefix `yaml:"trusted_proxies"`
+}
+
+// ParseTrustedProxies turns the configured list into prefixes. "any" widens
+// to both default routes; a bare IP becomes a single-host prefix.
+func ParseTrustedProxies(raw string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, field := range strings.Split(raw, ",") {
+		field = strings.TrimSpace(field)
+		switch {
+		case field == "":
+			continue
+		case strings.EqualFold(field, "any"):
+			out = append(out,
+				netip.MustParsePrefix("0.0.0.0/0"),
+				netip.MustParsePrefix("::/0"))
+		case strings.Contains(field, "/"):
+			prefix, err := netip.ParsePrefix(field)
+			if err != nil {
+				return nil, fmt.Errorf("trusted proxy %q: %w", field, err)
+			}
+			out = append(out, prefix)
+		default:
+			addr, err := netip.ParseAddr(field)
+			if err != nil {
+				return nil, fmt.Errorf("trusted proxy %q: not an IP, CIDR, or \"any\"", field)
+			}
+			out = append(out, netip.PrefixFrom(addr.Unmap(), addr.Unmap().BitLen()))
+		}
+	}
+	return out, nil
 }
 
 // VaultDir is where the user's markdown lives — the only tree quire treats as
@@ -87,6 +131,14 @@ func Load() (Config, error) {
 	}
 
 	applyEnv(&cfg)
+
+	if raw := os.Getenv("QUIRE_TRUSTED_PROXIES"); raw != "" {
+		proxies, err := ParseTrustedProxies(raw)
+		if err != nil {
+			return Config{}, err
+		}
+		cfg.TrustedProxies = proxies
+	}
 
 	if cfg.AuthMode != AuthNone && cfg.AuthMode != AuthPasskey && cfg.AuthMode != AuthTokenOnly {
 		return Config{}, fmt.Errorf("invalid QUIRE_AUTH_MODE %q (want none|passkey|token-only)", cfg.AuthMode)

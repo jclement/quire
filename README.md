@@ -154,6 +154,7 @@ quire today
 | `QUIRE_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
 | `QUIRE_GIT` | `true` | Git-backed vault (auto-init + debounced auto-commit) |
 | `QUIRE_UPDATE_CHECK` | `true` | Ask GitHub once a day whether a newer release exists |
+| `QUIRE_TRUSTED_PROXIES` | _(none)_ | Proxy IPs/CIDRs (or `any`) whose `X-Forwarded-For` may be believed — **set this behind a tunnel**, or rate limiting sees one client |
 | `QUIRE_SMTP_HOST/PORT/USER/PASS/FROM` | | SMTP relay (any provider's SMTP endpoint) |
 | `QUIRE_DIGEST_TO` / `QUIRE_DIGEST_TIME` | | Daily digest recipient and local HH:MM |
 | `QUIRE_URL` / `QUIRE_TOKEN` | | CLI verbs: which quire to talk to, and as whom |
@@ -199,6 +200,7 @@ Two credential paths, per the house pattern:
 | Task | Does |
 |---|---|
 | `mise run setup` | Zero → runnable: Go deps, frontend deps, dev vault |
+| `mise run test:e2e` | Browser end-to-end tests (Playwright) against a real built binary |
 | `mise run dev` | Dev instance with HMR (no auth, localhost) — copy `mise.local.toml.sample` to `mise.local.toml` to point it at real data and your tailnet |
 | `mise run test` | Go (`-race`) + frontend tests |
 | `mise run lint` | vet + format-check + typecheck (never mutates) |

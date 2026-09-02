@@ -14,6 +14,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/jclement/quire/internal/service"
 )
 
 type client struct {
@@ -142,38 +144,10 @@ func taskAdd(c *client, args []string) error {
 	return nil
 }
 
-// parseWhen accepts YYYY-MM-DD plus the handful of words worth typing:
-// today, tomorrow, weekday names (next occurrence), and +Nd.
+// parseWhen resolves a date the same way the server does — the parser lives
+// in the service layer so every transport agrees on what "fri" means.
 func parseWhen(s string) (string, error) {
-	s = strings.ToLower(strings.TrimSpace(s))
-	now := time.Now()
-	switch s {
-	case "today":
-		return now.Format("2006-01-02"), nil
-	case "tomorrow", "tom":
-		return now.AddDate(0, 0, 1).Format("2006-01-02"), nil
-	}
-	weekdays := map[string]time.Weekday{
-		"sun": time.Sunday, "mon": time.Monday, "tue": time.Tuesday, "wed": time.Wednesday,
-		"thu": time.Thursday, "fri": time.Friday, "sat": time.Saturday,
-	}
-	if wd, ok := weekdays[s[:min(3, len(s))]]; ok && len(s) >= 3 {
-		days := (int(wd) - int(now.Weekday()) + 7) % 7
-		if days == 0 {
-			days = 7 // "fri" on a Friday means next Friday
-		}
-		return now.AddDate(0, 0, days).Format("2006-01-02"), nil
-	}
-	if strings.HasPrefix(s, "+") && strings.HasSuffix(s, "d") {
-		var n int
-		if _, err := fmt.Sscanf(s, "+%dd", &n); err == nil {
-			return now.AddDate(0, 0, n).Format("2006-01-02"), nil
-		}
-	}
-	if _, err := time.Parse("2006-01-02", s); err == nil {
-		return s, nil
-	}
-	return "", fmt.Errorf("can't parse date %q (try YYYY-MM-DD, today, tomorrow, fri, +3d)", s)
+	return service.ParseWhen(s, time.Now())
 }
 
 // ---- search ----

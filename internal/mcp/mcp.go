@@ -105,7 +105,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool) *
 	// Task management — the "agent runs my todos" token stops here.
 	if allows(auth.ScopeTasks) {
 		sdk.AddTool(s, &sdk.Tool{Name: "create_task",
-			Description: "Create a task (lands in today's daily note with full provenance). Dates are YYYY-MM-DD: due = deadline, defer = hide until this date."},
+			Description: "Create a task (lands in today's daily note with full provenance). due = deadline, defer = hide until this date; both accept YYYY-MM-DD or a natural form (today, tomorrow, fri, +3d) and are resolved server-side. An unparseable date is an error, never a guess."},
 			t.createTask)
 		sdk.AddTool(s, &sdk.Tool{Name: "complete_task",
 			Description: "Mark a task complete by id (from list_tasks/get_document). Edits the source markdown checkbox surgically."},

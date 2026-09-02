@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 )
@@ -43,6 +44,10 @@ type HTTPConfig struct {
 	// EnrollCode gates bootstrap registration (see NewEnrollCode). Empty
 	// disables the gate, which is only correct on a loopback-only listener.
 	EnrollCode string
+
+	// TrustedProxies are the peers whose forwarding headers may be believed
+	// when identifying the client for rate limiting. See clientip.go.
+	TrustedProxies []netip.Prefix
 
 	limiter *rateLimiter
 }

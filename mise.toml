@@ -36,12 +36,24 @@ run = [
 description = "Full test suite: Go (-race) + frontend"
 run = [
   "go test -race ./...",
-  "bun test --cwd web",
+  "bun test --cwd web src",
 ]
 
 [tasks."test:go"]
 description = "Go tests only"
 run = "go test -race ./..."
+
+[tasks."test:e2e"]
+description = "Browser end-to-end tests (Playwright) against a real built binary"
+# Builds the shipping artifact — frontend embedded, prod tag — so the tests
+# exercise what users run, not a dev server. The data dir is wiped first
+# because the suite starts from an unclaimed instance and claims it.
+run = [
+  "bun run --cwd web build",
+  "go build -tags prod -o tmp/quire-e2e .",
+  "rm -rf tmp/e2e-data tmp/e2e-server.log",
+  "bun run --cwd web e2e",
+]
 
 [tasks.lint]
 description = "Lint + typecheck + format-check (never mutates)"

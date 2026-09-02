@@ -94,9 +94,19 @@ paths:
               required: [text]
               properties:
                 text: { type: string }
-                due: { type: string, format: date }
-                defer: { type: string, format: date, description: hidden until this date }
-      responses: { "201": { description: "data: Task" } }
+                due:
+                  type: string
+                  description: >
+                    YYYY-MM-DD or a natural form (today, tomorrow, fri, +3d),
+                    resolved server-side to ISO before it is written. An
+                    unparseable date is a 400, never a guess and never
+                    written to the file verbatim.
+                defer:
+                  type: string
+                  description: hidden until this date; same formats as due
+      responses:
+        "201": { description: "data: Task" }
+        "400": { description: "VALIDATION_ERROR — missing text, or a date that could not be resolved" }
   /api/v1/tasks/{id}:
     patch:
       summary: Edit a task's dates/priority (surgical single-line rewrite)

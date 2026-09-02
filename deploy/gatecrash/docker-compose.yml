@@ -40,6 +40,12 @@ services:
       # passkey is the mode for a human, and the only one in which OAuth
       # consent can be approved — which claude.ai connectors require.
       QUIRE_AUTH_MODE: passkey
+      # Rate limiting buckets by client IP. Behind the tunnel every request
+      # arrives from the tunnel client, so without this one bucket covers
+      # everybody and a stranger hammering the login endpoint locks you out
+      # of your own vault. "any" is safe here because nothing but the tunnel
+      # client can reach this container.
+      QUIRE_TRUSTED_PROXIES: any
       # Optional morning digest; uncomment and fill in .env to enable.
       # QUIRE_SMTP_HOST: ${QUIRE_SMTP_HOST:-}
       # QUIRE_SMTP_PORT: ${QUIRE_SMTP_PORT:-587}

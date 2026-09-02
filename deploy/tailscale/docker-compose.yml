@@ -40,4 +40,9 @@ services:
       QUIRE_ADDR: 0.0.0.0:8321
       QUIRE_BASE_URL: ${QUIRE_BASE_URL:?set QUIRE_BASE_URL in .env}
       QUIRE_AUTH_MODE: ${QUIRE_AUTH_MODE:-passkey}
+      # Rate limiting buckets by client IP. Behind a proxy every request
+      # arrives from the proxy, so without this one bucket covers everybody
+      # and a stranger hammering the login endpoint locks you out of your
+      # own vault. Safe here because the sidecar shares this container's network namespace.
+      QUIRE_TRUSTED_PROXIES: 127.0.0.1
     restart: unless-stopped

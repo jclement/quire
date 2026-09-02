@@ -9,7 +9,8 @@
     "typecheck": "tsc -b --noEmit",
     "lint": "oxlint src && prettier --check src",
     "fmt": "prettier --write src",
-    "test": "bun test",
+    "test": "bun test src",
+    "e2e": "playwright test",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -40,6 +41,7 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/bun": "^1.4.0",
     "@types/mdast": "^4.0.4",
     "@types/node": "^24.13.3",

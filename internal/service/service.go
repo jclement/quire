@@ -7,6 +7,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -16,6 +17,12 @@ import (
 	"github.com/jclement/quire/internal/markdown"
 	"github.com/jclement/quire/internal/vault"
 )
+
+// ErrValidation marks a caller mistake — a missing field, a date that
+// cannot be resolved — as distinct from a server fault, so the HTTP layer
+// can answer 400 instead of 500. Without it, `{"due":"someday"}` looked to
+// the client like an internal error.
+var ErrValidation = errors.New("validation")
 
 // Service wires the vault and index together.
 type Service struct {

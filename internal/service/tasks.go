@@ -47,11 +47,22 @@ func (s *Service) CreateTask(text, due, deferDate string) (Task, error) {
 func (s *Service) CreateTaskWithAttachment(text, due, deferDate string, att Attachment) (Task, error) {
 	text = strings.TrimSpace(text)
 	if text == "" && att.Path == "" {
-		return Task{}, fmt.Errorf("task text is required")
+		return Task{}, fmt.Errorf("%w: task text is required", ErrValidation)
 	}
 	if text == "" {
 		text = strings.TrimSuffix(path.Base(att.Path), path.Ext(att.Path))
 	}
+	// Resolve before writing: an unparseable date must fail loudly rather
+	// than land in the markdown as a word no view can match.
+	due, err := ParseWhen(due, s.Now())
+	if err != nil {
+		return Task{}, fmt.Errorf("%w: due date: %s", ErrValidation, err)
+	}
+	deferDate, err = ParseWhen(deferDate, s.Now())
+	if err != nil {
+		return Task{}, fmt.Errorf("%w: defer date: %s", ErrValidation, err)
+	}
+
 	line := "- [ ] " + text
 	if att.Markdown != "" {
 		line += " " + att.Markdown
