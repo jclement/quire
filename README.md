@@ -46,35 +46,42 @@ A complete backup is `data/vault/` + `data/.quire/auth.db` + `data/.quire/config
 The index is disposable: `quire reindex` rebuilds it from markdown. `quire doctor`
 lists dangling wikilinks.
 
-### Tailscale (first-class)
+### Getting to it from outside
 
-Set `QUIRE_TS_HOSTNAME` and quire joins your tailnet as its own node via tsnet — no
-sidecar, no port publishing:
+quire speaks plain HTTP on one port and does not terminate TLS. Put it behind
+something that does. It has no opinion about which, and needs to know only one
+thing: **`QUIRE_BASE_URL` must be the URL you actually reach it at** — share
+links, passkey RP ID, and OAuth discovery are all built from it.
 
-```yaml
-environment:
-  QUIRE_TS_HOSTNAME: quire
-  QUIRE_TS_AUTHKEY: tskey-auth-…   # first boot only; state persists in /data/.quire/tsnet
-  QUIRE_TS_FUNNEL: "true"          # expose ONLY /s/* share pages to the public internet
-```
+Three shapes that work, cheapest first:
 
-quire then serves `https://quire.<tailnet>.ts.net` with automatic TLS, and requests are
-authenticated by **tailnet identity** (WhoIs) — no login at all on-tailnet. Optional
-`QUIRE_TS_OWNER=you@example.com` restricts access to one tailnet login. Bearer tokens
-still work over the tailnet and keep their scopes (a read-only agent token stays
-read-only). With funnel on, the public internet sees exactly one surface: share pages.
-Everything else 404s.
+**Tailscale sidecar** — private, no public exposure at all. Run `tailscale/tailscale`
+alongside quire in the same network namespace (`network_mode: service:tailscale`) with
+`TS_SERVE_CONFIG` pointing at quire's port; the tailnet gives you HTTPS and MagicDNS,
+and you reach it at `https://quire.<tailnet>.ts.net`. Flip on Funnel in that same serve
+config when you want share links or claude.ai connectors to work from the internet.
+`docker-compose.example.yml` has this wired up.
 
-Add `QUIRE_TS_FUNNEL_MCP=true` to also expose `/mcp` and the OAuth endpoints over
-funnel — that is what lets **hosted Claude (claude.ai connectors)** reach your quire.
-`/mcp` still demands a valid token on every public request; unauthenticated calls get
-the standard OAuth discovery challenge, nothing more.
+**Cloudflare Tunnel** — a public hostname with no inbound ports. Run `cloudflared`
+as a sidecar with a token from the Zero Trust dashboard, route your hostname to
+`http://quire:8321`, and set `QUIRE_BASE_URL` to that hostname. This is the one to
+pick if you want a URL you can hand to someone.
+
+**Your own reverse proxy** — Caddy, nginx, Traefik. Nothing special required; just
+forward to `:8321` and set `QUIRE_BASE_URL`.
+
+Whichever you pick, **quire's own auth is what protects it** — the proxy is transport,
+not a security boundary. Every `/api/*` and `/mcp` request is authenticated in-process,
+so exposing the whole app is a supported deployment, not a workaround. Run it in
+`passkey` mode if a human uses it.
 
 ### Sharing
 
 Any document can get a revocable share link (`/s/<token>`): optional expiry, view
-counts, referenced attachments included, rendered as a clean standalone page. With
-funnel enabled the link works from anywhere; revoking it kills it instantly.
+counts, referenced attachments included, rendered as a clean standalone page. Share
+pages are the one route that is deliberately readable without credentials — anyone
+holding the link can read that document, so the link is the secret. Revoking kills it
+instantly.
 
 ### Auth modes
 
@@ -83,8 +90,8 @@ funnel enabled the link works from anywhere; revoking it kills it instantly.
 - `passkey` — WebAuthn: first visit registers the first passkey and issues 8 single-use
   recovery codes; sessions are server-side cookies; more passkeys manageable once
   logged in. `QUIRE_BASE_URL`'s hostname is the RP ID — passkeys only work at that
-  exact hostname. On a tailnet you rarely need this: tailnet identity already
-  authenticates you.
+  exact hostname. This is the mode to use for anything a human logs into, and the
+  only mode in which OAuth consent can be approved.
 
 ### Git-backed vault
 
@@ -138,11 +145,6 @@ quire today
 | `QUIRE_BASE_URL` | `http://localhost:8321` | External URL (WebAuthn RP ID binds to its hostname) |
 | `QUIRE_AUTH_MODE` | `none` | `none` (loopback only, enforced) \| `token-only` \| `passkey` |
 | `QUIRE_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
-| `QUIRE_TS_HOSTNAME` | _(off)_ | Set to join the tailnet as this hostname (tsnet) |
-| `QUIRE_TS_AUTHKEY` | | Tailscale auth key — needed on first boot only |
-| `QUIRE_TS_FUNNEL` | `false` | Publish `/s/*` share pages via Tailscale Funnel |
-| `QUIRE_TS_OWNER` | _(any member)_ | Restrict tailnet access to this login |
-| `QUIRE_TS_FUNNEL_MCP` | `false` | Also expose `/mcp` + OAuth over funnel (hosted Claude) |
 | `QUIRE_GIT` | `true` | Git-backed vault (auto-init + debounced auto-commit) |
 | `QUIRE_SMTP_HOST/PORT/USER/PASS/FROM` | | SMTP relay (any provider's SMTP endpoint) |
 | `QUIRE_DIGEST_TO` / `QUIRE_DIGEST_TIME` | | Daily digest recipient and local HH:MM |
@@ -173,10 +175,10 @@ Two credential paths, per the house pattern:
 
 - **OAuth 2.1 + dynamic client registration** (claude.ai connectors, Claude Desktop):
   paste `https://<host>/mcp` into Settings → Connectors and quire handles the rest —
-  RFC 8414 metadata, DCR, PKCE-only code flow, rotating refresh tokens. The consent
-  page must be approved by the vault owner: open it from a tailnet device (MagicDNS
-  makes it the same URL) or with a passkey session. With `QUIRE_TS_FUNNEL_MCP=true`
-  the whole flow works over funnel.
+  RFC 8414 metadata, DCR, PKCE-only code flow, rotating refresh tokens. Consent is
+  approved in the browser with your passkey session, so **this path needs
+  `QUIRE_AUTH_MODE=passkey`** — in `token-only` mode there is no browser login and
+  the consent page cannot be approved by anyone.
 
 ## Tasks
 

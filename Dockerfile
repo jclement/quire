@@ -1,6 +1,7 @@
 # Used by GoReleaser: the prebuilt static binary is copied in, so this stage
-# is packaging only. Defaults suit the tailnet deployment: token auth,
-# listening on all interfaces (the container boundary), state in /data.
+# is packaging only. Defaults suit running behind a proxy or tunnel: token
+# auth, listening on all interfaces (the container boundary), state in /data.
+# Set QUIRE_AUTH_MODE=passkey and QUIRE_BASE_URL for a human-facing install.
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata
 COPY quire /usr/local/bin/quire

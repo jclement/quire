@@ -1,16 +1,75 @@
-# Example deployment: quire on a Docker host, reachable over a tailnet or
-# reverse proxy. First run: create an API token for MCP/scripts with
+# Example deployment: quire behind a Tailscale sidecar, which gives it HTTPS,
+# a MagicDNS name, and (optionally) a public Funnel URL for share links and
+# claude.ai connectors. quire itself speaks plain HTTP and never terminates
+# TLS — swap the sidecar for cloudflared or Caddy and nothing else changes.
+#
+# First run: create an API token for MCP/scripts with
 #   docker compose exec quire quire token create claude read write tasks
 services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: quire # becomes quire.<your-tailnet>.ts.net
+    environment:
+      TS_AUTHKEY: tskey-auth-REPLACE-ME # first boot only; state persists below
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_EXTRA_ARGS: --advertise-tags=tag:container
+    volumes:
+      - ./ts-state:/var/lib/tailscale
+      - ./ts-config:/config # put serve.json here — see below
+    cap_add:
+      - net_admin
+    restart: unless-stopped
+
   quire:
     # :latest is the newest tagged release; :edge tracks main if you would
     # rather run today's work, and :main-<sha> pins one commit.
     image: ghcr.io/jclement/quire:latest
     restart: unless-stopped
-    ports:
-      - "8321:8321"
+    # Share the sidecar's network namespace: quire is reachable only through
+    # Tailscale, and publishes no host port at all.
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
     volumes:
       - ./data:/data
     environment:
+      # Bind 0.0.0.0 *within the shared namespace* rather than 127.0.0.1.
+      # Nothing outside the namespace can reach it either way, but binding a
+      # non-loopback address means auth mode "none" is refused at startup —
+      # and it must be, because the sidecar can reach loopback here, so
+      # "loopback means local only" is not true in this topology.
+      QUIRE_ADDR: 0.0.0.0:8321
       QUIRE_BASE_URL: https://quire.your-tailnet.ts.net
-      QUIRE_AUTH_MODE: token-only # passkey once implemented
+      # passkey is the mode to run for a human: it is also the only mode in
+      # which OAuth consent (claude.ai connectors) can be approved.
+      QUIRE_AUTH_MODE: passkey
+# ts-config/serve.json — proxy the tailnet name to quire. Add the AllowFunnel
+# block only if you want share links and hosted Claude to reach it from the
+# public internet; quire authenticates every /api and /mcp request itself, so
+# what the internet can read without credentials is share pages and the empty
+# SPA shell.
+#
+# {
+#   "TCP": { "443": { "HTTPS": true } },
+#   "Web": {
+#     "${TS_CERT_DOMAIN}:443": {
+#       "Handlers": { "/": { "Proxy": "http://127.0.0.1:8321" } }
+#     }
+#   },
+#   "AllowFunnel": { "${TS_CERT_DOMAIN}:443": true }
+# }
+#
+# --- Cloudflare Tunnel instead ---
+# Replace the tailscale service with:
+#
+#   cloudflared:
+#     image: cloudflare/cloudflared:latest
+#     command: tunnel --no-autoupdate run
+#     environment:
+#       TUNNEL_TOKEN: eyJ…            # from the Zero Trust dashboard
+#     restart: unless-stopped
+#
+# Route your hostname to http://quire:8321 in the dashboard, drop
+# network_mode/depends_on from the quire service, and set QUIRE_BASE_URL to
+# that hostname.

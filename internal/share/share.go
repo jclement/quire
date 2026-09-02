@@ -1,38 +1,32 @@
 // Package share serves public read-only share pages at /s/<token> — clean
 // standalone HTML, no SPA, no auth. A share exposes exactly one document
-// plus the attachments that document references. This is the only surface
-// Tailscale Funnel exposes to the public internet.
+// plus the attachments that document references. Share pages are the one
+// part of quire that is deliberately readable without credentials.
 package share
 
 import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/jclement/quire/internal/auth"
 	"github.com/jclement/quire/internal/service"
 )
 
-// Manager creates and serves shares. baseURL is where share links point —
-// updated at runtime once the funnel hostname is known.
+// Manager creates and serves shares. baseURL is where share links point: it
+// is whatever URL the outside world reaches this instance at, which quire
+// cannot discover for itself behind a proxy or tunnel — hence config.
 type Manager struct {
 	Auth    *auth.Store
 	Service *service.Service
-	baseURL atomic.Value // string
+	baseURL string
 }
 
 // NewManager returns a Manager building share URLs against baseURL.
 func NewManager(authStore *auth.Store, svc *service.Service, baseURL string) *Manager {
-	m := &Manager{Auth: authStore, Service: svc}
-	m.baseURL.Store(strings.TrimRight(baseURL, "/"))
-	return m
+	return &Manager{Auth: authStore, Service: svc, baseURL: strings.TrimRight(baseURL, "/")}
 }
-
-// SetBaseURL swaps the URL shares are advertised at (e.g. the funnel DNS
-// name once tsnet is up).
-func (m *Manager) SetBaseURL(u string) { m.baseURL.Store(strings.TrimRight(u, "/")) }
 
 // ShareInfo is re-exported from the service package, which owns every
 // API-visible shape (and generates the frontend's types from them).
@@ -42,7 +36,7 @@ func (m *Manager) info(sh auth.Share) ShareInfo {
 	return ShareInfo{
 		Token:        sh.Token,
 		DocPath:      sh.DocPath,
-		URL:          m.baseURL.Load().(string) + "/s/" + sh.Token,
+		URL:          m.baseURL + "/s/" + sh.Token,
 		CreatedAt:    sh.CreatedAt,
 		ExpiresAt:    sh.ExpiresAt,
 		RevokedAt:    sh.RevokedAt,

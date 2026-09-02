@@ -155,8 +155,8 @@ SHA-256 stored, 8-char prefix displayed, expiry/revocation/`last_used_at`.
 
 ## MCP
 
-Official `modelcontextprotocol/go-sdk`, Streamable HTTP at `/mcp`, bearer-token auth
-(OAuth 2.1 + DCR is v0.2 — on a tailnet, tokens cover Claude Code). Tools are thin
+Official `modelcontextprotocol/go-sdk`, Streamable HTTP at `/mcp`, authenticated by
+bearer token or an OAuth access token — same middleware, same scopes. Tools are thin
 wrappers over the same service layer as REST, so permissions cannot drift:
 
 `search`, `get_document`, `create_note`, `update_document` (with `base_sha256`
@@ -169,30 +169,37 @@ candidates, never guesses), `complete_task`, `today` (the flagship composed call
 Agent guardrails: read-only tokens are the default posture; no delete tool; every
 API/MCP write is audit-logged (principal, tool, path, when).
 
-## Tailscale (tsnet) — first-class
+## Getting to it from outside
 
-Setting `ts_hostname` makes quire join the tailnet as its own node (tsnet, state in
-`.quire/tsnet/`, auth key needed only until registered). It serves
-`https://<hostname>.<tailnet>.ts.net` with Tailscale-managed TLS, and requests are
-authenticated by **tailnet identity**: WhoIs on the connection resolves a tailnet peer
-to the owner principal — no passkeys or tokens needed on-tailnet. `ts_owner` optionally
-pins access to one login. A bearer token presented over the tailnet is still honored
-*with its scopes* — a deliberately read-only agent token keeps its reduced blast
-radius.
+quire listens on one plain-HTTP port and terminates no TLS. Exposure is somebody
+else's job: a Tailscale sidecar, a Cloudflare Tunnel, or an ordinary reverse proxy.
+The app is told one thing about the outside world — `base_url` — and every URL it
+hands out (share links, the WebAuthn RP ID, OAuth issuer and endpoint metadata) is
+built from it. It is never inferred from the `Host` header, which an attacker
+controls.
 
-With `ts_funnel: true`, the same `:443` listener also accepts public internet traffic
-(Tailscale Funnel). The per-request gate is the whole public story: a request is
-treated as a tailnet peer only when it is not marked as a funnel connection, its peer
-address is inside the tailnet range, AND WhoIs identifies it; anything else is a public
-visitor who sees `/s/*` share pages only, with every other path (including
-`/api/v1/health`) 404ing so the internet can't even learn quire exists.
+**The whole app is designed to be safely exposed**, which is why there is no
+split-surface gate any more. Every `/api/*` and `/mcp` request is authenticated
+in-process by `auth.Middleware`; the only routes readable without a credential are
+`/s/*` share pages (that is their purpose — the link is the secret), the SPA shell
+(which holds no data; its API calls are checked), `/api/v1/health`, and the auth
+endpoints that gate their own flows.
 
-**WhoIs alone cannot make that decision**, and assuming it could was a real
-vulnerability in v0.1.0: Funnel proxies connections through Tailscale's ingress, so
-they arrive with a tailnet source address that WhoIs resolves happily, and the gate
-served the entire vault to anonymous requests. Tailscale marks these connections
-(`ipn.FunnelConn`, captured via the server's `ConnContext`); the gate reads that mark,
-double-checks the address range, and fails closed when either signal is missing.
+**This replaced tsnet, and the reason is worth recording.** v0.1.0 embedded
+`tailscale.com/tsnet`, authenticated requests by tailnet identity (WhoIs), and used
+Funnel to publish share pages while keeping everything else private. That split — one
+listener serving two populations with different rights — was the entire source of a
+critical vulnerability: Funnel proxies connections through Tailscale's ingress, so
+public requests arrive carrying a *tailnet* source address that WhoIs resolves
+happily, and the gate served the whole vault to anonymous callers. The fix
+(`ipn.FunnelConn` + an address-range check, failing closed) worked, but the lesson
+was that a per-request trust decision derived from network topology is a hard thing
+to get right and an easy thing to get wrong silently. App-level auth on every route
+is one decision, testable without a network.
+
+Removing tsnet also dropped 318 of 819 Go packages (196 of them Tailscale's) and 23 MB
+of binary — 65.5 MB to 41.7 MB, a third of the artifact. A sidecar gives back the same
+TLS and MagicDNS, with the trust boundary at the proxy where it can be reasoned about.
 
 ## Sharing
 
@@ -202,7 +209,7 @@ standalone server-side page (goldmark, raw HTML escaped, wikilinks flattened to 
 text — their targets are private, callout markers become bold titles). Attachments are
 served through the share only if the shared document references them; markdown never
 serves through the file route. Revoked/expired/nonexistent are indistinguishable 404s.
-Share URLs advertise the tailnet/funnel hostname automatically when tsnet is up.
+Share URLs are built from `base_url`, so they are only correct if it is.
 
 ## OAuth 2.1 for remote MCP
 
@@ -213,12 +220,12 @@ client registration (capped unconsented registrations), PKCE-S256-only code flow
 revocation. Public clients only. A 401 from /mcp carries the WWW-Authenticate
 resource-metadata challenge — that header is the whole discovery mechanism.
 
-Consent is the owner's: the consent page accepts a tailnet-verified identity (the
-gate injects X-Quire-Tailnet-Login after stripping inbound values), a passkey
-session, or the loopback auth-none listener. Funnel visitors asking to authorize get
-a "open this from your tailnet" page — MagicDNS means the same URL routes tailnet
-members directly. `ts_funnel_mcp: true` publishes /mcp + OAuth over funnel; /mcp
-still demands a credential per request.
+Consent is the owner's, proved by a passkey session (or the loopback-only auth-none
+listener, which nobody remote can reach by construction). Anyone else who lands on
+/oauth/authorize is told to sign in rather than shown a form they could approve.
+The consequence is worth stating plainly: **`token-only` mode cannot complete an
+OAuth flow**, because it has no browser-shaped credential — quire warns about this
+at startup. Run `passkey` if you want claude.ai connectors.
 
 ## Email
 
@@ -283,12 +290,12 @@ auth:
   magic-cookie-URL idea is rejected (no real boundary on a single-user machine; URL
   secrets leak into history/screenshots). `mise run dev` and bare `quire serve` with no
   config default to this, print the URL.
-- `passkey` — for non-tailnet HTTPS deployments. `go-webauthn/webauthn`; server-side sessions
+- `passkey` — the mode for any human-facing install. `go-webauthn/webauthn`; server-side sessions
   (32-byte token, HttpOnly, SameSite=Lax, Secure off-localhost, 30-day sliding).
   Bootstrap: first visit registers the first passkey and prints 8 single-use recovery
   codes (argon2id-hashed). Recovery login forces new passkey registration and burns the
-  code. RP ID binds to the hostname — document loudly that passkeys registered at
-  `quire.tailXXXX.ts.net` only work there.
+  code. RP ID binds to `base_url`'s hostname — passkeys registered at one hostname do
+  not work at another, so changing how you expose quire means re-registering.
 - `token-only` — headless boxes: bearer tokens only, no browser login.
 
 ## Frontend
@@ -366,8 +373,12 @@ cosign signing — per the house `shipping` pattern.
     rollup pages** — the aggregation views deepen over releases; the data (links in
     frontmatter) is right from the first meeting note, so richer pages light up
     retroactively.
-11. **Passkeys are v0.1-late, not v0.1-gate** — `none` mode on the tailnet covers the
-    founder immediately; auth lands before anyone else touches it.
+11. **Exposure is a sidecar's job, not the app's** — quire embedded tsnet through
+    v0.1.1 and split its own surface between tailnet and Funnel visitors. That split
+    caused a critical vulnerability (see "Getting to it from outside"), pulled in 196
+    Tailscale packages, and bought something a five-line sidecar container gives back.
+    The app authenticates every route itself and is safe to expose whole; the tunnel
+    is transport.
 
 ## v0.1 — in / out
 
@@ -375,7 +386,7 @@ cosign signing — per the house `shipping` pattern.
 notes, meetings, tasks fully; person/project/company as typed stubs with backlink+task
 rollups; editor (edit/read/split) with the details above; palette; Today; Inbox; quick
 capture; image paste; Mermaid + callouts + highlighting; MCP over bearer tokens;
-Docker + compose; responsive mobile; **Tailscale/tsnet with funnel**; **sharing
+Docker + compose; responsive mobile; **sharing
 links** (the "sitter link"); **recurrence with lead time** (`🔁 every N unit [when
 done]`; the due−defer gap is the lead time and carries forward);
 **rename-with-link-rewriting** (only links that stop resolving get rewritten; the old
