@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	releasesURL   = "https://api.github.com/repos/jclement/quire/releases/latest"
-	checkInterval = 24 * time.Hour
-	checkTimeout  = 10 * time.Second
+	defaultReleasesURL = "https://api.github.com/repos/jclement/quire/releases/latest"
+	checkInterval      = 24 * time.Hour
+	checkTimeout       = 10 * time.Second
 )
 
 // Checker holds the last known answer. The zero value reports false, which
@@ -30,6 +30,9 @@ const (
 type Checker struct {
 	current   string
 	available atomic.Bool
+	// url is the endpoint to ask; overridden in tests so the check can be
+	// exercised without reaching GitHub.
+	url string
 }
 
 // Start begins periodic checking against the running version and returns a
@@ -39,7 +42,7 @@ func Start(ctx context.Context, currentVersion string) *Checker {
 	if currentVersion == "" || currentVersion == "dev" {
 		return nil
 	}
-	c := &Checker{current: currentVersion}
+	c := &Checker{current: currentVersion, url: defaultReleasesURL}
 	go func() {
 		// A short initial delay keeps startup off the network path.
 		timer := time.NewTimer(30 * time.Second)
@@ -66,7 +69,7 @@ func (c *Checker) checkOnce(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releasesURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, nil)
 	if err != nil {
 		return
 	}
@@ -87,10 +90,11 @@ func (c *Checker) checkOnce(ctx context.Context) {
 	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
 		return
 	}
-	if newer := IsNewer(c.current, body.TagName); newer {
+	newer := IsNewer(c.current, body.TagName)
+	if newer {
 		slog.Info("a newer quire release is available", "running", c.current, "latest", body.TagName)
 	}
-	c.available.Store(IsNewer(c.current, body.TagName))
+	c.available.Store(newer)
 }
 
 // IsNewer compares two semver-ish version strings, tolerating a leading "v"
