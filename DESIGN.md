@@ -179,7 +179,10 @@ built from it. It is never inferred from the `Host` header, which an attacker
 controls.
 
 **The whole app is designed to be safely exposed**, which is why there is no
-split-surface gate any more. Every `/api/*` and `/mcp` request is authenticated
+split-surface gate any more. `deploy/` carries three working compose samples
+(tailnet-only, tailnet+funnel, Cloudflare Tunnel);
+`internal/auth/exposure_test.go` is the fail-closed inventory asserting that
+claim route by route. Every `/api/*` and `/mcp` request is authenticated
 in-process by `auth.Middleware`; the only routes readable without a credential are
 `/s/*` share pages (that is their purpose — the link is the secret), the SPA shell
 (which holds no data; its API calls are checked), `/api/v1/health`, and the auth
@@ -206,9 +209,12 @@ TLS and MagicDNS, with the trust boundary at the proxy where it can be reasoned 
 Shares live in auth.db (grants, not derivable from the vault): 16-char random token →
 one document, optional expiry, soft revocation, view counts. `/s/<token>` renders a
 standalone server-side page (goldmark, raw HTML escaped, wikilinks flattened to styled
-text — their targets are private, callout markers become bold titles). Attachments are
-served through the share only if the shared document references them; markdown never
-serves through the file route. Revoked/expired/nonexistent are indistinguishable 404s.
+text — their targets are private, callout markers become bold titles) under a strict
+CSP (`default-src 'none'`; the page carries no JavaScript). Attachments are served
+through the share only if the shared document **references** them — membership in the
+goldmark AST's link/image set, not a substring scan of the markdown, which used to mean
+that merely naming a file in prose published it. Markdown never serves through the file
+route. Revoked/expired/nonexistent are indistinguishable 404s.
 Share URLs are built from `base_url`, so they are only correct if it is.
 
 ## OAuth 2.1 for remote MCP
@@ -294,7 +300,12 @@ auth:
   (32-byte token, HttpOnly, SameSite=Lax, Secure off-localhost, 30-day sliding).
   Bootstrap: first visit registers the first passkey and prints 8 single-use recovery
   codes (argon2id-hashed). Recovery login forces new passkey registration and burns the
-  code. RP ID binds to `base_url`'s hostname — passkeys registered at one hostname do
+  code. **Claiming is gated**: on a non-loopback listener the first registration
+  requires an 80-bit enrollment code minted at startup and printed to the log,
+  because an unclaimed instance on a reachable address otherwise belongs to
+  whoever loads it first — and `/api/v1/auth/status` advertises that it is
+  unclaimed. Loopback listeners skip the gate; there is no remote to race.
+  RP ID binds to `base_url`'s hostname — passkeys registered at one hostname do
   not work at another, so changing how you expose quire means re-registering.
 - `token-only` — headless boxes: bearer tokens only, no browser login.
 

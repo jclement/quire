@@ -25,8 +25,17 @@ The dev instance runs with `QUIRE_AUTH_MODE=none` against a scratch vault in
 
 ## Running for real
 
-See [docker-compose.example.yml](docker-compose.example.yml). Images are published
-to ghcr:
+Three complete, copy-and-run deployments live in [deploy/](deploy/) — pick the one
+that matches how you want to reach it, `cp .env.sample .env`, fill in a few values,
+`docker compose up -d`:
+
+| Sample | Reachable from |
+|---|---|
+| [`deploy/tailscale`](deploy/tailscale/) | your tailnet only |
+| [`deploy/tailscale-funnel`](deploy/tailscale-funnel/) | your tailnet + the public internet |
+| [`deploy/cloudflare-tunnel`](deploy/cloudflare-tunnel/) | the public internet, on your own domain |
+
+Images are published to ghcr:
 
 | Tag | What it is |
 |---|---|
@@ -55,17 +64,11 @@ links, passkey RP ID, and OAuth discovery are all built from it.
 
 Three shapes that work, cheapest first:
 
-**Tailscale sidecar** — private, no public exposure at all. Run `tailscale/tailscale`
-alongside quire in the same network namespace (`network_mode: service:tailscale`) with
-`TS_SERVE_CONFIG` pointing at quire's port; the tailnet gives you HTTPS and MagicDNS,
-and you reach it at `https://quire.<tailnet>.ts.net`. Flip on Funnel in that same serve
-config when you want share links or claude.ai connectors to work from the internet.
-`docker-compose.example.yml` has this wired up.
+**Tailscale sidecar** — private, no public exposure at all; the tailnet supplies
+HTTPS and MagicDNS. Add Funnel to the same serve config when you want share links
+and claude.ai connectors to work from the internet.
 
-**Cloudflare Tunnel** — a public hostname with no inbound ports. Run `cloudflared`
-as a sidecar with a token from the Zero Trust dashboard, route your hostname to
-`http://quire:8321`, and set `QUIRE_BASE_URL` to that hostname. This is the one to
-pick if you want a URL you can hand to someone.
+**Cloudflare Tunnel** — a public hostname on your own domain with no inbound ports.
 
 **Your own reverse proxy** — Caddy, nginx, Traefik. Nothing special required; just
 forward to `:8321` and set `QUIRE_BASE_URL`.
@@ -87,9 +90,11 @@ instantly.
 
 - `none` — loopback only (enforced at startup). Dev and "just run it on my laptop".
 - `token-only` — bearer tokens (`quire token create`). Headless/agents.
-- `passkey` — WebAuthn: first visit registers the first passkey and issues 8 single-use
-  recovery codes; sessions are server-side cookies; more passkeys manageable once
-  logged in. `QUIRE_BASE_URL`'s hostname is the RP ID — passkeys only work at that
+- `passkey` — WebAuthn: the first registration claims the instance and issues 8
+  single-use recovery codes; sessions are server-side cookies; more passkeys
+  manageable once logged in. On a non-loopback listener that first registration
+  needs the **enrollment code** printed in the server log at startup, so a
+  publicly-reachable instance cannot be claimed by whoever finds it first. `QUIRE_BASE_URL`'s hostname is the RP ID — passkeys only work at that
   exact hostname. This is the mode to use for anything a human logs into, and the
   only mode in which OAuth consent can be approved.
 

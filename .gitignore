@@ -15,3 +15,8 @@ web/dist/
 
 # Embedded SPA build output (rebuilt by mise run build)
 internal/webui/dist/
+
+# Deployment samples are templates; a filled-in .env or live state is not.
+deploy/*/.env
+deploy/*/data/
+deploy/*/ts-state/

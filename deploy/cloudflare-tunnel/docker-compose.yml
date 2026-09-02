@@ -1,0 +1,46 @@
+# quire on your own domain, via a Cloudflare Tunnel.
+#
+# cloudflared dials out to Cloudflare, so no inbound port is opened and your
+# home IP is never published. You get a real hostname
+# (notes.example.com) with Cloudflare-managed TLS.
+#
+# Setup, once, in the Cloudflare Zero Trust dashboard:
+#   Networks → Tunnels → Create a tunnel → Cloudflared
+#   Copy the tunnel token into .env as CF_TUNNEL_TOKEN
+#   Public hostname:  notes.example.com  →  http://quire:8321
+#
+# Then:  cp .env.sample .env && $EDITOR .env && docker compose up -d
+#        docker compose logs quire | grep enrollment_code   # to claim it
+#
+# What the internet can read WITHOUT a credential is exactly: /s/* share
+# pages (the link is the secret), the empty SPA shell, /api/v1/health, and
+# the OAuth discovery metadata. Every /api/* and /mcp request is
+# authenticated in-process — so run passkey mode.
+#
+# Optional hardening: put a Cloudflare Access policy in front of the tunnel
+# for a second, independent gate. If you do, EXCLUDE /s/ (share links are
+# meant for people who have no Cloudflare login), /mcp and /oauth/ (agents
+# and connectors cannot pass an interactive Access challenge).
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:?set CF_TUNNEL_TOKEN in .env}
+    depends_on:
+      - quire
+    restart: unless-stopped
+
+  quire:
+    image: ghcr.io/jclement/quire:${QUIRE_TAG:-latest}
+    # No ports published: cloudflared reaches it over the compose network.
+    # Uncomment to also reach it directly on the LAN.
+    # ports:
+    #   - "8321:8321"
+    volumes:
+      - ./data:/data
+    environment:
+      QUIRE_ADDR: 0.0.0.0:8321
+      QUIRE_BASE_URL: ${QUIRE_BASE_URL:?set QUIRE_BASE_URL in .env}
+      QUIRE_AUTH_MODE: ${QUIRE_AUTH_MODE:-passkey}
+    restart: unless-stopped
