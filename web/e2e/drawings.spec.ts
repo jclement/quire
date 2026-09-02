@@ -21,7 +21,7 @@ async function diskText(page: Page, path: string) {
 
 async function runCommand(page: Page, label: string) {
   await page.keyboard.press("ControlOrMeta+k");
-  await page.getByPlaceholder(/for commands/).fill(`>${label}`);
+  await page.getByLabel("Command palette input").fill(`>${label}`);
   await page.getByRole("listbox").getByRole("option", { name: label }).first().click();
 }
 
