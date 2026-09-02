@@ -87,6 +87,13 @@ export function useDocumentSave(path: string, doc: Document): DocumentSave {
         queuedRef.current = true;
         return;
       }
+      // A 409 freezes saving until the user chooses. onEditorChange already
+      // respects that, but blur and Cmd+S reach here directly — and clicking
+      // "Keep mine" blurs the editor, so without this the resolution was
+      // immediately preceded by an ordinary save carrying the same stale
+      // base sha, which conflicted again and swallowed the choice. Only an
+      // explicit override (keepMine/takeDisk) may write during a conflict.
+      if (conflictRef.current && !overrideSha) return;
       const text = textRef.current;
       if (text === savedTextRef.current && !overrideSha) {
         setStatus("saved");

@@ -255,6 +255,13 @@ Unsaved edits are never overwritten: while the buffer is dirty it holds the
 user's text, and a genuine divergence surfaces as a 409 on the next save with
 an explicit keep-mine / take-disk choice.
 
+**A conflict freezes writing**, and that has to include blur and Cmd+S, not
+just the idle autosave. Clicking "Keep mine" blurs the editor; before the
+freeze covered that path, the blur fired an ordinary save carrying the same
+stale base sha, which conflicted again and swallowed the user's choice — so
+the button appeared to do nothing and the other version won. Only an explicit
+override (keepMine, takeDisk) may write while a conflict is unresolved.
+
 ## Testing
 
 Three layers, each for what only it can see:
