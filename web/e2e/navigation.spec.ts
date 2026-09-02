@@ -53,8 +53,12 @@ test("the calendar shows the month and marks a day with a daily note", async ({
   await page.request.post(`/api/v1/daily/${today}`);
 
   await page.goto("/calendar");
-  // A month grid, not an empty shell.
-  await expect(page.getByText(String(new Date().getFullYear()))).toBeVisible();
+  // A month grid, not an empty shell. The heading specifically: daily-note
+  await expect(page.getByRole("heading", { name: new RegExp(String(new Date().getFullYear())) }).first()).toBeVisible();
+  // once other specs have created some.
+  await expect(
+    page.getByRole("heading", { name: new RegExp(String(new Date().getFullYear())) }).first(),
+  ).toBeVisible();
   const cell = page.getByRole("link", { name: new RegExp(`${Number(today.slice(8, 10))}\\b`) }).first();
   await expect(cell).toBeVisible();
 });
