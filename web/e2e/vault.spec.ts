@@ -22,8 +22,7 @@ test.describe.configure({ mode: "serial" });
 test("Today shows a task the moment it exists", async ({ page }) => {
   await page.goto("/");
   // Today's heading is the date itself, not the word "Today".
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.getByText("Nothing on the hook")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
 
   const created = await page.request.post("/api/v1/tasks", {
     data: { text: "Book the dentist", due: "today" },
@@ -49,7 +48,10 @@ test("Today shows a task the moment it exists", async ({ page }) => {
     .toBe(true);
 
   await page.reload();
-  // It lands under the "Due today" section, and the empty state goes away.
+  // It lands under the "Due today" section, and the empty state cannot be
+  // showing once something is due. There is deliberately no assertion that
+  // the page *started* empty: other specs share this server and create tasks
+  // of their own, so that only held when this spec happened to run first.
   await expect(page.getByRole("heading", { name: /due today/i })).toBeVisible();
   await expect(page.getByText("Book the dentist").first()).toBeVisible();
   await expect(page.getByText("Nothing on the hook")).toHaveCount(0);
