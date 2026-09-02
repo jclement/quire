@@ -72,7 +72,11 @@ const SECTIONS: HelpSection[] = [
   {
     title: "Blocks",
     rows: [
-      { syntax: "| a | b |\n|---|---|\n| 1 | 2 |", meaning: "Table" },
+      {
+        syntax: "| a | b |\n|---|---|\n| 1 | 2 |",
+        meaning:
+          "Table — ⌘⌥T reformats the one under the cursor, Tab moves between cells",
+      },
       {
         syntax: "```go\ncode\n```",
         meaning: "Fenced code, highlighted by language",

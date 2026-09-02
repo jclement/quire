@@ -17,6 +17,7 @@ import {
   Sunrise,
   Trash2,
   type LucideIcon,
+  Table2,
 } from "lucide-react";
 import {
   useMemo,
@@ -24,6 +25,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { api } from "../api/client.ts";
+import { formatAllTables } from "../lib/tables.ts";
 import { queryKeys } from "../api/queries.ts";
 import type { DocMeta, DocType } from "../api/types.ts";
 import { todayISO } from "../lib/dates.ts";
@@ -189,6 +191,27 @@ function PaletteContent({ close }: { close: () => void }) {
               label: "Delete this document",
               icon: Trash2,
               run: (paletteUi) => paletteUi.setDeleteDocPath(docPath),
+            },
+            {
+              id: "format-tables",
+              label: "Reformat all tables in this document",
+              icon: Table2,
+              // Works from read mode too: a CAS round trip through the API,
+              // so it can never clobber an edit made since the page loaded.
+              run: (paletteUi) => {
+                void (async () => {
+                  const doc = await api.getDocument(docPath);
+                  const next = formatAllTables(doc.markdown);
+                  if (next === doc.markdown) {
+                    paletteUi.toast("Tables already tidy");
+                    return;
+                  }
+                  await api.putDocument(docPath, next, doc.sha256);
+                  paletteUi.toast("Tables reformatted");
+                })().catch(() =>
+                  paletteUi.toast("Couldn't reformat — reload and try again"),
+                );
+              },
             },
           ]
         : [],

@@ -23,6 +23,7 @@ import {
   toggleCheckboxOnLine,
 } from "./extensions.ts";
 import { imagePasteHandler } from "./imagePaste.ts";
+import { tableKeymap, tableTools } from "./tables.ts";
 
 export interface MarkdownEditorHandle {
   /** Replaces the whole buffer (conflict resolution: "take disk"). */
@@ -156,6 +157,7 @@ function buildExtensions(callbacks: CallbacksRef) {
       ],
     }),
     imagePasteHandler,
+    tableTools,
     EditorView.domEventHandlers({
       blur: () => {
         callbacks.current.onBlur();
@@ -172,6 +174,7 @@ function buildExtensions(callbacks: CallbacksRef) {
       },
     }),
     editorKeymap([
+      ...tableKeymap,
       {
         key: "Mod-Enter",
         run: () => (callbacks.current.onSaveAndExit(), true),
