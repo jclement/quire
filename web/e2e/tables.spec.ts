@@ -1,5 +1,6 @@
-// Table editing in the real editor: the Reformat panel, the keybinding, Tab
-// between cells, and the palette command that works from read mode.
+// Table editing in the real editor: the toolbar's table buttons (enabled
+// only inside a table), the keybinding, Tab between cells, and the palette
+// command that works from read mode.
 import { expect, test } from "@playwright/test";
 
 test.describe.configure({ mode: "serial" });
@@ -20,20 +21,25 @@ async function openInEditor(page: import("@playwright/test").Page, title: string
   return { path: data.path as string, editor };
 }
 
-test("a panel appears inside a table and reformats it", async ({ page }) => {
+test("the toolbar's table buttons wake up inside a table and reformat it", async ({ page }) => {
   const { path, editor } = await openInEditor(page, "Table Panel", RAGGED);
+  const toolbar = page.getByRole("toolbar", { name: "Editor tools" });
+  await expect(toolbar).toBeVisible();
 
-  // Outside the table: no panel.
+  // Outside the table: the table-editing buttons are there but disabled,
+  // and "Table" (insert) is live.
   await editor.click();
   await page.keyboard.press("ControlOrMeta+Home");
-  await expect(page.getByRole("toolbar", { name: "Table tools" })).toHaveCount(0);
+  await expect(toolbar.getByRole("button", { name: "Reformat table" })).toBeDisabled();
+  await expect(toolbar.getByRole("button", { name: "Edit as grid" })).toBeDisabled();
+  await expect(toolbar.getByRole("button", { name: "Table", exact: true })).toBeEnabled();
 
   // Click into the table body.
   await page.getByText("Sarah Chen", { exact: false }).first().click();
-  const panel = page.getByRole("toolbar", { name: "Table tools" });
-  await expect(panel).toBeVisible();
+  await expect(toolbar.getByRole("button", { name: "Reformat table" })).toBeEnabled();
+  await expect(toolbar.getByRole("button", { name: "Table", exact: true })).toBeDisabled();
 
-  await panel.getByRole("button", { name: "Reformat table" }).click();
+  await toolbar.getByRole("button", { name: "Reformat table" }).click();
   await expect(editor).toContainText(TIDY_HEADER);
 
   // The rewrite reaches disk through the ordinary save path.

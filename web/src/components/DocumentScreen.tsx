@@ -42,6 +42,9 @@ import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import type { MarkdownEditorHandle } from "../editor/MarkdownEditor.tsx";
+import type { EditorContext } from "../editor/commands.ts";
+import type { StripSync } from "../api/queries.ts";
+import { EditorToolbar } from "./EditorToolbar.tsx";
 import { extractHeadings } from "../lib/headings.ts";
 import { requestTableEdit } from "../lib/tableEditor.ts";
 import { insertDrawingInto } from "../lib/drawings.ts";
@@ -151,6 +154,19 @@ function DocumentView({
   const [liveText, setLiveText] = useState(save.currentText);
   const previewText = useDebouncedValue(liveText, PREVIEW_DEBOUNCE_MS);
   const [editorTopLine, setEditorTopLine] = useState(1);
+  const [editorContext, setEditorContext] = useState<EditorContext | null>(
+    null,
+  );
+  // The properties strip while editing: the server rewrites the file the
+  // buffer has just been flushed to, and the editor adopts the result.
+  const stripSync: StripSync = {
+    before: () => save.save(),
+    after: (updated) => {
+      save.adopt(updated);
+      editorRef.current?.adopt(updated.markdown);
+      setLiveText(updated.markdown);
+    },
+  };
 
   // Read mode outlines the saved buffer; edit/split outlines what's being typed.
   const outlineSource = mode === "read" ? save.text : previewText;
@@ -340,44 +356,60 @@ function DocumentView({
               <Backlinks doc={doc} />
             </>
           ) : (
-            <div
-              className={
-                mode === "split"
-                  ? "grid flex-1 md:grid-cols-2"
-                  : "flex flex-1 flex-col"
-              }
-            >
-              <Suspense fallback={<SkeletonRows count={6} />}>
-                <MarkdownEditor
-                  ref={editorRef}
-                  initialValue={save.currentText()}
-                  onChange={(text) => {
-                    save.onEditorChange(text);
-                    setLiveText(text);
-                  }}
-                  onSave={() => void save.save()}
-                  onSaveAndExit={exitEdit}
-                  onBlur={() => void save.save()}
-                  getTags={getTags}
-                  onTopLineChange={setEditorTopLine}
-                />
-              </Suspense>
-              {mode === "split" ? (
-                <div className="hidden min-w-0 border-l border-border pt-3 pl-4 md:block">
-                  {/* Preview follows the buffer, debounced. A checkbox here
+            <>
+              {/* The strip stays while editing: a change it makes flushes
+                  the buffer, rewrites the file on the server, and loads
+                  the result back into the editor. */}
+              <FrontmatterStrip doc={doc} sync={stripSync} />
+              <EditorToolbar
+                context={editorContext}
+                run={(command) => editorRef.current?.run(command)}
+                onInsertDrawing={() =>
+                  insertDrawingInto(path).catch(() =>
+                    toast("Couldn't create a drawing — reload and try again"),
+                  )
+                }
+              />
+              <div
+                className={
+                  mode === "split"
+                    ? "grid flex-1 md:grid-cols-2"
+                    : "flex flex-1 flex-col"
+                }
+              >
+                <Suspense fallback={<SkeletonRows count={6} />}>
+                  <MarkdownEditor
+                    ref={editorRef}
+                    initialValue={save.currentText()}
+                    onChange={(text) => {
+                      save.onEditorChange(text);
+                      setLiveText(text);
+                    }}
+                    onSave={() => void save.save()}
+                    onSaveAndExit={exitEdit}
+                    onBlur={() => void save.save()}
+                    getTags={getTags}
+                    onTopLineChange={setEditorTopLine}
+                    onContextChange={setEditorContext}
+                  />
+                </Suspense>
+                {mode === "split" ? (
+                  <div className="hidden min-w-0 border-l border-border pt-3 pl-4 md:block">
+                    {/* Preview follows the buffer, debounced. A checkbox here
                       flips its line in the editor, so the toggle lands in
                       the same save as everything else being typed. */}
-                  <Markdown
-                    markdown={previewText}
-                    links={doc.links}
-                    tasks={doc.tasks}
-                    onToggleLine={(line) =>
-                      editorRef.current?.toggleTaskOnLine(line)
-                    }
-                  />
-                </div>
-              ) : null}
-            </div>
+                    <Markdown
+                      markdown={previewText}
+                      links={doc.links}
+                      tasks={doc.tasks}
+                      onToggleLine={(line) =>
+                        editorRef.current?.toggleTaskOnLine(line)
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </>
           )}
         </div>
         <DocumentRail

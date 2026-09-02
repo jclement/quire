@@ -85,7 +85,7 @@ test("editor: the table panel opens the grid and writes into the buffer", async 
   await expect(editor).toBeVisible();
   await editor.getByText("| Bo | CTO |").click();
 
-  await page.getByRole("toolbar", { name: "Table tools" }).getByRole("button", { name: "Edit as grid" }).click();
+  await page.getByRole("toolbar", { name: "Editor tools" }).getByRole("button", { name: "Edit as grid" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit table" });
   await expect(dialog.getByLabel("Row 2, column 2")).toHaveValue("CTO");
 

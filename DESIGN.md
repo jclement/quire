@@ -272,6 +272,14 @@ stale base sha, which conflicted again and swallowed the user's choice — so
 the button appeared to do nothing and the other version won. Only an explicit
 override (keepMine, takeDisk) may write while a conflict is unresolved.
 
+The properties strip works in edit mode too, without a second source of
+truth: each of its writes flushes the buffer first (so the server rewrites
+what is on screen), then the editor adopts the server's file — `adopt` on
+both the save hook and the editor — which also resets the base sha. The
+toolbar is stateless: it is handed an `EditorContext` (line, in-table,
+heading level, parsed task, callout) after every selection change and runs
+commands from editor/commands.ts against the live view.
+
 A failed save is not believed until the server is asked. A response lost
 in transit (the tunnel dropping it) leaves the write applied; the client's
 retry then carries the old base sha, gets a 409, and would show a conflict

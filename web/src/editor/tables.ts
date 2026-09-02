@@ -1,11 +1,9 @@
-// Table editing in CodeMirror: a "Reformat table" panel that appears while
-// the cursor is inside a GFM table, a keybinding for the same, and Tab /
-// Shift-Tab moving between cells so a table can be filled in without
-// counting pipes.
+// Table editing in CodeMirror: reformat-at-cursor and edit-as-grid (the
+// toolbar's table buttons and their keybindings), and Tab / Shift-Tab
+// moving between cells so a table can be filled in without counting pipes.
 //
 // The formatting itself lives in lib/tables.ts (pure, tested); this file is
 // only the editor plumbing around it.
-import { showPanel, type Panel } from "@codemirror/view";
 import { EditorView, type KeyBinding } from "@codemirror/view";
 import {
   findTableAt,
@@ -163,74 +161,4 @@ export const tableKeymap: KeyBinding[] = [
   { key: "Mod-Alt-Shift-t", run: formatAllTablesInDoc },
   { key: "Tab", run: (view) => moveCell(view, 1) },
   { key: "Shift-Tab", run: (view) => moveCell(view, -1) },
-];
-
-/** The panel: visible only while the cursor is inside a table. */
-function tablePanel(view: EditorView): Panel {
-  const dom = document.createElement("div");
-  dom.className = "cm-table-panel";
-  dom.setAttribute("role", "toolbar");
-  dom.setAttribute("aria-label", "Table tools");
-
-  const label = document.createElement("span");
-  label.textContent = "Table";
-  label.className = "cm-table-panel-label";
-
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = "Reformat table";
-  button.title = "Pad every column to its widest cell (⌘⌥T)";
-  button.className = "cm-table-panel-button";
-  button.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus
-  button.addEventListener("click", () => formatTableAtCursor(view));
-
-  const grid = document.createElement("button");
-  grid.type = "button";
-  grid.textContent = "Edit as grid";
-  grid.title = "Edit the cells in a visual grid";
-  grid.className = "cm-table-panel-button";
-  grid.addEventListener("mousedown", (e) => e.preventDefault());
-  grid.addEventListener("click", () => editTableAtCursor(view));
-
-  const hint = document.createElement("span");
-  hint.textContent = "Tab moves between cells";
-  hint.className = "cm-table-panel-hint";
-
-  dom.append(label, button, grid, hint);
-  return { dom, top: true };
-}
-
-/** Shows the table panel whenever the selection is inside a table. */
-export const tableTools = [
-  showPanel.compute(["selection", "doc"], (state) => {
-    const text = state.doc.toString();
-    return findTableAt(text, state.selection.main.head) ? tablePanel : null;
-  }),
-  EditorView.theme({
-    ".cm-table-panel": {
-      display: "flex",
-      alignItems: "center",
-      gap: "8px",
-      padding: "4px 8px",
-      fontSize: "12px",
-      background: "var(--raised)",
-      borderBottom: "1px solid var(--border)",
-      color: "var(--muted)",
-    },
-    ".cm-table-panel-label": { fontWeight: "600", color: "var(--heading)" },
-    ".cm-table-panel-button": {
-      height: "24px",
-      padding: "0 8px",
-      borderRadius: "4px",
-      border: "1px solid var(--border)",
-      background: "transparent",
-      color: "var(--body)",
-      cursor: "pointer",
-    },
-    ".cm-table-panel-button:hover": {
-      background: "var(--hover)",
-      color: "var(--heading)",
-    },
-    ".cm-table-panel-hint": { marginLeft: "auto" },
-  }),
 ];

@@ -36,6 +36,12 @@ export interface DocumentSave {
   text: string;
   /** Latest buffer text, readable from callbacks without a stale closure. */
   currentText: () => string;
+  /**
+   * Takes the server's version as the saved state — after a write made
+   * outside the editor buffer (the properties strip) that the editor is
+   * about to load. Nothing is pending afterwards.
+   */
+  adopt: (doc: Document) => void;
 }
 
 export function useDocumentSave(path: string, doc: Document): DocumentSave {
@@ -156,6 +162,13 @@ export function useDocumentSave(path: string, doc: Document): DocumentSave {
     (text: string) => {
       textRef.current = text;
       if (conflictRef.current) return; // Frozen until the user resolves.
+      // Typed back to exactly what is saved (or adopted from the server):
+      // nothing to write, and the label should say so.
+      if (text === savedTextRef.current) {
+        clearTimeout(idleTimerRef.current);
+        setStatus((current) => (current === "saving" ? current : "saved"));
+        return;
+      }
       setStatus((current) => (current === "saving" ? current : "dirty"));
       clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => void doSave(), IDLE_SAVE_MS);
@@ -194,6 +207,23 @@ export function useDocumentSave(path: string, doc: Document): DocumentSave {
 
   const currentText = useCallback(() => textRef.current, []);
 
+  const adopt = useCallback(
+    (next: Document) => {
+      clearTimeout(idleTimerRef.current);
+      textRef.current = next.markdown;
+      savedTextRef.current = next.markdown;
+      baseShaRef.current = next.sha256;
+      conflictRef.current = false;
+      queuedRef.current = false;
+      setConflictDoc(null);
+      setErrorMessage(null);
+      setPublishedText(next.markdown);
+      queryClient.setQueryData(queryKeys.document(path), next);
+      setStatus("saved");
+    },
+    [path, queryClient],
+  );
+
   return {
     status,
     conflictDoc,
@@ -204,5 +234,6 @@ export function useDocumentSave(path: string, doc: Document): DocumentSave {
     takeDisk,
     text,
     currentText,
+    adopt,
   };
 }

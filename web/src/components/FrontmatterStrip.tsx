@@ -22,7 +22,12 @@ import { useMutation } from "@tanstack/react-query";
 import { Hash, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage } from "../api/client.ts";
-import { useDocumentList, useLinkEntity, useTags } from "../api/queries.ts";
+import {
+  useDocumentList,
+  useLinkEntity,
+  useTags,
+  type StripSync,
+} from "../api/queries.ts";
 import type { Document } from "../api/types.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import {
@@ -38,9 +43,16 @@ import { useUi } from "../keys/UiContext.tsx";
 const TYPEAHEAD_LIMIT = 8;
 const TYPEAHEAD_DEBOUNCE_MS = 150;
 
-export function FrontmatterStrip({ doc }: { doc: Document }) {
+export function FrontmatterStrip({
+  doc,
+  sync,
+}: {
+  doc: Document;
+  /** Present while the editor is open: flush before, adopt after. */
+  sync?: StripSync;
+}) {
   const { toast } = useUi();
-  const linkEntity = useLinkEntity(doc.path);
+  const linkEntity = useLinkEntity(doc.path, sync);
   const [addingKey, setAddingKey] = useState<string | null>(null);
 
   const linkKeys = linkKeysFor(doc.type);
@@ -66,9 +78,10 @@ export function FrontmatterStrip({ doc }: { doc: Document }) {
 
   return (
     <div className="mb-3 flex flex-wrap items-start gap-1.5 border-b border-border pb-3">
-      {showArea ? <AreaChip doc={doc} /> : null}
+      {showArea ? <AreaChip doc={doc} sync={sync} /> : null}
       <TagChips
         doc={doc}
+        sync={sync}
         adding={addingKey === "tags"}
         onAdding={(open) => setAddingKey(open ? "tags" : null)}
       />
@@ -325,16 +338,19 @@ function AddLinkPopover({
  * Which area the document files under, as a badge: "Area: unassigned", or
  * the area's dot and name in its colour. Clicking opens the picker.
  */
-function AreaChip({ doc }: { doc: Document }) {
+function AreaChip({ doc, sync }: { doc: Document; sync?: StripSync }) {
   const queryClient = useQueryClient();
   const { toast } = useUi();
   const areas = useAreas();
   const [open, setOpen] = useState(false);
   const setArea = useMutation({
-    mutationFn: (area: string) =>
-      api.setFrontmatter(doc.path, { area: area || null }),
+    mutationFn: async (area: string) => {
+      await sync?.before();
+      return api.setFrontmatter(doc.path, { area: area || null });
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.document(doc.path), updated);
+      sync?.after(updated);
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
       void queryClient.invalidateQueries({ queryKey: ["areas"] });
     },
@@ -418,10 +434,12 @@ function frontmatterTags(value: unknown): string[] {
  */
 function TagChips({
   doc,
+  sync,
   adding,
   onAdding,
 }: {
   doc: Document;
+  sync?: StripSync;
   adding: boolean;
   onAdding: (open: boolean) => void;
 }) {
@@ -429,10 +447,15 @@ function TagChips({
   const { toast } = useUi();
   const tags = frontmatterTags(doc.frontmatter.tags);
   const save = useMutation({
-    mutationFn: (next: string[]) =>
-      api.setFrontmatter(doc.path, { tags: next.length > 0 ? next : null }),
+    mutationFn: async (next: string[]) => {
+      await sync?.before();
+      return api.setFrontmatter(doc.path, {
+        tags: next.length > 0 ? next : null,
+      });
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.document(doc.path), updated);
+      sync?.after(updated);
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
     },

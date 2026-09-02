@@ -8,7 +8,13 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { api, type ListDocumentsParams } from "./client.ts";
-import type { Task, TaskEdit, TaskView, SearchMode } from "./types.ts";
+import type {
+  Task,
+  TaskEdit,
+  TaskView,
+  SearchMode,
+  Document,
+} from "./types.ts";
 import { useUi } from "../keys/UiContext.tsx";
 
 export const queryKeys = {
@@ -217,13 +223,30 @@ export function useShares() {
  * frontmatter key). The response is the rewritten document, so it seeds the
  * cache directly; invalidation then reconciles the lists it can appear in.
  */
-export function useLinkEntity(path: string) {
+/**
+ * Hooks around a frontmatter write made from the properties strip while
+ * the editor is open: flush the buffer first (so the server rewrites what
+ * is on screen), then load the server's file back into the editor.
+ */
+export interface StripSync {
+  before: () => Promise<void>;
+  after: (doc: Document) => void;
+}
+
+export function useLinkEntity(path: string, sync?: StripSync) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { key: string; target: string; remove?: boolean }) =>
-      api.link(path, input.key, input.target, input.remove ?? false),
+    mutationFn: async (input: {
+      key: string;
+      target: string;
+      remove?: boolean;
+    }) => {
+      await sync?.before();
+      return api.link(path, input.key, input.target, input.remove ?? false);
+    },
     onSuccess: (doc) => {
       queryClient.setQueryData(queryKeys.document(path), doc);
+      sync?.after(doc);
     },
     onSettled: () => {
       void queryClient.invalidateQueries({

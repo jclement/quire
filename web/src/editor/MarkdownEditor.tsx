@@ -24,7 +24,8 @@ import {
   toggleLineCheckbox,
 } from "./extensions.ts";
 import { imagePasteHandler } from "./imagePaste.ts";
-import { tableKeymap, tableTools } from "./tables.ts";
+import { tableKeymap } from "./tables.ts";
+import { editorContext, type EditorContext } from "./commands.ts";
 import { onInsertTextRequest } from "../lib/insertText.ts";
 
 export interface MarkdownEditorHandle {
@@ -36,6 +37,14 @@ export interface MarkdownEditorHandle {
   scrollToLine: (line: number) => void;
   /** Flips the checkbox on a 1-based line — the split preview's click. */
   toggleTaskOnLine: (line: number) => void;
+  /** Runs a toolbar command against the live view, then refocuses it. */
+  run: (command: (view: EditorView) => void) => void;
+  /**
+   * Replaces the buffer with the server's version after an out-of-band
+   * edit (the properties strip writing frontmatter), keeping the cursor
+   * where it was as far as the new text allows.
+   */
+  adopt: (text: string) => void;
 }
 
 interface MarkdownEditorProps {
@@ -51,6 +60,8 @@ interface MarkdownEditorProps {
   getTags: () => string[];
   /** 1-based top visible line, on scroll — drives the outline's highlight. */
   onTopLineChange?: (line: number) => void;
+  /** What the cursor is on, after every selection or document change. */
+  onContextChange?: (context: EditorContext) => void;
 }
 
 export function MarkdownEditor({
@@ -62,6 +73,7 @@ export function MarkdownEditor({
   onBlur,
   getTags,
   onTopLineChange,
+  onContextChange,
 }: MarkdownEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -73,6 +85,7 @@ export function MarkdownEditor({
     onBlur,
     getTags,
     onTopLineChange,
+    onContextChange,
   });
   callbacksRef.current = {
     onChange,
@@ -81,6 +94,7 @@ export function MarkdownEditor({
     onBlur,
     getTags,
     onTopLineChange,
+    onContextChange,
   };
 
   useEffect(() => {
@@ -94,6 +108,7 @@ export function MarkdownEditor({
     });
     viewRef.current = view;
     view.focus();
+    callbacksRef.current.onContextChange?.(editorContext(view.state));
     // Text pushed in from outside (the palette's "Insert drawing") lands on
     // its own line at the cursor.
     const stopInserts = onInsertTextRequest((request) => {
@@ -138,6 +153,21 @@ export function MarkdownEditor({
         effects: EditorView.scrollIntoView(position, { y: "start" }),
       });
     },
+    run: (command) => {
+      const view = viewRef.current;
+      if (!view) return;
+      command(view);
+      view.focus();
+    },
+    adopt: (text: string) => {
+      const view = viewRef.current;
+      if (!view || view.state.doc.toString() === text) return;
+      const head = Math.min(view.state.selection.main.head, text.length);
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: text },
+        selection: { anchor: head },
+      });
+    },
     toggleTaskOnLine: (line: number) => {
       const view = viewRef.current;
       if (!view || line < 1 || line > view.state.doc.lines) return;
@@ -167,6 +197,7 @@ type CallbacksRef = RefObject<{
   onBlur: () => void;
   getTags: () => string[];
   onTopLineChange?: (line: number) => void;
+  onContextChange?: (context: EditorContext) => void;
 }>;
 
 function buildExtensions(callbacks: CallbacksRef) {
@@ -194,7 +225,6 @@ function buildExtensions(callbacks: CallbacksRef) {
       ],
     }),
     imagePasteHandler,
-    tableTools,
     EditorView.domEventHandlers({
       blur: () => {
         callbacks.current.onBlur();
@@ -228,6 +258,9 @@ function buildExtensions(callbacks: CallbacksRef) {
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         callbacks.current.onChange(update.state.doc.toString());
+      }
+      if (update.docChanged || update.selectionSet) {
+        callbacks.current.onContextChange?.(editorContext(update.state));
       }
     }),
   ];
