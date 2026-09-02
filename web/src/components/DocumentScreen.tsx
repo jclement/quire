@@ -364,12 +364,16 @@ function DocumentView({
               </Suspense>
               {mode === "split" ? (
                 <div className="hidden min-w-0 border-l border-border pt-3 pl-4 md:block">
-                  {/* Preview follows the buffer, debounced; task toggling is
-                      off here because line numbers shift while typing. */}
+                  {/* Preview follows the buffer, debounced. A checkbox here
+                      flips its line in the editor, so the toggle lands in
+                      the same save as everything else being typed. */}
                   <Markdown
                     markdown={previewText}
                     links={doc.links}
                     tasks={doc.tasks}
+                    onToggleLine={(line) =>
+                      editorRef.current?.toggleTaskOnLine(line)
+                    }
                   />
                 </div>
               ) : null}

@@ -95,3 +95,20 @@ test("new documents open in the last-used editing mode", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Mode Three" }).first()).toBeVisible();
   await expect(modeGroup.getByRole("button", { name: "Edit" })).toHaveAttribute("aria-pressed", "true");
 });
+
+test("split preview checkboxes toggle the task in the buffer", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const path = await createDoc(page, "Split Toggle", "# Split Toggle\n\n- [ ] first\n- [ ] second\n");
+  await page.goto(`/doc/${path}`);
+  await page.getByRole("group", { name: "View mode" }).getByRole("button", { name: "Split" }).click();
+  const editor = page.locator(".cm-content");
+  await expect(editor).toBeVisible();
+  const box = page.getByRole("checkbox", { name: /second/ });
+  await expect(box).toBeEnabled();
+  await box.click();
+  await expect(editor).toContainText("- [x] second");
+  await expect(editor).toContainText("- [ ] first");
+  await expect(box).toBeChecked();
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect.poll(() => diskText(page, path)).toContain("- [x] second");
+});

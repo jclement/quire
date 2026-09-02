@@ -67,6 +67,12 @@ interface MarkdownProps {
   tasks?: Task[];
   onToggleTask?: (task: Task) => void;
   /**
+   * Line-based toggling for a preview of a live buffer: every checkbox is
+   * interactive and reports its source line, and the host flips that line
+   * in the editor. Takes precedence over onToggleTask when given.
+   */
+  onToggleLine?: (line: number) => void;
+  /**
    * Offers "Edit table" on each rendered table; called with the table's
    * index in document order (matching lib/tables.ts findTables).
    */
@@ -77,6 +83,7 @@ interface MarkdownContextValue {
   links: Link[];
   tasks: Task[];
   onToggleTask?: (task: Task) => void;
+  onToggleLine?: (line: number) => void;
   onEditTable?: (index: number) => void;
   /** Source line a table starts on → its index, for the edit affordance. */
   tableIndexByLine: Map<number, number>;
@@ -99,6 +106,7 @@ export function Markdown({
   links = [],
   tasks = [],
   onToggleTask,
+  onToggleLine,
   onEditTable,
 }: MarkdownProps) {
   const context = useMemo(
@@ -106,6 +114,7 @@ export function Markdown({
       links,
       tasks,
       onToggleTask,
+      onToggleLine,
       onEditTable,
       headingIdsByLine: new Map(
         extractHeadings(markdown).map((heading) => [heading.line, heading.id]),
@@ -114,7 +123,7 @@ export function Markdown({
         onEditTable ? findTables(markdown).map((t, i) => [t.line, i]) : [],
       ),
     }),
-    [links, tasks, onToggleTask, onEditTable, markdown],
+    [links, tasks, onToggleTask, onToggleLine, onEditTable, markdown],
   );
   return (
     <MarkdownContext.Provider value={context}>
@@ -213,21 +222,32 @@ function ListItem(props: ComponentProps<"li"> & ExtraProps) {
 }
 
 function Checkbox(props: ComponentProps<"input"> & ExtraProps) {
-  const { tasks, onToggleTask } = useContext(MarkdownContext);
+  const { tasks, onToggleTask, onToggleLine } = useContext(MarkdownContext);
   const line = useContext(LineContext);
   const task =
     line === null
       ? undefined
       : tasks.find((candidate) => candidate.line === line);
-  const interactive = task !== undefined && onToggleTask !== undefined;
+  const byLine = onToggleLine !== undefined && line !== null;
+  const interactive =
+    byLine || (task !== undefined && onToggleTask !== undefined);
+  const onChange = byLine
+    ? () => onToggleLine(line)
+    : task && onToggleTask
+      ? () => onToggleTask(task)
+      : undefined;
   return (
     <input
       type="checkbox"
       checked={props.checked ?? false}
       disabled={!interactive}
-      onChange={interactive ? () => onToggleTask(task) : undefined}
+      onChange={onChange}
       aria-label={
-        task ? `Toggle task: ${task.text}` : "Task checkbox (not indexed)"
+        task
+          ? `Toggle task: ${task.text}`
+          : byLine
+            ? `Toggle task on line ${line}`
+            : "Task checkbox (not indexed)"
       }
       className={`mr-1.5 size-3.5 translate-y-0.5 rounded-sm accent-(--accent) ${
         interactive ? "cursor-pointer" : ""

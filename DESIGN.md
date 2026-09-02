@@ -371,7 +371,12 @@ section re-embeds nothing it doesn't have to. Search is a brute-force dot
 product over an in-memory copy: 20k chunks is 40MB and a few milliseconds,
 and an ANN index would be complexity a personal vault doesn't need. Related
 documents reuse the document's own stored vectors (its centroid), so the
-rail costs no API call.
+rail costs no API call. Related has two gates, because notes from one
+person share vocabulary and structure and an absolute bar alone lets the
+whole vault through for a short note: a floor of 0.4 cosine, plus (once
+the vault has 20+ documents) mean + 1.5σ of the note's similarity to
+everything; and a note with under ~80 characters of body relates to
+nothing, since every title is a little like every other.
 
 Failures degrade to full-text: a 429 or 5xx re-queues the batch after a
 pause, a permanent error is logged and shown in Settings, and the document

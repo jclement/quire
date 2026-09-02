@@ -7,8 +7,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jclement/quire/internal/semantic"
+	"github.com/jclement/quire/internal/vault"
 )
 
 // ErrSemanticOff is returned when no API key is configured.
@@ -52,7 +54,36 @@ func (s *Service) RelatedDocuments(path string, limit int) ([]SearchResult, erro
 	if limit <= 0 || limit > 50 {
 		limit = 5
 	}
+	f, err := s.Vault.Read(path)
+	if err != nil {
+		return nil, err
+	}
+	if bodyChars(f.Raw) < minRelatedBodyChars {
+		return []SearchResult{}, nil
+	}
 	return s.hitsToResults(s.Semantic.Related(path, limit*2), "", limit), nil
+}
+
+// minRelatedBodyChars: below this much prose (frontmatter and the H1 aside)
+// a note is a title, and every title is a little like every other.
+const minRelatedBodyChars = 80
+
+// bodyChars counts the characters of a document's body after frontmatter
+// and its first heading are removed.
+func bodyChars(raw []byte) int {
+	body := raw
+	if _, rest, ok := vault.SplitFrontmatter(raw); ok {
+		body = rest
+	}
+	text := strings.TrimSpace(string(body))
+	if strings.HasPrefix(text, "# ") {
+		if nl := strings.IndexByte(text, '\n'); nl >= 0 {
+			text = text[nl+1:]
+		} else {
+			text = ""
+		}
+	}
+	return len(strings.TrimSpace(text))
 }
 
 func (s *Service) hitsToResults(hits []semantic.Hit, area string, limit int) []SearchResult {

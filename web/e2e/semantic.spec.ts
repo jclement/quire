@@ -41,9 +41,9 @@ test("semantic mode ranks by meaning and survives reload; text mode is exact", a
   const rollout = await createDoc(
     page,
     "Cluster rollout",
-    "# Cluster rollout\n\nThe kubernetes cluster rollout waits on the ingress upgrade.\n",
+    "# Cluster rollout\n\nThe kubernetes cluster rollout waits on the ingress upgrade landing, with the platform team on call for the cutover window.\n",
   );
-  await createDoc(page, "Ingress upgrade", "# Ingress upgrade\n\nDrain the kubernetes cluster before the ingress upgrade.\n");
+  await createDoc(page, "Ingress upgrade", "# Ingress upgrade\n\nDrain the kubernetes cluster before the ingress upgrade so the rollout has no traffic to disturb during the cutover window.\n");
   await createDoc(page, "Lunch plans", "# Lunch plans\n\nTacos on Thursday with the platform team.\n");
   await settled(page);
 

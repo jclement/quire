@@ -161,11 +161,18 @@ function AreaSwitcher() {
                     aria-hidden="true"
                   />
                 ) : (
-                  <AreaDot key={name} color={colorOf(name)} />
+                  <AreaDot
+                    key={name}
+                    color={colorOf(name)}
+                    title={areaLabel(name)}
+                  />
                 ),
               )}
             </span>
-            <span className="truncate">{areaLabel(area)}</span>
+            {/* One area is named; several are told apart by their dots alone. */}
+            {selected.length === 1 ? (
+              <span className="truncate">{areaLabel(area)}</span>
+            ) : null}
           </>
         )}
         <ChevronDown

@@ -126,6 +126,9 @@ func (e *Embedder) Search(ctx context.Context, query string, limit int) ([]Hit, 
 	if err != nil {
 		return nil, err
 	}
+	if limit <= 0 {
+		limit = 20
+	}
 	return e.nearest(vecs[0], "", limit), nil
 }
 
@@ -135,6 +138,15 @@ func (e *Embedder) Search(ctx context.Context, query string, limit int) ([]Hit, 
 // unlike it. 0.4 sits well above the 0.1–0.3 that unrelated notes score
 // with text-embedding-3 while keeping genuinely overlapping ones.
 const minRelatedScore = 0.4
+
+// relatedSigmas: a related document must also score this many standard
+// deviations above the note's mean similarity to the whole vault — once
+// the vault is big enough for a mean to mean anything.
+const relatedSigmas = 1.5
+
+// minVaultForSigmas: below this many documents the spread is dominated by
+// the handful of notes there are, so only the absolute floor applies.
+const minVaultForSigmas = 20
 
 // Related ranks other documents by similarity to this one — no API call,
 // the document's own vectors are already here. Nil when it has none yet,
@@ -154,20 +166,44 @@ func (e *Embedder) Related(path string, limit int) []Hit {
 		}
 	}
 	e.mu.RUnlock()
-	hits := e.nearest(normalize(sum), path, limit)
-	kept := hits[:0]
-	for _, h := range hits {
-		if h.Score >= minRelatedScore {
-			kept = append(kept, h)
+	q := normalize(sum)
+	// Every document's best score, so "related" can mean "well above what
+	// this note scores against the vault at large" — notes from one person
+	// share vocabulary and structure, and an absolute bar alone lets the
+	// whole vault through for a short note.
+	all := e.nearest(q, path, 0)
+	if len(all) == 0 {
+		return nil
+	}
+	var mean, sq float64
+	for _, h := range all {
+		mean += float64(h.Score)
+	}
+	mean /= float64(len(all))
+	for _, h := range all {
+		d := float64(h.Score) - mean
+		sq += d * d
+	}
+	std := math.Sqrt(sq / float64(len(all)))
+	floor := minRelatedScore
+	if len(all) >= minVaultForSigmas {
+		floor = math.Max(floor, mean+relatedSigmas*std)
+	}
+	var kept []Hit
+	for _, h := range all {
+		if float64(h.Score) < floor {
+			break // sorted descending
+		}
+		kept = append(kept, h)
+		if limit > 0 && len(kept) >= limit {
+			break
 		}
 	}
 	return kept
 }
 
+// nearest ranks every document by its best chunk; limit 0 means all.
 func (e *Embedder) nearest(q []float32, exclude string, limit int) []Hit {
-	if limit <= 0 {
-		limit = 20
-	}
 	best := map[string]Hit{}
 	e.mu.RLock()
 	for _, en := range e.entries {
@@ -190,7 +226,7 @@ func (e *Embedder) nearest(q []float32, exclude string, limit int) []Hit {
 		}
 		return hits[i].Path < hits[j].Path
 	})
-	if len(hits) > limit {
+	if limit > 0 && len(hits) > limit {
 		hits = hits[:limit]
 	}
 	return hits

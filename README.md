@@ -156,7 +156,9 @@ on the target, and person/company/project pages assemble themselves from them.
 
 A new document opens straight into the editor, in whichever of Edit or Split
 you used last (remembered per device, like the theme). `e` edits, ⌘E cycles
-read → edit → split, and Escape or Read flushes the save.
+read → edit → split, and Escape or Read flushes the save. In Split, the
+preview's checkboxes flip the task in the editor buffer, so they save with
+whatever else you are typing.
 
 ### Areas
 
@@ -247,7 +249,9 @@ toggle appears on the search page (and `?mode=semantic` on the API, plus
 by heading, embedded with `text-embedding-3-small` (512 dimensions, a few
 cents per thousand notes), kept up to date as you edit, and ranked by cosine
 similarity; each document's rail also lists the notes nearest to it in
-meaning. Be clear about what this means: **note text is sent to that
+meaning — only ones that stand clearly above the note's similarity to the
+vault at large, and never for a note with no body yet (hover an entry for
+its score). Be clear about what this means: **note text is sent to that
 embeddings endpoint.** Nothing is sent with the key unset. Any
 OpenAI-compatible server works via `QUIRE_OPENAI_BASE_URL` (Ollama, LiteLLM),
 which keeps the text on your own machine. Embeddings live in `index.db` and

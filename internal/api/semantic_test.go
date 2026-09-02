@@ -62,14 +62,14 @@ func TestSemanticSearchEndToEnd(t *testing.T) {
 	var created service.Document
 	doJSON(t, "POST", ts.URL+"/api/v1/documents", map[string]any{
 		"type": "note", "title": "Cluster rollout",
-		"markdown": "# Cluster rollout\n\nkubernetes cluster rollout after the ingress upgrade\n",
+		"markdown": "# Cluster rollout\n\nThe kubernetes cluster rollout is scheduled after the ingress upgrade lands, with the platform team on call for the cutover.\n",
 	}, http.StatusCreated, &created)
 	doJSON(t, "POST", ts.URL+"/api/v1/documents", map[string]any{
-		"type": "note", "title": "Lunch", "markdown": "# Lunch\n\ntacos with the team\n",
+		"type": "note", "title": "Lunch", "markdown": "# Lunch\n\nTacos Thursday, sushi Friday, walk afterwards.\n",
 	}, http.StatusCreated, nil)
 	doJSON(t, "POST", ts.URL+"/api/v1/documents", map[string]any{
 		"type": "note", "title": "Ingress upgrade",
-		"markdown": "# Ingress upgrade\n\ndrain the kubernetes cluster before the ingress upgrade\n",
+		"markdown": "# Ingress upgrade\n\nDrain the kubernetes cluster before the ingress upgrade so the rollout has no traffic to disturb during the cutover.\n",
 	}, http.StatusCreated, nil)
 
 	deadline := time.Now().Add(10 * time.Second)

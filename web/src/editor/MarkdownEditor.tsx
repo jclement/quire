@@ -21,6 +21,7 @@ import {
   editorKeymap,
   editorTheme,
   toggleCheckboxOnLine,
+  toggleLineCheckbox,
 } from "./extensions.ts";
 import { imagePasteHandler } from "./imagePaste.ts";
 import { tableKeymap, tableTools } from "./tables.ts";
@@ -33,6 +34,8 @@ export interface MarkdownEditorHandle {
   focus: () => void;
   /** Scrolls a 1-based source line into view — the outline's click target. */
   scrollToLine: (line: number) => void;
+  /** Flips the checkbox on a 1-based line — the split preview's click. */
+  toggleTaskOnLine: (line: number) => void;
 }
 
 interface MarkdownEditorProps {
@@ -134,6 +137,19 @@ export function MarkdownEditor({
       view.dispatch({
         effects: EditorView.scrollIntoView(position, { y: "start" }),
       });
+    },
+    toggleTaskOnLine: (line: number) => {
+      const view = viewRef.current;
+      if (!view || line < 1 || line > view.state.doc.lines) return;
+      const target = view.state.doc.line(line);
+      const replaced = toggleLineCheckbox(target.text);
+      // The preview trails the buffer by a debounce, so the line may have
+      // moved on; only a line that still holds a list item is touched.
+      if (replaced === null) return;
+      view.dispatch(
+        { changes: { from: target.from, to: target.to, insert: replaced } },
+        { userEvent: "input" },
+      );
     },
   }));
 

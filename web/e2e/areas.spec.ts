@@ -67,7 +67,10 @@ test("the switcher narrows Browse, and Unclassified is the unfiled set", async (
   // Several at once: Work stays on, Personal joins it.
   await pickArea(page, "Personal");
   await closeSwitcher(page);
-  await expect(switcher(page)).toContainText("Work, Personal");
+  // Several areas: the badge shows their dots, not a list of names.
+  await expect(switcher(page)).not.toContainText("Work");
+  await expect(switcher(page).getByRole("img", { name: "Work" })).toHaveCount(1);
+  await expect(switcher(page).getByRole("img", { name: "Personal" })).toHaveCount(1);
   await expect(page.getByRole("link", { name: "Work Roadmap" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Beach Trip" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Loose Thought" })).toHaveCount(0);

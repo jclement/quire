@@ -130,7 +130,7 @@ export function DocumentRail({
                 <li key={hit.path}>
                   <RouterLink
                     to={docHref(hit.path)}
-                    title={`${hit.title} (${hit.type})`}
+                    title={`${hit.title} (${hit.type}) — similarity ${hit.score ? hit.score.toFixed(2) : "?"}`}
                     className="-ml-px flex items-start gap-1.5 border-l border-transparent py-0.5 pr-1 pl-2 text-xs leading-snug text-muted hover:border-border hover:text-body"
                   >
                     {Icon ? (

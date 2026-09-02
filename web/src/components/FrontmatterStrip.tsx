@@ -358,7 +358,7 @@ function AreaChip({ doc }: { doc: Document }) {
         title="Change which area this document files under"
         disabled={setArea.isPending}
         onClick={() => setOpen(!open)}
-        className={`${CHIP_CLASSES} h-7 cursor-pointer hover:bg-hover disabled:opacity-60 print:hidden`}
+        className={`${CHIP_CLASSES} cursor-pointer hover:bg-hover disabled:opacity-60 print:hidden`}
         style={{
           borderColor: doc.area ? areaColorVar(current?.color) : undefined,
         }}

@@ -130,7 +130,9 @@ const UNCHECKED = /^(\s*(?:[-*+]|\d+[.)])\s+)\[ \]\s?/;
 const CHECKED = /^(\s*(?:[-*+]|\d+[.)])\s+)\[[xX]\]\s?/;
 const BARE_ITEM = /^(\s*(?:[-*+]|\d+[.)])\s+)(?!\[[ xX]\])/;
 
-function toggleLineCheckbox(text: string): string | null {
+/** The line with its checkbox flipped (or one added to a bare item); null
+ * when the line is not a list item at all. */
+export function toggleLineCheckbox(text: string): string | null {
   if (UNCHECKED.test(text)) return text.replace(UNCHECKED, "$1[x] ");
   if (CHECKED.test(text)) return text.replace(CHECKED, "$1[ ] ");
   if (BARE_ITEM.test(text)) return text.replace(BARE_ITEM, "$1[ ] ");
