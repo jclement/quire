@@ -301,9 +301,12 @@ thought about; the browser asserts the behaviour the user gets.
 
 ## Areas
 
-An area is `area:` in frontmatter, lowercased on read. Discovered from the vault
-and merged with two seeds (`work`, `personal`) so the Nirvana split exists on day
-one; a third area is just frontmatter. `documents.area` is a column (schema v3)
+An area is `area:` in frontmatter, lowercased on read. **Areas are opt-in**: they
+are defined in Settings (`.quire/settings.json`, precious, next to auth.db), each
+with a colour from a nine-hue palette whose light and dark values are CSS tokens,
+and nothing area-shaped renders until two or more exist. An area found only in
+frontmatter is still listed, in neutral, so a typo'd filing stays findable and can
+be defined with one click. `documents.area` is a column (schema v3)
 so every listing, the task views (through their existing documents join) and
 Today narrow with one `AND d.area = ?`. "Unclassified" is `area = '' AND type !=
 'daily'`: daily notes are the capture spine and belong to every area, never to

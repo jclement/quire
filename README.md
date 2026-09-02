@@ -154,19 +154,19 @@ on the target, and person/company/project pages assemble themselves from them.
 
 ### Areas
 
-Nirvana-style **work / personal / unclassified**, as a frontmatter key:
+Optional, Nirvana-style **work / personal / unclassified**, as a frontmatter key:
 
 ```yaml
 area: work
 ```
 
-The switcher at the top of the sidebar narrows Browse, Search, Tasks and Today to
-one area, remembers your choice per device, and files new documents under it.
-Every document page has an area chip to re-file it in place. `work` and
-`personal` are always offered; any other value you write becomes an area the
-moment a document carries it. Daily notes never have an area — they belong to
-every one. `area:work` works in search too, and the CLI/MCP accept an area on
-listing and creation.
+Define areas in **Settings → Areas**, each with a colour. Nothing area-shaped
+appears until you have two or more; then a switcher at the top of the sidebar
+narrows Browse, Search, Tasks and Today to one area, remembers your choice per
+device, and files new documents under it. Every document page gets an area chip
+to re-file it in place, and its colour shows as a dot wherever the area does.
+Daily notes never have an area — they belong to every one. `area:work` works in
+search too, and the CLI/MCP accept an area on listing and creation.
 
 ### Templates
 
