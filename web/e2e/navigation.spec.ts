@@ -54,8 +54,11 @@ test("the calendar shows the month and marks a day with a daily note", async ({
 
   await page.goto("/calendar");
   // A month grid, not an empty shell. The heading specifically: daily-note
-  await expect(page.getByRole("heading", { name: new RegExp(String(new Date().getFullYear())) }).first()).toBeVisible();
+  // titles are also dates, so a bare text match for the year is ambiguous
   // once other specs have created some.
+  await expect(
+    page.getByRole("heading", { name: new RegExp(String(new Date().getFullYear())) }).first(),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: new RegExp(String(new Date().getFullYear())) }).first(),
   ).toBeVisible();

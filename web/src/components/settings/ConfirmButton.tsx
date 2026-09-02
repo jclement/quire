@@ -50,7 +50,7 @@ export function ConfirmButton({
           onConfirm();
         }}
         onBlur={() => setArmed(false)}
-        className="flex h-7 shrink-0 items-center rounded border border-danger px-1.5 text-[10px] font-medium uppercase tracking-wide text-danger hover:bg-danger hover:text-white"
+        className="flex h-11 shrink-0 items-center rounded border border-danger px-2 text-[10px] font-medium uppercase tracking-wide text-danger hover:bg-danger hover:text-white md:h-7 md:px-1.5"
       >
         {confirmLabel}
       </button>
@@ -61,7 +61,7 @@ export function ConfirmButton({
       type="button"
       onClick={arm}
       aria-label={label}
-      className="flex size-7 shrink-0 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-danger"
+      className="flex size-11 shrink-0 items-center justify-center rounded border border-border text-muted hover:bg-hover hover:text-danger md:size-7"
     >
       {children}
     </button>

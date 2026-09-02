@@ -152,6 +152,18 @@ Entities relate through wikilinks, either in prose (`met [[Sarah Chen]] about
 `people: ["[[Sarah Chen]]"]`). Both are indexed, so either produces a backlink
 on the target, and person/company/project pages assemble themselves from them.
 
+### Journal
+
+`/journal` is every daily note on one scrolling page, today first, history
+loading as you scroll. Checkboxes toggle in place; each day's heading opens it
+for editing. The Daily page has a Journal toggle and the sidebar links both.
+
+### Tags
+
+`#tags` in prose and `tags:` in frontmatter are the same thing. `/tags` lists
+every tag sized by use; tags in prose, in Browse rows and on the tags page all
+link to the `tag:x` search. Purely numeric `#123` is not a tag.
+
 ### Calendar
 
 `/calendar` shows the month at a glance: which days have a daily note, what
@@ -198,10 +210,19 @@ Settings and stored as an ordinary vault document (`AGENTS.md`). Edit it in the
 app or in vim; the next agent session gets it, no restart.
 
 quire is agent-operable by design: a Streamable-HTTP MCP server at `/mcp` exposes the
-same service layer as the UI — `search`, `get_document`, `create_document`,
-`update_document` (hash-guarded), `append_to_document`, `list_tasks`, `create_task`,
-`complete_task`, `today`, and `person_context` (meeting prep in one call). There is
-deliberately no delete tool.
+same service layer as the UI. Sixteen tools, each annotated (read-only / additive /
+destructive) so clients know what deserves a confirmation:
+
+| Scope | Tools |
+|---|---|
+| read | `search` (full-text + `type:` `tag:` `is:task` `due:`), `list_documents`, `get_document`, `get_daily`, `list_tasks`, `list_tags`, `today`, `person_context` |
+| write | `create_document`, `append_to_document`, `update_document` (hash-guarded), `link_entity`, `set_frontmatter` |
+| tasks | `create_task`, `complete_task`, `edit_task` (snooze / reprioritise) |
+
+There is deliberately no delete tool. **Every mutating tool call and every REST
+write by a token or connected app is recorded** — Settings → Agent activity shows
+who did what, where, and whether it succeeded. Your own edits in the browser are
+not logged; the question the log answers is "what did the agents do?".
 
 Two credential paths, per the house pattern:
 

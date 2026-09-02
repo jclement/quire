@@ -172,7 +172,17 @@ candidates, never guesses), `complete_task`, `today` (the flagship composed call
 `person_context` (the rollup a person page shows, as JSON — meeting prep in one call).
 
 Agent guardrails: read-only tokens are the default posture; no delete tool; every
-API/MCP write is audit-logged (principal, tool, path, when).
+API/MCP write is audit-logged (principal, tool, path, when) — `audit_log` in auth.db,
+surfaced in Settings. The owner's own browser session is not audited on purpose: the
+log answers "what did the agents do", and the human's autosaves would drown it. This
+claim was in this document for two releases before anything recorded a row; it is
+true now, with tests for the middleware path and the MCP path.
+
+Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
+`idempotentHint`) so a client can run reads freely, retry additive writes, and ask
+before a full-document replace. Descriptions are written as onboarding — when to
+reach for this tool rather than that one — because the description *is* the
+integration.
 
 **Tools are registered per request against the caller's scopes.** The auth
 middleware attaches the principal to the request context and internal/mcp builds
@@ -288,6 +298,22 @@ Three layers, each for what only it can see:
 The last of those is the pattern worth naming: **the browser has repeatedly
 found what a green Go suite could not.** Unit tests assert the behaviour you
 thought about; the browser asserts the behaviour the user gets.
+
+## Journal and tags
+
+The journal (`/journal`) is a paged, newest-first read of daily notes, driven by
+`GET /api/v1/daily?before=`. Daily paths sort lexically as dates, so "the ten notes
+before this date" is one indexed query with no date parsing. Each day renders
+through the same Markdown component as a document page, so task toggles work in
+place — which exposed that a toggle resolves its task id through the *index* while
+the page reads the *file*: after an external edit there is a debounce-wide window
+where the file is ahead of the index and a toggle 404s. It self-heals in under a
+second and is not worth a fallback scan, but the E2E test waits for the index
+rather than the DOM for exactly that reason.
+
+Tags are one concept with two spellings — `#tag` in prose, `tags:` in frontmatter —
+merged at index time. `#tag` in prose renders as a link to the tag search; a purely
+numeric `#123` is not a tag, matching Obsidian.
 
 ## Sharing
 
