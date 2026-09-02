@@ -155,3 +155,39 @@ test("search honours the switcher and a typed area: wins", async ({ page }) => {
   await expect(page.getByText("book the beach").first()).toBeVisible();
   await pickArea(page, "All areas");
 });
+
+test("a person inherits their company's area, and a note its first person's", async ({ page }) => {
+  await page.request.put("/api/v1/areas", {
+    data: { areas: [{ name: "work", color: "blue" }, { name: "personal", color: "green" }] },
+  });
+  const mk = async (type: string, title: string, markdown: string, area = "") =>
+    ((await (await page.request.post("/api/v1/documents", { data: { type, title, markdown, area } })).json())
+      .data.path as string);
+  const company = await mk("company", "Globex", "# Globex\n", "work");
+  expect((await (await page.request.get(`/api/v1/documents/${company}`)).json()).data.area).toBe("work");
+  const person = await mk("person", "Hank Scorpio", "# Hank Scorpio\n");
+  const note = await mk("note", "Volcano Plans", "# Volcano Plans\n\nlair logistics\n");
+  await page.request.post("/api/v1/link", { data: { path: person, key: "company", target: "Globex" } });
+  await page.request.post("/api/v1/link", { data: { path: note, key: "people", target: "Hank Scorpio" } });
+
+  await expect
+    .poll(async () => (await (await page.request.get(`/api/v1/documents/${note}`)).json()).data.area)
+    .toBe("work");
+  const doc = (await (await page.request.get(`/api/v1/documents/${note}`)).json()).data;
+  expect(doc.area_from).toBe(person);
+  expect(doc.markdown).not.toContain("area:");
+
+  await page.goto(`/doc/${note}`);
+  const badge = page.getByRole("button", { name: "Document area" });
+  await expect(badge).toContainText("work");
+  await expect(badge).toContainText("inherited");
+  await expect(badge).toHaveAttribute("data-inherited", "true");
+
+  // An explicit choice overrides the inheritance.
+  await badge.click();
+  await page.getByRole("listbox", { name: "Choose area" }).getByRole("option", { name: "Personal", exact: true }).click();
+  await expect
+    .poll(async () => (await (await page.request.get(`/api/v1/documents/${note}`)).json()).data.area)
+    .toBe("personal");
+  await expect(badge).not.toContainText("inherited");
+});

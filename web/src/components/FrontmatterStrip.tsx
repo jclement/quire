@@ -364,6 +364,11 @@ function AreaChip({ doc, sync }: { doc: Document; sync?: StripSync }) {
       ? [...list, { area: doc.area, count: 1, color: "slate", defined: false }]
       : list;
   const current = list.find((a) => a.area === doc.area);
+  // An inherited area comes through the document's links (a person's
+  // company, a note's first person); the badge shows it dashed, and the
+  // picker's "no explicit area" row keeps inheriting rather than clearing.
+  const inherited = doc.area !== "" && doc.area_from !== "";
+  const inheritedFrom = doc.area_from.replace(/^.*\//, "").replace(/\.md$/, "");
   // A flex wrapper (not a block around an inline button) so no baseline gap
   // pushes the badge below its neighbours; h-[22px] is the chips' height.
   return (
@@ -373,10 +378,17 @@ function AreaChip({ doc, sync }: { doc: Document; sync?: StripSync }) {
         aria-label="Document area"
         aria-expanded={open}
         aria-haspopup="listbox"
-        title="Change which area this document files under"
+        data-inherited={inherited ? "true" : undefined}
+        title={
+          inherited
+            ? `Inherited from ${inheritedFrom} — pick one to override`
+            : "Change which area this document files under"
+        }
         disabled={setArea.isPending}
         onClick={() => setOpen(!open)}
-        className={`${CHIP_CLASSES} h-[22px] cursor-pointer hover:bg-hover disabled:opacity-60 print:hidden`}
+        className={`${CHIP_CLASSES} h-[22px] cursor-pointer hover:bg-hover disabled:opacity-60 print:hidden ${
+          inherited ? "border-dashed" : ""
+        }`}
         style={{
           borderColor: doc.area ? areaColorVar(current?.color) : undefined,
         }}
@@ -385,7 +397,10 @@ function AreaChip({ doc, sync }: { doc: Document; sync?: StripSync }) {
         {doc.area ? (
           <>
             <AreaDot color={current?.color} />
-            <span className="text-heading">{doc.area}</span>
+            <span className={inherited ? "text-body" : "text-heading"}>
+              {doc.area}
+            </span>
+            {inherited ? <span className="text-muted">· inherited</span> : null}
           </>
         ) : (
           <span className="text-body">unassigned</span>
@@ -395,14 +410,14 @@ function AreaChip({ doc, sync }: { doc: Document; sync?: StripSync }) {
         <AreaPicker
           label="Choose area"
           areas={choices}
-          selected={doc.area ? [doc.area] : []}
+          selected={inherited ? [] : doc.area ? [doc.area] : []}
           multi={false}
-          noneLabel="Unassigned"
+          noneLabel={inherited ? `Inherit (${doc.area})` : "Unassigned"}
           onToggle={(area) => {
             if (area !== doc.area) setArea.mutate(area);
           }}
           onClear={() => {
-            if (doc.area) setArea.mutate("");
+            if (doc.area && !inherited) setArea.mutate("");
           }}
           onClose={() => setOpen(false)}
         />

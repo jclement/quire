@@ -50,13 +50,14 @@ func (s *Service) today() string { return s.Now().Format("2006-01-02") }
 
 func metaFromRow(d index.DocRow) DocMeta {
 	return DocMeta{
-		Path:   d.Path,
-		Type:   d.Type,
-		Title:  d.Title,
-		Mtime:  d.Mtime.Format(time.RFC3339),
-		SHA256: d.SHA256,
-		Tags:   d.Tags,
-		Area:   d.Area,
+		Path:     d.Path,
+		Type:     d.Type,
+		Title:    d.Title,
+		Mtime:    d.Mtime.Format(time.RFC3339),
+		SHA256:   d.SHA256,
+		Tags:     d.Tags,
+		Area:     d.Area,
+		AreaFrom: d.AreaFrom,
 	}
 }
 
@@ -209,6 +210,10 @@ func (s *Service) buildDocument(f vault.File) (Document, error) {
 		meta.Type = row.Type
 		meta.Title = row.Title
 		meta.Tags = row.Tags
+		// The effective area (explicit or inherited) is the index's answer;
+		// the frontmatter value above only stands in for an unindexed file.
+		meta.Area = row.Area
+		meta.AreaFrom = row.AreaFrom
 	} else {
 		meta.Type = string(vault.InferType(f.Path))
 		meta.Title = scanned.Title

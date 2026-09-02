@@ -189,6 +189,13 @@ to re-file it in place, and its colour shows as a dot wherever the area does.
 Daily notes never have an area — they belong to every one. `area:work` works in
 search too, and the CLI/MCP accept an area on listing and creation.
 
+A document without an area of its own inherits one through its links: a
+person files under their company, a project under its company (else its
+first person), a note or meeting under its first person (else company, then
+project). Explicit always wins, the chain follows (note → person →
+company), and nothing is written to the inheriting files — the badge shows
+"inherited" with a dashed border, and picking an area there overrides it.
+
 The switcher is a badge in the sidebar — "Area: all", or the coloured dots
 and names of what is selected — and its picker takes several areas at once,
 so Work and Personal can be on together (the API and MCP take the same thing

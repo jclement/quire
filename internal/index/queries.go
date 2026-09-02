@@ -20,7 +20,10 @@ type DocRow struct {
 	SHA256      string
 	Tags        []string
 	Frontmatter json.RawMessage
-	Area        string
+	// Area is the effective area; AreaFrom is the path it was inherited
+	// from, "" when explicit or absent.
+	Area     string
+	AreaFrom string
 }
 
 // AreaUnclassified is the filter value meaning "documents with no area".
@@ -125,14 +128,14 @@ type SearchHit struct {
 const docSelect = `
 	SELECT d.path, d.type, d.title, d.mtime, d.sha256, d.frontmatter_json,
 	       COALESCE((SELECT group_concat(t.tag) FROM tags t WHERE t.path = d.path), ''),
-	       d.area
+	       d.area, d.area_from
 	FROM documents d`
 
 func scanDocRow(rows interface{ Scan(...any) error }) (DocRow, error) {
 	var d DocRow
 	var mtime int64
 	var fm, tags string
-	if err := rows.Scan(&d.Path, &d.Type, &d.Title, &mtime, &d.SHA256, &fm, &tags, &d.Area); err != nil {
+	if err := rows.Scan(&d.Path, &d.Type, &d.Title, &mtime, &d.SHA256, &fm, &tags, &d.Area, &d.AreaFrom); err != nil {
 		return DocRow{}, err
 	}
 	d.Mtime = time.Unix(mtime, 0)

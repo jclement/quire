@@ -12,7 +12,7 @@ import (
 )
 
 // schemaVersion is stored in PRAGMA user_version. Bump on any schema change.
-const schemaVersion = 3 // v3: documents.area
+const schemaVersion = 4 // v4: documents.area_explicit / area_from (inheritance)
 
 const schema = `
 CREATE TABLE documents (
@@ -23,10 +23,16 @@ CREATE TABLE documents (
 	size             INTEGER NOT NULL,
 	sha256           TEXT NOT NULL,
 	frontmatter_json TEXT NOT NULL DEFAULT '{}',
-	-- Area is the frontmatter area: value (work, personal, ...) lowercased;
-	-- '' for unclassified, and always '' for daily notes, which belong to
-	-- every area.
-	area             TEXT NOT NULL DEFAULT ''
+	-- area is the effective area the document files under: its own
+	-- frontmatter area: value (lowercased) when set, otherwise the one it
+	-- inherits through its entity links (see areas.go); '' when neither,
+	-- and always '' for daily notes, which belong to every area.
+	area             TEXT NOT NULL DEFAULT '',
+	-- area_explicit is the frontmatter value alone; area_from is the path
+	-- of the document the effective area was inherited from ('' when the
+	-- area is explicit or absent).
+	area_explicit    TEXT NOT NULL DEFAULT '',
+	area_from        TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX documents_area ON documents(area);
 
@@ -111,6 +117,13 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 	if version == schemaVersion {
 		return db, false, nil
 	}
+	// v3 → v4 adds columns; everything else in the file (embeddings above
+	// all, which cost money to rebuild) stays.
+	if version == 3 {
+		if err := migrateV3ToV4(db); err == nil {
+			return db, false, nil
+		}
+	}
 
 	// Wrong or zero version: drop everything and rebuild. index.db is
 	// disposable by design (DESIGN.md decision 2).
@@ -118,6 +131,20 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 		return nil, false, err
 	}
 	return db, true, nil
+}
+
+func migrateV3ToV4(db *sql.DB) error {
+	for _, stmt := range []string{
+		"ALTER TABLE documents ADD COLUMN area_explicit TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE documents ADD COLUMN area_from TEXT NOT NULL DEFAULT ''",
+		"UPDATE documents SET area_explicit = area",
+		"PRAGMA user_version = 4",
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrating index to v4: %w", err)
+		}
+	}
+	return nil
 }
 
 func recreate(db *sql.DB) error {

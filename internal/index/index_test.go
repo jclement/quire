@@ -1,6 +1,7 @@
 package index
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -307,5 +308,90 @@ func TestAreaClauseCombinesAreas(t *testing.T) {
 		if want.clause == "" && clause != "" {
 			t.Errorf("areaClause(%q) should be empty, got %q", in, clause)
 		}
+	}
+}
+
+// TestAreaInheritance: a person takes the company's area, a note takes its
+// first person's, explicit wins, and re-filing the company re-files the
+// chain — with nothing written to any file but the company's.
+func TestAreaInheritance(t *testing.T) {
+	root := t.TempDir()
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(rel, body string) {
+		t.Helper()
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		_ = os.MkdirAll(filepath.Dir(full), 0o755)
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("companies/acme.md", "---\ntitle: Acme\narea: work\n---\n# Acme\n")
+	write("people/sarah.md", "---\ntitle: Sarah Chen\ncompany: \"[[Acme]]\"\n---\n# Sarah Chen\n")
+	write("notes/plan.md", "---\ntitle: Plan\npeople: [\"[[Sarah Chen]]\"]\n---\n# Plan\n")
+	write("notes/own.md", "---\ntitle: Own\narea: personal\npeople: [\"[[Sarah Chen]]\"]\n---\n# Own\n")
+	write("projects/apollo.md", "---\ntitle: Apollo\npeople: [\"[[Sarah Chen]]\"]\n---\n# Apollo\n")
+	write("daily/2026-09-02.md", "# 2026-09-02\n")
+
+	db, _, err := Open(filepath.Join(t.TempDir(), "index.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ix := &Index{DB: db, Vault: v}
+	if err := ix.FullScan(); err != nil {
+		t.Fatal(err)
+	}
+	get := func(rel string) (string, string) {
+		t.Helper()
+		row, err := ix.GetDocMeta(rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return row.Area, row.AreaFrom
+	}
+	for rel, want := range map[string][2]string{
+		"companies/acme.md":   {"work", ""},
+		"people/sarah.md":     {"work", "companies/acme.md"},
+		"notes/plan.md":       {"work", "people/sarah.md"},
+		"notes/own.md":        {"personal", ""},
+		"projects/apollo.md":  {"work", "people/sarah.md"},
+		"daily/2026-09-02.md": {"", ""},
+	} {
+		area, from := get(rel)
+		if area != want[0] || from != want[1] {
+			t.Errorf("%s: area=%q from=%q, want %q from %q", rel, area, from, want[0], want[1])
+		}
+	}
+
+	// Re-filing the company re-files everyone downstream.
+	write("companies/acme.md", "---\ntitle: Acme\narea: personal\n---\n# Acme\n")
+	if _, err := ix.IndexFile("companies/acme.md"); err != nil {
+		t.Fatal(err)
+	}
+	if area, _ := get("notes/plan.md"); area != "personal" {
+		t.Errorf("note should follow the company: %q", area)
+	}
+	// Unlinking the person from the company clears the chain below them.
+	write("people/sarah.md", "---\ntitle: Sarah Chen\n---\n# Sarah Chen\n")
+	if _, err := ix.IndexFile("people/sarah.md"); err != nil {
+		t.Fatal(err)
+	}
+	if area, from := get("notes/plan.md"); area != "" || from != "" {
+		t.Errorf("note should lose its inherited area: %q from %q", area, from)
+	}
+	// The filter and the counts see effective areas.
+	counts, err := ix.Areas()
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := 0
+	for _, c := range counts {
+		total += c.Count
+	}
+	if total != 2 { // acme (explicit) + own (explicit); sarah/plan/apollo lost theirs
+		t.Errorf("area counts = %+v", counts)
 	}
 }

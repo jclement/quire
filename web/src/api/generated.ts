@@ -43,6 +43,10 @@ export interface DocMeta {
    * unclassified. Daily notes are always "".
    */
   area: string;
+  /**
+   * AreaFrom is the document the area was inherited from, "" when explicit.
+   */
+  area_from: string;
 }
 /**
  * AreaCount is one area (work, personal, …) with its document count. Defined

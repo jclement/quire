@@ -18,6 +18,8 @@ type DocMeta struct {
 	// Area is the document's frontmatter area:, lowercased; "" when
 	// unclassified. Daily notes are always "".
 	Area string `json:"area"`
+	// AreaFrom is the document the area was inherited from, "" when explicit.
+	AreaFrom string `json:"area_from"`
 }
 
 // AreaCount is one area (work, personal, …) with its document count. Defined

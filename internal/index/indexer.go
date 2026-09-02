@@ -29,6 +29,9 @@ type Index struct {
 	Vault *vault.Vault
 	// Notify, when set, receives an Event after each applied change.
 	Notify func(Event)
+	// batching suppresses per-file area propagation during FullScan, which
+	// runs it once at the end instead.
+	batching bool
 }
 
 func (ix *Index) notify(ev Event) {
@@ -78,9 +81,9 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 		return false, err
 	}
 
-	_, err = tx.Exec(`INSERT INTO documents (path, type, title, mtime, size, sha256, frontmatter_json, area)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		rel, string(docType), title, f.ModTime.Unix(), len(f.Raw), f.SHA256, string(fmJSON), area)
+	_, err = tx.Exec(`INSERT INTO documents (path, type, title, mtime, size, sha256, frontmatter_json, area, area_explicit)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		rel, string(docType), title, f.ModTime.Unix(), len(f.Raw), f.SHA256, string(fmJSON), area, area)
 	if err != nil {
 		return false, fmt.Errorf("inserting document %s: %w", rel, err)
 	}
@@ -127,6 +130,11 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("committing index of %s: %w", rel, err)
 	}
+	if !ix.batching {
+		if err := ix.PropagateAreas(); err != nil {
+			return false, err
+		}
+	}
 	ix.notify(Event{Path: rel, Action: "upsert"})
 	return true, nil
 }
@@ -147,6 +155,11 @@ func (ix *Index) Remove(rel string) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	if !ix.batching {
+		if err := ix.PropagateAreas(); err != nil {
+			return err
+		}
+	}
 	ix.notify(Event{Path: rel, Action: "delete"})
 	return nil
 }
@@ -155,6 +168,15 @@ func (ix *Index) Remove(rel string) error {
 // files that no longer exist. Cheap when nothing changed: it compares
 // (mtime, size) before re-reading content.
 func (ix *Index) FullScan() error {
+	ix.batching = true
+	defer func() { ix.batching = false }()
+	if err := ix.fullScan(); err != nil {
+		return err
+	}
+	return ix.PropagateAreas()
+}
+
+func (ix *Index) fullScan() error {
 	known := map[string][2]int64{} // path → (mtime, size)
 	rows, err := ix.DB.Query("SELECT path, mtime, size FROM documents")
 	if err != nil {

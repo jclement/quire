@@ -333,6 +333,14 @@ Chosen over fixed areas (a third one would need a code change) and over
 directory-based areas (`work/people/` collides with the type directories and
 breaks the imported-vault story). Decision made with the owner, 2026-09-02.
 
+Inheritance is derived, never written: `documents.area` is the effective
+area, `area_explicit` the file's own, `area_from` the path it came through.
+`PropagateAreas` (index/areas.go) recomputes all three from every file's
+frontmatter links after each index change — a few thousand rows of JSON and
+a map lookup per link, milliseconds — so there is no dependency tracking to
+get wrong. The v3→v4 schema change is an in-place `ALTER`, since dropping
+index.db would also drop the embeddings.
+
 The filter value is a comma-separated list ("work,personal", "none,work"):
 `areaClause` ORs the members, so the switcher can show several areas at
 once and the API/MCP take the same string. A document still has one area.
