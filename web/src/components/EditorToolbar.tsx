@@ -10,7 +10,6 @@ import {
   LayoutGrid,
   MessageSquareQuote,
   PenTool,
-  Table2,
   WrapText,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -18,7 +17,6 @@ import { CALLOUT_TYPES, type CalloutType } from "../lib/callouts.ts";
 import type { TaskLine } from "../lib/taskLine.ts";
 import {
   applyTaskLine,
-  insertTable,
   makeTask,
   setCallout,
   setHeading,
@@ -143,18 +141,11 @@ export function EditorToolbar({
       <Divider />
 
       <IconButton
-        label="Table"
-        tip="Insert a table"
-        onClick={() => run(insertTable)}
-        disabled={!context || context.inTable}
-      >
-        <Table2 className="size-4" aria-hidden="true" />
-      </IconButton>
-      <IconButton
         label="Reformat table"
         tip="Reformat table (⌘⌥T)"
         onClick={() => run((view) => void formatTableAtCursor(view))}
         disabled={!context?.inTable}
+        active={context?.inTable === true}
       >
         <WrapText className="size-4" aria-hidden="true" />
       </IconButton>
@@ -163,6 +154,7 @@ export function EditorToolbar({
         tip="Edit table as a grid"
         onClick={() => run((view) => void editTableAtCursor(view))}
         disabled={!context?.inTable}
+        active={context?.inTable === true}
       >
         <LayoutGrid className="size-4" aria-hidden="true" />
       </IconButton>

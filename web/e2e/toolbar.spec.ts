@@ -66,19 +66,15 @@ test("heading, task, details and callout act on the cursor line", async ({ page 
   await expect.poll(() => diskText(page, path)).toContain("> [!warning]\n> some prose");
 });
 
-test("Table inserts a starter table and Drawing inserts an embed", async ({ page }) => {
+test("Drawing inserts an embed at the cursor", async ({ page }) => {
   const { path, editor } = await openInEditor(page, "Toolbar Insert", "# Toolbar Insert\n\nintro\n");
   await editor.getByText("intro").click();
-  await toolbar(page).getByRole("button", { name: "Table", exact: true }).click();
-  await expect(editor).toContainText("| Column | Column |");
-  await expect(toolbar(page).getByRole("button", { name: "Reformat table" })).toBeEnabled();
-
   await toolbar(page).getByRole("button", { name: "Drawing" }).click();
   await expect(page.getByRole("dialog", { name: "Drawing" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(editor).toContainText("![Drawing](attachments/");
   await page.keyboard.press("ControlOrMeta+s");
-  await expect.poll(() => diskText(page, path)).toContain("| Column | Column |");
+  await expect.poll(() => diskText(page, path)).toContain("![Drawing](attachments/");
 });
 
 test("the properties strip stays live while editing", async ({ page }) => {

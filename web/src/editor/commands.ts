@@ -151,25 +151,3 @@ export function insertBlock(view: EditorView, block: string): void {
     { userEvent: "input" },
   );
 }
-
-/** A starter table, cursor left in its first cell. */
-export function insertTable(view: EditorView): void {
-  const block = "| Column | Column |\n| --- | --- |\n|  |  |";
-  const { state } = view;
-  const line = state.doc.lineAt(state.selection.main.head);
-  const empty = line.text.trim() === "";
-  const before = empty ? "" : "\n\n";
-  const at = empty ? line.from : line.to;
-  view.dispatch(
-    {
-      changes: {
-        from: at,
-        to: empty ? line.to : at,
-        insert: `${before}${block}`,
-      },
-      selection: EditorSelection.cursor(at + before.length + 2),
-      scrollIntoView: true,
-    },
-    { userEvent: "input" },
-  );
-}

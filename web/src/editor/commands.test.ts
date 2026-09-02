@@ -4,7 +4,6 @@ import { EditorView } from "@codemirror/view";
 import {
   applyTaskLine,
   editorContext,
-  insertTable,
   makeTask,
   setCallout,
   setHeading,
@@ -73,14 +72,5 @@ describe("editor commands", () => {
     expect(editorContext(v.state).callout).toBe("warning");
     setCallout(v, "tip");
     expect(v.state.doc.line(1).text).toBe("> [!tip]");
-  });
-
-  test("a table is inserted on its own lines with the cursor in the first cell", () => {
-    const v = view("intro", 5);
-    insertTable(v);
-    expect(v.state.doc.toString()).toBe(
-      "intro\n\n| Column | Column |\n| --- | --- |\n|  |  |",
-    );
-    expect(v.state.doc.lineAt(v.state.selection.main.head).number).toBe(3);
   });
 });

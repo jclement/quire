@@ -26,18 +26,16 @@ test("the toolbar's table buttons wake up inside a table and reformat it", async
   const toolbar = page.getByRole("toolbar", { name: "Editor tools" });
   await expect(toolbar).toBeVisible();
 
-  // Outside the table: the table-editing buttons are there but disabled,
-  // and "Table" (insert) is live.
+  // Outside the table the table buttons are there but asleep.
   await editor.click();
   await page.keyboard.press("ControlOrMeta+Home");
   await expect(toolbar.getByRole("button", { name: "Reformat table" })).toBeDisabled();
   await expect(toolbar.getByRole("button", { name: "Edit as grid" })).toBeDisabled();
-  await expect(toolbar.getByRole("button", { name: "Table", exact: true })).toBeEnabled();
 
-  // Click into the table body.
+  // Click into the table body: they light up.
   await page.getByText("Sarah Chen", { exact: false }).first().click();
   await expect(toolbar.getByRole("button", { name: "Reformat table" })).toBeEnabled();
-  await expect(toolbar.getByRole("button", { name: "Table", exact: true })).toBeDisabled();
+  await expect(toolbar.getByRole("button", { name: "Edit as grid" })).toHaveAttribute("aria-pressed", "true");
 
   await toolbar.getByRole("button", { name: "Reformat table" }).click();
   await expect(editor).toContainText(TIDY_HEADER);
