@@ -183,7 +183,7 @@ paths:
       responses: { "200": { description: "data: ShareInfo[] — token, doc_path, url, view_count, expires_at, revoked_at" } }
     post:
       summary: Create a share link for a document
-      description: "Body {path, expires_in_days?}. The returned url advertises the tailnet/funnel hostname when configured."
+      description: "Body {path, expires_in_days?}. The returned url is built from the configured base URL."
       responses: { "201": { description: "data: ShareInfo" } }
   /api/v1/shares/{token}:
     delete:

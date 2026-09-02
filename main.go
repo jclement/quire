@@ -27,7 +27,6 @@ import (
 	"github.com/jclement/quire/internal/oauth"
 	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/share"
-	"github.com/jclement/quire/internal/tailnet"
 	"github.com/jclement/quire/internal/vault"
 	"github.com/jclement/quire/internal/webui"
 )
@@ -160,19 +159,16 @@ func runServe() error {
 	mux.Handle("/", webui.Handler())
 
 	// OAuth 2.1 authorization server for remote MCP clients. Consent needs
-	// the vault owner: a tailnet-verified identity (header set by the gate),
-	// a passkey session, or the loopback-only auth-none listener (which is
-	// never reachable via funnel — the gate marks those requests public).
+	// the vault owner: a passkey session, or the loopback-only auth-none
+	// listener, which by definition nobody remote can reach.
 	isOwner := func(r *http.Request) bool {
-		if r.Header.Get(auth.HeaderTailnetLogin) != "" {
-			return true
-		}
 		if cookie, err := r.Cookie(auth.SessionCookie); err == nil {
 			if _, err := authStore.SessionPrincipal(cookie.Value); err == nil {
 				return true
 			}
 		}
-		return cfg.AuthMode == config.AuthNone && r.Header.Get(auth.HeaderPublicRequest) == ""
+		// Loopback-only mode has no other notion of a user.
+		return cfg.AuthMode == config.AuthNone
 	}
 	oauthServer := oauth.New(authStore, cfg.BaseURL, isOwner)
 	oauthServer.Routes(mux)
@@ -180,12 +176,18 @@ func runServe() error {
 	if cfg.AuthMode == config.AuthNone {
 		slog.Warn("auth mode \"none\": every request is the vault owner (loopback only)")
 	}
+	// Consent is a browser flow, so it needs a browser-shaped credential.
+	// token-only has none, which makes /oauth/authorize unapprovable — the
+	// connector fails at the last step with nothing to explain it.
+	if cfg.AuthMode == config.AuthTokenOnly {
+		slog.Warn("auth mode \"token-only\": bearer tokens work, but OAuth consent cannot be approved " +
+			"(no browser login) — use QUIRE_AUTH_MODE=passkey if you want claude.ai connectors")
+	}
 	// Every URL quire hands out — the OAuth discovery challenge on /mcp,
 	// share links — comes from base_url. Left at its default while listening
 	// elsewhere, it silently points clients at a host that isn't there.
-	// (Tailscale mode overwrites it with the node's own name, so it is fine.)
 	if cfg.BaseURL == config.DefaultBaseURL && cfg.Addr != "127.0.0.1:8321" &&
-		cfg.Addr != "localhost:8321" && !cfg.TailscaleEnabled() {
+		cfg.Addr != "localhost:8321" {
 		slog.Warn("QUIRE_BASE_URL is unset, so share links and MCP OAuth discovery will advertise "+
 			config.DefaultBaseURL+" — set it to the URL clients actually reach this instance at",
 			"listening_on", cfg.Addr)
@@ -213,9 +215,6 @@ func runServe() error {
 		})
 	}
 
-	if cfg.TailscaleEnabled() {
-		go serveTailnet(ctx, cfg, mux, mcpHandler, shares, oauthServer, authStore)
-	}
 	scheduleDigest(ctx, cfg, svc)
 
 	server := &http.Server{Addr: cfg.Addr, Handler: securityHeaders(authStore.Middleware(cfg.AuthMode, oauthServer.WWWAuthenticate(), mux))}
@@ -234,62 +233,6 @@ func runServe() error {
 		committer.Wait(10 * time.Second)
 	}
 	return nil
-}
-
-// serveTailnet joins the tailnet and serves the app there over HTTPS,
-// authenticated by tailnet identity. With funnel on, the same listener also
-// takes public traffic, which the gate restricts to /s/* share pages.
-// Tailnet failures never take down the local listener — they log and retry
-// is a restart away.
-func serveTailnet(ctx context.Context, cfg config.Config, mux http.Handler, mcpHandler http.Handler, shares *share.Manager, oauthServer *oauth.Server, authStore *auth.Store) {
-	node, err := tailnet.Start(ctx, cfg)
-	if err != nil {
-		slog.Error("tailscale failed to start; continuing without it", "err", err)
-		return
-	}
-	defer node.Close()
-
-	ln, err := node.Listen(cfg.TSFunnel)
-	if err != nil {
-		slog.Error("tailscale listener failed", "funnel", cfg.TSFunnel, "err", err)
-		return
-	}
-
-	// Share links and the OAuth issuer advertise the tailnet HTTPS name (the
-	// funnel URL is the same name) unless the user pinned an explicit base URL.
-	if node.DNSName != "" && os.Getenv("QUIRE_BASE_URL") == "" {
-		shares.SetBaseURL("https://" + node.DNSName)
-		oauthServer.SetIssuer("https://" + node.DNSName)
-	}
-
-	publicMux := http.NewServeMux()
-	shares.Routes(publicMux)
-	if cfg.TSFunnelMCP {
-		// Hosted clients (claude.ai connectors) reach MCP + OAuth via funnel;
-		// the gate enforces bearer credentials on /mcp before this mux runs.
-		publicMux.Handle("/mcp", mcpHandler)
-		oauthServer.Routes(publicMux)
-	}
-
-	server := &http.Server{ConnContext: tailnet.ConnContext, Handler: securityHeaders(node.Handler(tailnet.GateConfig{
-		Full:         mux,
-		Public:       publicMux,
-		Store:        authStore,
-		OwnerLogin:   cfg.TSOwner,
-		PublicMCP:    cfg.TSFunnelMCP,
-		MCPChallenge: oauthServer.WWWAuthenticate(),
-	}))}
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = server.Shutdown(shutdownCtx)
-	}()
-
-	slog.Info("quire on the tailnet", "url", "https://"+node.DNSName, "funnel", cfg.TSFunnel)
-	if err := server.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
-		slog.Error("tailscale server stopped", "err", err)
-	}
 }
 
 func runReindex() error {

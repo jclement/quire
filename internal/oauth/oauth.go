@@ -4,10 +4,9 @@
 // server-rendered consent page, rotating refresh tokens, RFC 7009
 // revocation. Public clients only (token_endpoint_auth_method "none").
 //
-// Consent requires the vault owner: a tailnet-identified request (the gate
-// injects the identity header), a passkey session, or loopback auth-none.
-// Over funnel, an unauthenticated authorize renders a "open this from your
-// tailnet" page instead — MagicDNS means the same URL works there.
+// Consent requires the vault owner: a passkey session, or the loopback-only
+// auth-none mode. Anyone else asking to authorize is told to sign in rather
+// than shown a form they could approve.
 package oauth
 
 import (
@@ -21,7 +20,6 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/jclement/quire/internal/auth"
@@ -40,26 +38,29 @@ type Server struct {
 	// IsOwner authenticates the human at the authorize endpoint.
 	IsOwner func(r *http.Request) bool
 
-	issuer atomic.Value // string; settable once the tailnet name is known
+	// issuer is the public origin clients reach this instance at; every
+	// advertised endpoint URL is built from it.
+	issuer string
 
 	// In-flight consent nonces (CSRF): the GET mints one, the POST burns it.
 	mu     sync.Mutex
 	nonces map[string]time.Time
 }
 
-// New builds the server with an initial issuer (updated via SetIssuer when
-// the tailnet comes up).
+// New builds the authorization server. issuer must be the public origin
+// clients reach quire at — RFC 8414 requires every advertised endpoint to
+// share it, so a wrong value makes discovery fail rather than degrade.
 func New(store *auth.Store, issuer string, isOwner func(r *http.Request) bool) *Server {
-	s := &Server{Store: store, IsOwner: isOwner, nonces: map[string]time.Time{}}
-	s.issuer.Store(strings.TrimRight(issuer, "/"))
-	return s
+	return &Server{
+		Store:   store,
+		IsOwner: isOwner,
+		issuer:  strings.TrimRight(issuer, "/"),
+		nonces:  map[string]time.Time{},
+	}
 }
 
-// SetIssuer swaps the advertised issuer/origin.
-func (s *Server) SetIssuer(issuer string) { s.issuer.Store(strings.TrimRight(issuer, "/")) }
-
-// Issuer returns the current issuer origin.
-func (s *Server) Issuer() string { return s.issuer.Load().(string) }
+// Issuer returns the issuer origin.
+func (s *Server) Issuer() string { return s.issuer }
 
 // Routes registers all OAuth endpoints.
 func (s *Server) Routes(mux *http.ServeMux) {
@@ -212,11 +213,10 @@ func (s *Server) handleAuthorizeForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.IsOwner(r) {
-		renderPage(w, http.StatusForbidden, "Approve from your tailnet",
-			`<p>This authorization must be approved by the vault owner.</p>
-			 <p>Open this same address from a device on your tailnet (the URL is
-			 identical — MagicDNS routes you directly), or sign in first if this
-			 quire uses passkeys.</p>`)
+		renderPage(w, http.StatusForbidden, "Sign in to approve",
+			`<p>This authorization has to be approved by the vault owner.</p>
+			 <p>Sign in to quire in this browser, then start the connection
+			 again from the client.</p>`)
 		return
 	}
 

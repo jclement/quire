@@ -39,31 +39,11 @@ type Config struct {
 	AuthMode AuthMode `yaml:"auth_mode"`
 	LogLevel string   `yaml:"log_level"`
 
-	// Tailscale (tsnet): setting ts_hostname makes quire join the tailnet as
-	// its own node, serving HTTPS at https://<hostname>.<tailnet>.ts.net with
-	// requests authenticated by tailnet identity. The auth key is only needed
-	// until the node registers; state persists under .quire/tsnet.
-	TSHostname string `yaml:"ts_hostname"`
-	TSAuthKey  string `yaml:"ts_authkey"`
-	// TSFunnel exposes ONLY the /s/* share pages to the public internet via
-	// Tailscale Funnel (the tailnet must allow funnel in its ACLs).
-	TSFunnel bool `yaml:"ts_funnel"`
-	// TSFunnelMCP additionally exposes /mcp plus the OAuth endpoints over
-	// funnel so hosted clients (claude.ai connectors) can reach quire; /mcp
-	// still demands a valid bearer/OAuth token on every request.
-	TSFunnelMCP bool `yaml:"ts_funnel_mcp"`
-	// TSOwner, when set, restricts tailnet access to this login (e.g.
-	// "jeff@example.com"); empty accepts any member of the tailnet.
-	TSOwner string `yaml:"ts_owner"`
-
 	// Git keeps the vault in a local git repository with debounced
 	// auto-commits (commit-only; quire never pushes or merges). On by
 	// default — QUIRE_GIT=false to opt out.
 	Git bool `yaml:"git"`
 }
-
-// TailscaleEnabled reports whether the tsnet listener should run.
-func (c Config) TailscaleEnabled() bool { return c.TSHostname != "" }
 
 // VaultDir is where the user's markdown lives — the only tree quire treats as
 // user-owned content.
@@ -133,21 +113,6 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("QUIRE_LOG_LEVEL"); v != "" {
 		cfg.LogLevel = v
-	}
-	if v := os.Getenv("QUIRE_TS_HOSTNAME"); v != "" {
-		cfg.TSHostname = v
-	}
-	if v := os.Getenv("QUIRE_TS_AUTHKEY"); v != "" {
-		cfg.TSAuthKey = v
-	}
-	if v := os.Getenv("QUIRE_TS_FUNNEL"); v != "" {
-		cfg.TSFunnel = v == "true" || v == "1"
-	}
-	if v := os.Getenv("QUIRE_TS_FUNNEL_MCP"); v != "" {
-		cfg.TSFunnelMCP = v == "true" || v == "1"
-	}
-	if v := os.Getenv("QUIRE_TS_OWNER"); v != "" {
-		cfg.TSOwner = v
 	}
 	if v := os.Getenv("QUIRE_GIT"); v != "" {
 		cfg.Git = v != "false" && v != "0"

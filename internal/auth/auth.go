@@ -145,30 +145,11 @@ func Open(path string) (*Store, error) {
 	return &Store{DB: db}, nil
 }
 
-// Identity headers owned by the serving gates: inbound values are always
-// stripped before any handler runs, then set from verified state, so the
-// OAuth consent page can trust them.
-const (
-	// HeaderTailnetLogin carries the WhoIs-verified tailnet login.
-	HeaderTailnetLogin = "X-Quire-Tailnet-Login"
-	// HeaderPublicRequest marks a request that arrived via funnel.
-	HeaderPublicRequest = "X-Quire-Public"
-)
-
 // OwnerPrincipal is the vault owner with every scope — auth mode "none" and
-// tailnet-identified requests act as this.
+// passkey sessions act as this.
 func OwnerPrincipal() Principal {
 	return Principal{Name: "owner", Scopes: map[string]bool{ScopeRead: true, ScopeWrite: true, ScopeTasks: true}}
 }
-
-// BearerPrincipal resolves the request's Authorization header to a token
-// principal (exported for the tailnet listener, which does its own gating).
-func (s *Store) BearerPrincipal(r *http.Request) (Principal, error) {
-	return s.authenticateBearer(r)
-}
-
-// RequiredScope maps a request to the scope it needs (see requiredScope).
-func RequiredScope(r *http.Request) string { return requiredScope(r) }
 
 // Protected reports whether a path is subject to authentication at all.
 // The SPA shell and share pages are not; neither are the auth endpoints
@@ -187,11 +168,6 @@ func Protected(path string) bool {
 // OAuth-capable clients can discover the authorization server.
 func (s *Store) Middleware(mode config.AuthMode, mcpChallenge string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The identity headers belong to the tailnet gate; this listener
-		// must never let a client smuggle them in.
-		r.Header.Del(HeaderTailnetLogin)
-		r.Header.Del(HeaderPublicRequest)
-
 		if !Protected(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return

@@ -1,33 +1,20 @@
 # Copy to mise.local.toml (gitignored) to make `mise run dev` serve YOUR real
-# data and join your tailnet. Everything here overrides mise.toml's [env].
+# data. Everything here overrides mise.toml's [env].
 #
-# With TS_HOSTNAME set, dev runs two listeners:
-#   - http://localhost:5173      — Vite with HMR (what you develop against)
-#   - https://<host>.<tailnet>.ts.net — the tsnet node (API/MCP/share pages;
-#     the SPA there says "dev build" until you `mise run build`)
-# The auth key is only needed on the first run; the node's identity persists
-# in <data>/.quire/tsnet/. Mint keys at
-# https://login.tailscale.com/admin/settings/keys (a reusable key is handy
-# for rebuilds; tag it if your ACLs expect tags).
+# Dev always runs on loopback with auth off: http://localhost:5173 is Vite
+# with HMR, proxying to the Go server on :8321. To exercise the parts that
+# need a real public URL (passkeys, share links, OAuth discovery), put a
+# tunnel in front of :8321 — `tailscale serve 8321`, or `cloudflared tunnel
+# --url http://localhost:8321` — and set QUIRE_BASE_URL to the URL it hands
+# you. Nothing in quire knows or cares which one you used.
 
 [env]
 # Real data instead of the scratch vault (vault lives at <data>/vault):
 QUIRE_DATA_DIR = "{{env.HOME}}/.data/quire"
 
-# Join the tailnet as this hostname:
-QUIRE_TS_HOSTNAME = "quire-dev"
-QUIRE_TS_AUTHKEY = "tskey-auth-REPLACE-ME"
-
-# Publish /s/* share pages to the public internet via Funnel (requires the
-# funnel node attribute in your tailnet policy):
-QUIRE_TS_FUNNEL = "true"
-
-# Also expose /mcp + OAuth over funnel so hosted Claude (claude.ai
-# connectors) can reach this quire:
-QUIRE_TS_FUNNEL_MCP = "true"
-
-# Optional: only this tailnet login may use the app (default: any member):
-# QUIRE_TS_OWNER = "you@example.com"
+# Only when fronting dev with a tunnel — this is the URL share links, the
+# WebAuthn RP ID, and OAuth discovery are all built from:
+# QUIRE_BASE_URL = "https://quire-dev.your-tailnet.ts.net"
 
 # Optional: morning digest email (any provider's SMTP endpoint):
 # QUIRE_SMTP_HOST = "smtp.mailgun.org"

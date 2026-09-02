@@ -16,8 +16,8 @@ import (
 	"github.com/jclement/quire/internal/config"
 )
 
-// newTestServer wires the OAuth server the way main does, with an isOwner
-// that trusts the tailnet identity header (as the gate would inject it).
+// newTestServer wires the OAuth server the way main does: consent is proved
+// by a passkey session cookie.
 func newTestServer(t *testing.T) (*Server, *http.ServeMux, *auth.Store) {
 	t.Helper()
 	store, err := auth.Open(filepath.Join(t.TempDir(), "auth.db"))
@@ -26,18 +26,37 @@ func newTestServer(t *testing.T) (*Server, *http.ServeMux, *auth.Store) {
 	}
 	t.Cleanup(func() { store.DB.Close() })
 
-	isOwner := func(r *http.Request) bool { return r.Header.Get(auth.HeaderTailnetLogin) != "" }
+	isOwner := func(r *http.Request) bool {
+		cookie, err := r.Cookie(auth.SessionCookie)
+		if err != nil {
+			return false
+		}
+		_, err = store.SessionPrincipal(cookie.Value)
+		return err == nil
+	}
 	s := New(store, "https://quire.example.ts.net", isOwner)
 	mux := http.NewServeMux()
 	s.Routes(mux)
 	return s, mux, store
 }
 
-func postForm(mux *http.ServeMux, path string, form url.Values, owner bool) *httptest.ResponseRecorder {
+// sessionFor mints a real login session — the only owner signal the consent
+// page accepts.
+func sessionFor(t *testing.T, store *auth.Store) string {
+	t.Helper()
+	token, err := store.CreateSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token
+}
+
+// postForm posts as the owner when session is non-empty.
+func postForm(mux *http.ServeMux, path string, form url.Values, session string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest("POST", path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if owner {
-		req.Header.Set(auth.HeaderTailnetLogin, "jeff@example.com")
+	if session != "" {
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: session})
 	}
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -82,16 +101,19 @@ func TestFullConnectorFlow(t *testing.T) {
 		"&redirect_uri=" + url.QueryEscape("https://claude.ai/api/mcp/auth_callback") +
 		"&state=xyz&code_challenge=" + challenge + "&code_challenge_method=S256&scope=read+write+tasks"
 
-	// Unauthenticated (funnel) → the "approve from your tailnet" page.
+	// Anyone who is not signed in is told to sign in, not shown a consent
+	// form they could approve.
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest("GET", authorizeURL, nil))
-	if rec.Code != 403 || !strings.Contains(rec.Body.String(), "tailnet") {
-		t.Fatalf("unauthenticated authorize = %d", rec.Code)
+	if rec.Code != 403 || !strings.Contains(rec.Body.String(), "Sign in") {
+		t.Fatalf("unauthenticated authorize = %d %s", rec.Code, rec.Body.String())
 	}
 
-	// Owner (tailnet) → consent form with a nonce.
+	session := sessionFor(t, store)
+
+	// Signed in → consent form with a nonce.
 	req = httptest.NewRequest("GET", authorizeURL, nil)
-	req.Header.Set(auth.HeaderTailnetLogin, "jeff@example.com")
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: session})
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "Claude") {
@@ -108,7 +130,7 @@ func TestFullConnectorFlow(t *testing.T) {
 		"redirect_uri": {"https://claude.ai/api/mcp/auth_callback"},
 		"state":        {"xyz"}, "code_challenge": {challenge},
 		"scope": {"read write tasks"}, "decision": {"approve"},
-	}, true)
+	}, session)
 	if rec.Code != 302 {
 		t.Fatalf("approve = %d %s", rec.Code, rec.Body.String())
 	}
@@ -124,7 +146,7 @@ func TestFullConnectorFlow(t *testing.T) {
 		"client_id":     {client.ClientID},
 		"redirect_uri":  {"https://claude.ai/api/mcp/auth_callback"},
 		"code_verifier": {verifier},
-	}, false)
+	}, "")
 	if rec.Code != 200 {
 		t.Fatalf("token = %d %s", rec.Code, rec.Body.String())
 	}
@@ -145,32 +167,44 @@ func TestFullConnectorFlow(t *testing.T) {
 		"client_id":     {client.ClientID},
 		"redirect_uri":  {"https://claude.ai/api/mcp/auth_callback"},
 		"code_verifier": {verifier},
-	}, false)
+	}, "")
 	if rec.Code != 400 {
 		t.Errorf("code reuse = %d", rec.Code)
 	}
 
-	// 5. The access token authenticates like any bearer, with its scopes.
-	apiReq := httptest.NewRequest("GET", "/api/v1/documents", nil)
-	apiReq.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
-	principal, err := store.BearerPrincipal(apiReq)
-	if err != nil || !principal.Allows(auth.ScopeWrite) || !strings.HasPrefix(principal.Name, "oauth:") {
-		t.Fatalf("oauth bearer principal = %+v, %v", principal, err)
-	}
-	// And it passes the standard middleware in token-only mode.
+	// 5. The access token authenticates through the real API middleware,
+	// carrying the scopes it was granted — read on a GET, write on a POST.
 	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
 	mw := store.Middleware(config.AuthTokenOnly, s.WWWAuthenticate(), ok)
+	call := func(method, path, token string) int {
+		req := httptest.NewRequest(method, path, nil)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		mw.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if got := call("GET", "/api/v1/documents", tokens.AccessToken); got != 200 {
+		t.Errorf("oauth token on read = %d", got)
+	}
+	if got := call("POST", "/api/v1/documents", tokens.AccessToken); got != 200 {
+		t.Errorf("oauth token on write = %d", got)
+	}
+	// A 401 on /mcp must advertise where the authorization server lives —
+	// that header is the whole discovery mechanism for connectors.
+	mcpReq := httptest.NewRequest("POST", "/mcp", nil)
 	rec = httptest.NewRecorder()
-	mw.ServeHTTP(rec, apiReq)
-	if rec.Code != 200 {
-		t.Errorf("oauth token through middleware = %d", rec.Code)
+	mw.ServeHTTP(rec, mcpReq)
+	if rec.Code != 401 || !strings.Contains(rec.Header().Get("WWW-Authenticate"), "oauth-protected-resource") {
+		t.Errorf("mcp challenge = %d %q", rec.Code, rec.Header().Get("WWW-Authenticate"))
 	}
 
 	// 6. Refresh rotation: new pair; old refresh works only briefly (grace),
 	// and the rotated-out access token is replaced.
 	rec = postForm(mux, "/oauth/token", url.Values{
 		"grant_type": {"refresh_token"}, "refresh_token": {tokens.RefreshToken},
-	}, false)
+	}, "")
 	if rec.Code != 200 {
 		t.Fatalf("refresh = %d %s", rec.Code, rec.Body.String())
 	}
@@ -184,13 +218,12 @@ func TestFullConnectorFlow(t *testing.T) {
 	}
 
 	// 7. Revocation kills the grant.
-	rec = postForm(mux, "/oauth/revoke", url.Values{"token": {rotated.AccessToken}}, false)
+	rec = postForm(mux, "/oauth/revoke", url.Values{"token": {rotated.AccessToken}}, "")
 	if rec.Code != 200 {
 		t.Fatalf("revoke = %d", rec.Code)
 	}
-	apiReq.Header.Set("Authorization", "Bearer "+rotated.AccessToken)
-	if _, err := store.BearerPrincipal(apiReq); err == nil {
-		t.Errorf("revoked access token still valid")
+	if got := call("GET", "/api/v1/documents", rotated.AccessToken); got != 401 {
+		t.Errorf("revoked access token = %d, want 401", got)
 	}
 }
 
@@ -203,7 +236,7 @@ func TestAuthorizeRejectsBadRequests(t *testing.T) {
 
 	get := func(query string) int {
 		req := httptest.NewRequest("GET", "/oauth/authorize?"+query, nil)
-		req.Header.Set(auth.HeaderTailnetLogin, "jeff@example.com")
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: sessionFor(t, store)})
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		return rec.Code
