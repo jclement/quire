@@ -8,7 +8,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../api/client.ts";
-import { useTemplates } from "../api/queries.ts";
+import { useEffectiveArea, useTemplates } from "../api/queries.ts";
 import type { DocType } from "../api/types.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import { noAutofill } from "../lib/noAutofill.ts";
@@ -34,7 +34,7 @@ export function NewDocDialog() {
 
 function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
   const navigate = useNavigate();
-  const { area } = useUi();
+  const area = useEffectiveArea();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   // Named templates for this type. The type's default (templates/<type>.md)

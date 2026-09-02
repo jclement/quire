@@ -98,7 +98,7 @@ test("agent guidance saves and is served to MCP clients", async ({ page }) => {
 
   const guidance = page.getByLabel("Agent guidance");
   await guidance.fill("Always file client work under projects/.");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
 
   // It is stored as an ordinary vault document, which is the design claim
   // worth checking: editable in the app or in vim.

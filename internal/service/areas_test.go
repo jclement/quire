@@ -1,9 +1,11 @@
 package service
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/jclement/quire/internal/settings"
 	"github.com/jclement/quire/internal/vault"
 )
 
@@ -13,6 +15,10 @@ import (
 // notes belong to every area rather than to none.
 func TestAreasPartitionEverythingButDaily(t *testing.T) {
 	svc := newTestService(t)
+	svc.Settings = settings.Open(filepath.Join(t.TempDir(), "settings.json"))
+	if err := svc.SetAreas([]AreaDef{{Name: "work", Color: "blue"}, {Name: "personal", Color: "green"}}); err != nil {
+		t.Fatal(err)
+	}
 	writeVault(t, svc, map[string]string{
 		"notes/roadmap.md":               "---\narea: Work\n---\n# Roadmap\n\n- [ ] ship it 📅 2026-09-01\n",
 		"notes/holiday.md":               "---\narea: personal\n---\n# Holiday\n\n- [ ] book flights 📅 2026-09-01\n",
@@ -33,8 +39,13 @@ func TestAreasPartitionEverythingButDaily(t *testing.T) {
 	if got["work"] != 2 || got["personal"] != 1 {
 		t.Errorf("area counts = %v", got)
 	}
-	if _, seeded := got["personal"]; !seeded {
-		t.Error("seed areas must always be offered")
+	if _, defined := got["personal"]; !defined {
+		t.Error("defined areas must always be offered")
+	}
+	// Defined areas come first with a colour; a frontmatter-only area
+	// follows in neutral and is still there to be found.
+	if areas[0].Area != "work" || areas[0].Color != "blue" || !areas[0].Defined {
+		t.Errorf("first area = %+v, want the defined work/blue", areas[0])
 	}
 
 	titles := func(docs []DocMeta) string {
@@ -121,5 +132,23 @@ func TestCreateDocumentFilesUnderArea(t *testing.T) {
 		if strings.Contains(d.Markdown, "area:") {
 			t.Errorf("unclassified doc got an area key:\n%s", d.Markdown)
 		}
+	}
+}
+
+// TestAreasAreOptional: with nothing defined, the only areas are the ones
+// found in frontmatter, in neutral — and an install with none is normal.
+func TestAreasAreOptional(t *testing.T) {
+	svc := newTestService(t)
+	areas, err := svc.Areas()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(areas) != 0 {
+		t.Errorf("a fresh vault should have no areas, got %+v", areas)
+	}
+	writeVault(t, svc, map[string]string{"notes/x.md": "---\narea: hobby\n---\n# X\n"})
+	areas, _ = svc.Areas()
+	if len(areas) != 1 || areas[0].Area != "hobby" || areas[0].Defined || areas[0].Color != "slate" {
+		t.Errorf("discovered area = %+v", areas)
 	}
 }

@@ -4,7 +4,8 @@
 import { Link as RouterLink, useNavigate } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useDocumentList } from "../api/queries.ts";
+import { useAreas, useAreasEnabled, useDocumentList } from "../api/queries.ts";
+import { AreaDot } from "../components/AreaDot.tsx";
 import type { DocMeta, DocType } from "../api/types.ts";
 import { formatRelativeTime } from "../lib/dates.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
@@ -58,6 +59,11 @@ export function BrowsePage({ type }: { type: DocType }) {
 
 function DocTable({ docs }: { docs: DocMeta[] }) {
   const navigate = useNavigate();
+  const areas = useAreas();
+  const areasEnabled = useAreasEnabled();
+  const areaColors = Object.fromEntries(
+    (areas.data ?? []).map((a) => [a.area, a.color]),
+  );
   const [sortKey, setSortKey] = useState<SortKey>("mtime");
   const [ascending, setAscending] = useState(false);
 
@@ -131,9 +137,15 @@ function DocTable({ docs }: { docs: DocMeta[] }) {
               <RouterLink
                 to={docHref(doc.path)}
                 onClick={(event) => event.stopPropagation()}
-                className="block truncate outline-none hover:underline"
+                className="flex items-center gap-1.5 truncate outline-none hover:underline"
               >
-                {doc.title}
+                {areasEnabled && doc.area ? (
+                  <AreaDot
+                    color={areaColors[doc.area]}
+                    title={`Area: ${doc.area}`}
+                  />
+                ) : null}
+                <span className="truncate">{doc.title}</span>
               </RouterLink>
             </td>
             <td className="hidden truncate px-2 text-xs text-muted sm:table-cell">

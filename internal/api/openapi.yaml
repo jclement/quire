@@ -206,7 +206,18 @@ paths:
         An area is the frontmatter `area:` key, lowercased. Daily notes carry
         none and belong to every area. Pass ?area=<name> to /documents,
         /tasks and /today to narrow them, or ?area=none for unclassified.
-      responses: { "200": { description: "data: AreaCount[] — area, count" } }
+      responses: { "200": { description: "data: AreaCount[] — area, count, color, defined" } }
+    put:
+      summary: Replace the defined areas (Settings → Areas)
+      description: >
+        Body {areas: [{name, color}]}. Names normalize to lowercase and must be
+        unique; color is one of slate, red, orange, amber, green, teal, blue,
+        violet, pink. Renaming does not rewrite documents — frontmatter is the
+        truth, and a document under the old name shows as a discovered area
+        until re-filed.
+      responses:
+        "200": { description: "data: AreaCount[]" }
+        "400": { description: "VALIDATION_ERROR — a duplicate, reserved, or empty name, or an unknown colour" }
   /api/v1/tags:
     get:
       summary: Every tag with its document count, most-used first

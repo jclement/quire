@@ -20,10 +20,20 @@ type DocMeta struct {
 	Area string `json:"area"`
 }
 
-// AreaCount is one area (work, personal, …) with its document count.
+// AreaCount is one area (work, personal, …) with its document count. Defined
+// areas (Settings) carry their colour and come first; an area only found in
+// frontmatter is listed too, in neutral, so nothing disappears.
 type AreaCount struct {
-	Area  string `json:"area"`
-	Count int    `json:"count"`
+	Area    string `json:"area"`
+	Count   int    `json:"count"`
+	Color   string `json:"color"`
+	Defined bool   `json:"defined"`
+}
+
+// AreaDef is a defined area as edited in Settings.
+type AreaDef struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
 }
 
 // Link is a wikilink with its resolution ("" target = dangling → null).

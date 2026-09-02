@@ -24,6 +24,9 @@ import { docHref } from "../../lib/docs.ts";
 import { noAutofill } from "../../lib/noAutofill.ts";
 import { useUi } from "../../keys/UiContext.tsx";
 import { ConfirmButton } from "./ConfirmButton.tsx";
+import { AreaDot } from "../AreaDot.tsx";
+import { AREA_COLORS, areaColorVar } from "../../lib/area.ts";
+import type { AreaDef } from "../../api/types.ts";
 import { SkeletonRows } from "../Skeleton.tsx";
 
 const TOKENS_KEY = ["auth", "tokens"] as const;
@@ -597,6 +600,178 @@ export function TemplateSettings() {
         >
           {templates.data ? `${templates.data.length} installed` : "…"}
         </RouterLink>
+      </div>
+    </section>
+  );
+}
+
+// ---- areas ----
+
+/**
+ * The defined areas, in order, each with a colour. Areas are opt-in: the
+ * switcher, chips and dots appear only once two or more are defined here.
+ * Renaming does not rewrite documents — frontmatter is the truth, and a
+ * document filed under an old name shows as a discovered area until it is
+ * re-filed.
+ */
+export function AreaSettings() {
+  const queryClient = useQueryClient();
+  const { toast } = useUi();
+  const areas = useQuery({ queryKey: ["areas"], queryFn: api.listAreas });
+  const [draft, setDraft] = useState<AreaDef[] | null>(null);
+  const [newName, setNewName] = useState("");
+
+  const defined =
+    draft ??
+    (areas.data ?? [])
+      .filter((a) => a.defined)
+      .map((a) => ({ name: a.area, color: a.color }));
+  const discovered = (areas.data ?? []).filter((a) => !a.defined);
+
+  const save = useMutation({
+    mutationFn: (next: AreaDef[]) => api.setAreas(next),
+    onSuccess: (list) => {
+      queryClient.setQueryData(["areas"], list);
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      setDraft(null);
+      toast("Areas saved");
+    },
+    onError: (error) => toast(errorMessage(error)),
+  });
+
+  const update = (next: AreaDef[]) => setDraft(next);
+  const add = (raw: string) => {
+    const name = raw.trim().toLowerCase();
+    if (!name || defined.some((d) => d.name === name)) return;
+    update([
+      ...defined,
+      { name, color: AREA_COLORS[defined.length % AREA_COLORS.length]! },
+    ]);
+    setNewName("");
+  };
+
+  return (
+    <section className="border-t border-border pt-4">
+      <SectionHeading>Areas</SectionHeading>
+      <p className="mb-2 text-xs text-muted">
+        Optional. Define two or more — work and personal, say — and a switcher
+        appears in the sidebar to narrow everything to one, with a coloured dot
+        wherever the area shows. Renaming does not rewrite documents.
+      </p>
+      {areas.isPending ? (
+        <SkeletonRows count={2} />
+      ) : areas.isError ? (
+        <p className="text-xs text-danger">{errorMessage(areas.error)}</p>
+      ) : defined.length === 0 ? (
+        <p className="border-y border-border py-3 text-xs text-muted">
+          No areas defined.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border border-y border-border">
+          {defined.map((a, i) => (
+            <li
+              key={i}
+              className="flex min-h-9 flex-wrap items-center gap-2 px-2 py-1"
+            >
+              <AreaDot color={a.color} />
+              <input
+                value={a.name}
+                aria-label={`Area ${i + 1} name`}
+                onChange={(event) =>
+                  update(
+                    defined.map((d, j) =>
+                      j === i ? { ...d, name: event.target.value } : d,
+                    ),
+                  )
+                }
+                {...noAutofill(`area-name-${i}`)}
+                className="field-bare h-7 w-36 rounded border border-border bg-raised px-1.5 text-sm text-heading outline-none focus:border-accent"
+              />
+              <span
+                role="radiogroup"
+                aria-label={`Colour for ${a.name || "area"}`}
+                className="flex gap-1"
+              >
+                {AREA_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    role="radio"
+                    aria-checked={a.color === color}
+                    aria-label={color}
+                    title={color}
+                    onClick={() =>
+                      update(
+                        defined.map((d, j) => (j === i ? { ...d, color } : d)),
+                      )
+                    }
+                    className={`flex size-6 items-center justify-center rounded-full border ${a.color === color ? "border-heading" : "border-transparent"}`}
+                  >
+                    <span
+                      className="block size-3 rounded-full"
+                      style={{ background: areaColorVar(color) }}
+                    />
+                  </button>
+                ))}
+              </span>
+              <ConfirmButton
+                label={`Remove area ${a.name}`}
+                confirmLabel="Remove?"
+                onConfirm={() => update(defined.filter((_, j) => j !== i))}
+              >
+                <Trash2 className="size-3.5" aria-hidden="true" />
+              </ConfirmButton>
+            </li>
+          ))}
+        </ul>
+      )}
+      {discovered.length > 0 ? (
+        <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+          Found in frontmatter but not defined:
+          {discovered.map((d) => (
+            <button
+              key={d.area}
+              type="button"
+              onClick={() => add(d.area)}
+              className="rounded border border-border px-1.5 py-0.5 font-mono text-accent hover:bg-hover"
+              title="Define this area"
+            >
+              {d.area} ({d.count})
+            </button>
+          ))}
+        </p>
+      ) : null}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          value={newName}
+          onChange={(event) => setNewName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              add(newName);
+            }
+          }}
+          placeholder="New area"
+          aria-label="New area name"
+          {...noAutofill("new-area")}
+          className="field-bare h-8 w-36 rounded border border-border bg-raised px-2 text-sm text-heading outline-none placeholder:text-muted focus:border-accent"
+        />
+        <button
+          type="button"
+          onClick={() => add(newName)}
+          className="flex h-8 items-center gap-1.5 rounded border border-border px-2.5 text-xs text-body hover:bg-hover hover:text-heading"
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+          Add
+        </button>
+        <button
+          type="button"
+          disabled={draft === null || save.isPending}
+          onClick={() => save.mutate(defined)}
+          className="flex h-8 items-center rounded border border-border bg-accent px-2.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+        >
+          {save.isPending ? "Saving…" : "Save areas"}
+        </button>
       </div>
     </section>
   );

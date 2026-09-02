@@ -15,6 +15,7 @@ import (
 
 	"github.com/jclement/quire/internal/index"
 	"github.com/jclement/quire/internal/markdown"
+	"github.com/jclement/quire/internal/settings"
 	"github.com/jclement/quire/internal/vault"
 )
 
@@ -28,6 +29,9 @@ var ErrValidation = errors.New("validation")
 type Service struct {
 	Vault *vault.Vault
 	Index *index.Index
+	// Settings holds the owner's app-level configuration (areas and their
+	// colours). Nil means defaults, which is what tests get.
+	Settings *settings.Store
 	// Now allows tests to pin the clock.
 	Now func() time.Time
 }
@@ -53,29 +57,68 @@ func metaFromRow(d index.DocRow) DocMeta {
 	}
 }
 
-// SeedAreas always appear as choices even before any document carries them,
-// so a fresh vault offers the Nirvana-style split from day one. Any other
-// area is just frontmatter and shows up once used.
-var SeedAreas = []string{"work", "personal"}
+// definedAreas is the Settings list; none when there is no store.
+func (s *Service) definedAreas() ([]settings.AreaDef, error) {
+	if s.Settings == nil {
+		return nil, nil
+	}
+	cfg, err := s.Settings.Load()
+	if err != nil {
+		return nil, err
+	}
+	return cfg.Areas, nil
+}
 
-// Areas returns the areas in use merged with the seeds, most-used first.
+// Areas returns the defined areas in their configured order with colours
+// and counts, followed by any area found only in frontmatter (neutral, so a
+// document filed under a typo'd area still has somewhere to be found).
 func (s *Service) Areas() ([]AreaCount, error) {
+	defined, err := s.definedAreas()
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.Index.Areas()
 	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	out := make([]AreaCount, 0, len(rows)+len(SeedAreas))
+	counts := map[string]int{}
 	for _, r := range rows {
-		seen[r.Area] = true
-		out = append(out, AreaCount{Area: r.Area, Count: r.Count})
+		counts[r.Area] = r.Count
 	}
-	for _, seed := range SeedAreas {
-		if !seen[seed] {
-			out = append(out, AreaCount{Area: seed})
+	out := make([]AreaCount, 0, len(defined)+len(rows))
+	seen := map[string]bool{}
+	for _, d := range defined {
+		seen[d.Name] = true
+		out = append(out, AreaCount{Area: d.Name, Count: counts[d.Name], Color: d.Color, Defined: true})
+	}
+	for _, r := range rows {
+		if !seen[r.Area] {
+			out = append(out, AreaCount{Area: r.Area, Count: r.Count, Color: "slate"})
 		}
 	}
 	return out, nil
+}
+
+// SetAreas replaces the defined areas. Renaming here does not rewrite
+// documents — the frontmatter is the truth, and a document filed under the
+// old name simply becomes a discovered area until it is re-filed.
+func (s *Service) SetAreas(areas []AreaDef) error {
+	if s.Settings == nil {
+		return fmt.Errorf("settings are not available on this instance")
+	}
+	defs := make([]settings.AreaDef, 0, len(areas))
+	for _, a := range areas {
+		defs = append(defs, settings.AreaDef{Name: a.Name, Color: a.Color})
+	}
+	if err := settings.ValidateAreas(defs); err != nil {
+		return fmt.Errorf("%w: %s", ErrValidation, err)
+	}
+	cfg, err := s.Settings.Load()
+	if err != nil {
+		return err
+	}
+	cfg.Areas = defs
+	return s.Settings.Save(cfg)
 }
 
 func metasFromRows(rows []index.DocRow) []DocMeta {

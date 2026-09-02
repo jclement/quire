@@ -27,6 +27,7 @@ import { EmptyState } from "../components/EmptyState.tsx";
 import { ConfirmButton } from "../components/settings/ConfirmButton.tsx";
 import {
   AgentActivity,
+  AreaSettings,
   ConnectedAppSettings,
   ShareSettings,
   TemplateSettings,
@@ -70,6 +71,7 @@ export function SettingsPage() {
       <TokenSettings />
       <ConnectedAppSettings />
       <ShareSettings />
+      <AreaSettings />
       <TemplateSettings />
       <AgentGuidanceSection />
       <AgentActivity />

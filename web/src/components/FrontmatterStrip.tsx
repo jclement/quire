@@ -1,5 +1,7 @@
+import { AreaDot } from "./AreaDot.tsx";
+import { areaColorVar } from "../lib/area.ts";
 import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys, useAreas } from "../api/queries.ts";
+import { queryKeys, useAreas, useAreasEnabled } from "../api/queries.ts";
 // The properties strip under a document's title: frontmatter as dense
 // key:value chips, never rendered as markdown. The relationship keys for this
 // document's type (a meeting's people/project/company, a person's company)
@@ -47,7 +49,8 @@ export function FrontmatterStrip({ doc }: { doc: Document }) {
   const entries = Object.entries(doc.frontmatter).filter(
     ([key]) => key !== "title" && !editable.has(key),
   );
-  const showArea = doc.type !== "daily";
+  const areasEnabled = useAreasEnabled();
+  const showArea = areasEnabled && doc.type !== "daily";
   if (linkKeys.length === 0 && entries.length === 0 && !showArea) return null;
 
   const resolved = resolvedTargets(doc.links);
@@ -335,9 +338,15 @@ function AreaChip({ doc }: { doc: Document }) {
       [...(areas.data ?? []).map((a) => a.area), doc.area].filter(Boolean),
     ),
   );
+  const current = (areas.data ?? []).find((a) => a.area === doc.area);
   return (
-    <label className="flex h-7 items-center gap-1 rounded border border-border bg-raised px-1.5 text-xs text-muted">
-      <span>area</span>
+    <label
+      className="flex h-7 items-center gap-1 rounded border bg-raised px-1.5 text-xs text-muted"
+      style={{
+        borderColor: doc.area ? areaColorVar(current?.color) : undefined,
+      }}
+    >
+      {doc.area ? <AreaDot color={current?.color} /> : <span>area</span>}
       <select
         aria-label="Document area"
         value={doc.area}

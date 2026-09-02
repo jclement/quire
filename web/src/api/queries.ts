@@ -36,7 +36,7 @@ export function useHealth() {
 
 /** Lists within the current area unless the caller sets one explicitly. */
 export function useDocumentList(params: ListDocumentsParams, enabled = true) {
-  const { area } = useUi();
+  const area = useEffectiveArea();
   const scoped = { ...params, area: params.area ?? area };
   return useQuery({
     queryKey: queryKeys.documents(scoped),
@@ -53,6 +53,22 @@ export function useAreas() {
   return useQuery({ queryKey: queryKeys.areas, queryFn: api.listAreas });
 }
 
+/**
+ * Areas are opt-in: nothing area-shaped shows until two or more are defined
+ * in Settings. With fewer, the switcher's stored value is ignored so a
+ * choice made before areas were removed cannot keep silently filtering.
+ */
+export function useAreasEnabled(): boolean {
+  const areas = useAreas();
+  return (areas.data ?? []).filter((a) => a.defined).length >= 2;
+}
+
+/** The area every list should be narrowed to right now ("" = all). */
+export function useEffectiveArea(): string {
+  const { area } = useUi();
+  return useAreasEnabled() ? area : "";
+}
+
 export function useDocument(path: string) {
   return useQuery({
     queryKey: queryKeys.document(path),
@@ -61,7 +77,7 @@ export function useDocument(path: string) {
 }
 
 export function useSearch(q: string) {
-  const { area } = useUi();
+  const area = useEffectiveArea();
   // The search grammar carries the area itself, so a typed area: wins over
   // the switcher and the URL stays the whole query.
   const scoped = area && !/\barea:/.test(q) ? `${q} area:${area}` : q;
@@ -73,7 +89,7 @@ export function useSearch(q: string) {
 }
 
 export function useTasks(view: TaskView) {
-  const { area } = useUi();
+  const area = useEffectiveArea();
   return useQuery({
     queryKey: queryKeys.tasks(view, area),
     queryFn: () => api.listTasks(view, area),
@@ -81,7 +97,7 @@ export function useTasks(view: TaskView) {
 }
 
 export function useToday() {
-  const { area } = useUi();
+  const area = useEffectiveArea();
   return useQuery({
     queryKey: queryKeys.todayIn(area),
     queryFn: () => api.today(area),

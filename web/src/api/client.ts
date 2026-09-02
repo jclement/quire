@@ -5,6 +5,7 @@
 import type {
   AgentGuidanceResponse,
   AreaCount,
+  AreaDef,
   AttachmentUpload,
   AuditEntry,
   AuthStatus,
@@ -164,6 +165,9 @@ export const api = {
     ),
 
   listAreas: () => request<AreaCount[]>("/api/v1/areas"),
+
+  setAreas: (areas: AreaDef[]) =>
+    request<AreaCount[]>("/api/v1/areas", jsonInit("PUT", { areas })),
 
   deleteDocument: (path: string) =>
     request<void>(`/api/v1/documents/${encodeVaultPath(path)}`, {

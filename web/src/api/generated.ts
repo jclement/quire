@@ -45,11 +45,22 @@ export interface DocMeta {
   area: string;
 }
 /**
- * AreaCount is one area (work, personal, …) with its document count.
+ * AreaCount is one area (work, personal, …) with its document count. Defined
+ * areas (Settings) carry their colour and come first; an area only found in
+ * frontmatter is listed too, in neutral, so nothing disappears.
  */
 export interface AreaCount {
   area: string;
   count: number /* int */;
+  color: string;
+  defined: boolean;
+}
+/**
+ * AreaDef is a defined area as edited in Settings.
+ */
+export interface AreaDef {
+  name: string;
+  color: string;
 }
 /**
  * Link is a wikilink with its resolution ("" target = dangling → null).

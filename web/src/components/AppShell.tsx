@@ -2,7 +2,8 @@
 // sidebar, mobile bottom nav with a center capture button, and the slide-over
 // drawer. Routed pages render into <main> via children. Version and update
 // status live in Settings, not in page furniture.
-import { useAreas } from "../api/queries.ts";
+import { AreaDot } from "./AreaDot.tsx";
+import { useAreas, useAreasEnabled } from "../api/queries.ts";
 import { AREA_ALL, AREA_NONE, areaLabel } from "../lib/area.ts";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
@@ -116,14 +117,21 @@ function NavLink({
 function AreaSwitcher() {
   const { area, setArea } = useUi();
   const areas = useAreas();
+  const enabled = useAreasEnabled();
+  if (!enabled) return null;
   const choices = [
     AREA_ALL,
     ...(areas.data ?? []).map((a) => a.area),
     AREA_NONE,
   ];
+  const current = (areas.data ?? []).find((a) => a.area === area);
   return (
     <label className="mb-1 flex items-center gap-1.5 px-2">
-      <Layers className="size-4 shrink-0 text-muted" aria-hidden="true" />
+      {current ? (
+        <AreaDot color={current.color} className="ml-1 mr-1" />
+      ) : (
+        <Layers className="size-4 shrink-0 text-muted" aria-hidden="true" />
+      )}
       <select
         aria-label="Area"
         value={area}

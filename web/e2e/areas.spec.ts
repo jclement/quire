@@ -7,6 +7,10 @@ import { expect, test } from "@playwright/test";
 test.describe.configure({ mode: "serial" });
 
 async function seed(page: import("@playwright/test").Page) {
+  // Areas are opt-in: define two so the switcher exists at all.
+  await page.request.put("/api/v1/areas", {
+    data: { areas: [{ name: "work", color: "blue" }, { name: "personal", color: "green" }] },
+  });
   for (const [title, area, body] of [
     ["Work Roadmap", "work", "- [ ] ship the roadmap 📅 2026-09-02"],
     ["Beach Trip", "personal", "- [ ] book the beach 📅 2026-09-02"],

@@ -27,6 +27,7 @@ import (
 	"github.com/jclement/quire/internal/mcp"
 	"github.com/jclement/quire/internal/oauth"
 	"github.com/jclement/quire/internal/service"
+	"github.com/jclement/quire/internal/settings"
 	"github.com/jclement/quire/internal/share"
 	"github.com/jclement/quire/internal/update"
 	"github.com/jclement/quire/internal/vault"
@@ -104,7 +105,9 @@ func setup() (config.Config, *service.Service, error) {
 		return config.Config{}, nil, err
 	}
 	ix := &index.Index{DB: db, Vault: v}
-	return cfg, service.New(v, ix), nil
+	svc := service.New(v, ix)
+	svc.Settings = settings.Open(filepath.Join(cfg.StateDir(), "settings.json"))
+	return cfg, svc, nil
 }
 
 func runServe() error {

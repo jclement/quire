@@ -19,6 +19,21 @@ func (s *Server) handleListAreas(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, areas)
 }
 
+// handleSetAreas replaces the defined areas (Settings → Areas).
+func (s *Server) handleSetAreas(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Areas []service.AreaDef `json:"areas"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	if err := s.Service.SetAreas(body.Areas); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	s.handleListAreas(w, r)
+}
+
 func (s *Server) handleListTemplates(w http.ResponseWriter, r *http.Request) {
 	templates, err := s.Service.Templates()
 	if err != nil {

@@ -15,6 +15,17 @@
   --border: #e5e3dd;
   --hover: #f1efe9;
   --selected: #eae9fb;
+  /* Area colours: chosen by name in Settings, so both grounds are defined
+     here once. Each is a dot or a chip border, never a text colour. */
+  --area-slate: #6b7280;
+  --area-red: #d0453e;
+  --area-orange: #ea7d2a;
+  --area-amber: #c99a06;
+  --area-green: #2e9c58;
+  --area-teal: #13918a;
+  --area-blue: #3b7ddd;
+  --area-violet: #7c5cd6;
+  --area-pink: #d4519a;
   --accent: #5b5bd6;
   --danger: #c0453e;
   --warn: #9a6700;
@@ -40,6 +51,15 @@
   --border: #2c2d33;
   --hover: #222329;
   --selected: #2c2e49;
+  --area-slate: #8b93a1;
+  --area-red: #ef6b62;
+  --area-orange: #f5944f;
+  --area-amber: #e0b93a;
+  --area-green: #4fbd78;
+  --area-teal: #3fb8ad;
+  --area-blue: #6ea2f0;
+  --area-violet: #a88cf0;
+  --area-pink: #ec7db8;
   --accent: #8688ee;
   --danger: #e5695f;
   --warn: #d9a53f;

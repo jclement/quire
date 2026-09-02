@@ -34,3 +34,24 @@ export function areaLabel(area: string): string {
 export function isRealArea(area: string): boolean {
   return area !== AREA_ALL && area !== AREA_NONE;
 }
+
+/** The palette, in the order swatches are offered. Mirrors settings.Colors. */
+export const AREA_COLORS = [
+  "slate",
+  "red",
+  "orange",
+  "amber",
+  "green",
+  "teal",
+  "blue",
+  "violet",
+  "pink",
+] as const;
+
+/** CSS colour for an area colour name; unknown names fall back to slate. */
+export function areaColorVar(color: string | undefined): string {
+  const name = (AREA_COLORS as readonly string[]).includes(color ?? "")
+    ? color
+    : "slate";
+  return `var(--area-${name})`;
+}
