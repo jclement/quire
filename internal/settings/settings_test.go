@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestDefaultsThenRoundTrip(t *testing.T) {
@@ -52,5 +53,27 @@ func TestValidateAreas(t *testing.T) {
 	}
 	if ok[0].Name != "work" || ok[0].Color != "slate" {
 		t.Errorf("normalization: %+v", ok[0])
+	}
+}
+
+func TestTimezoneRoundTripAndValidation(t *testing.T) {
+	store := Open(filepath.Join(t.TempDir(), "settings.json"))
+	if store.Location() != time.Local {
+		t.Error("unset zone should be the server's")
+	}
+	if err := store.Save(Settings{Timezone: "Mars/Olympus"}); err == nil {
+		t.Error("an unknown zone must be refused")
+	}
+	if err := store.Save(Settings{Timezone: "America/Edmonton"}); err != nil {
+		t.Fatal(err)
+	}
+	if store.Location().String() != "America/Edmonton" {
+		t.Errorf("location = %s", store.Location())
+	}
+	// A fresh store reads the file, not a cache.
+	again := Open(store.path)
+	cfg, _ := again.Load()
+	if cfg.Timezone != "America/Edmonton" {
+		t.Errorf("reloaded timezone = %q", cfg.Timezone)
 	}
 }

@@ -51,7 +51,8 @@ test("the calendar shows the month and marks a day with a daily note", async ({
   page,
 }) => {
   // Creating today's daily note should light up today's cell.
-  const today = new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   await page.request.post(`/api/v1/daily/${today}`);
 
   await page.goto("/calendar");

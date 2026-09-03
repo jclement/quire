@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Colors is the palette an area may use. Names, not hex: the CSS defines a
@@ -31,16 +32,23 @@ type AreaDef struct {
 // Settings is everything the file holds.
 type Settings struct {
 	Areas []AreaDef `json:"areas"`
+	// Timezone is an IANA name ("America/Edmonton"); "" means the server's
+	// own zone. Everything dated — today's note, due:today, ✅ stamps, the
+	// digest hour — is reckoned in it.
+	Timezone string `json:"timezone"`
 }
 
 // DefaultAreas is empty on purpose: areas are opt-in. Nothing area-shaped
 // appears in the app until two or more are defined in Settings.
 var DefaultAreas []AreaDef
 
-// Store reads and writes the settings file.
+// Store reads and writes the settings file. The parsed file is cached
+// after the first read — Now() consults it constantly — and refreshed by
+// Save; an edit to the file by hand is picked up on the next restart.
 type Store struct {
-	path string
-	mu   sync.Mutex
+	path   string
+	mu     sync.Mutex
+	cached *Settings
 }
 
 // Open returns a store for path. The file need not exist yet.
@@ -50,9 +58,14 @@ func Open(path string) *Store { return &Store{path: path} }
 func (s *Store) Load() (Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.cached != nil {
+		return *s.cached, nil
+	}
 	raw, err := os.ReadFile(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Settings{Areas: append([]AreaDef(nil), DefaultAreas...)}, nil
+		cfg := Settings{Areas: append([]AreaDef(nil), DefaultAreas...)}
+		s.cached = &cfg
+		return cfg, nil
 	}
 	if err != nil {
 		return Settings{}, fmt.Errorf("reading settings: %w", err)
@@ -61,7 +74,33 @@ func (s *Store) Load() (Settings, error) {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return Settings{}, fmt.Errorf("settings file %s is not valid JSON: %w", s.path, err)
 	}
+	s.cached = &cfg
 	return cfg, nil
+}
+
+// Location resolves the configured zone; the server's own when unset or
+// unknown (an unknown name cannot be saved, so that is only a hand-edit).
+func (s *Store) Location() *time.Location {
+	cfg, err := s.Load()
+	if err != nil || cfg.Timezone == "" {
+		return time.Local
+	}
+	loc, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		return time.Local
+	}
+	return loc
+}
+
+// ValidateTimezone accepts "" (server zone) or an IANA name Go can load.
+func ValidateTimezone(name string) error {
+	if name == "" {
+		return nil
+	}
+	if _, err := time.LoadLocation(name); err != nil {
+		return fmt.Errorf("unknown time zone %q (want an IANA name like America/Edmonton)", name)
+	}
+	return nil
 }
 
 // Save validates and writes atomically.
@@ -69,8 +108,12 @@ func (s *Store) Save(cfg Settings) error {
 	if err := ValidateAreas(cfg.Areas); err != nil {
 		return err
 	}
+	if err := ValidateTimezone(cfg.Timezone); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.cached = nil
 	raw, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
@@ -82,7 +125,12 @@ func (s *Store) Save(cfg Settings) error {
 	if err := os.WriteFile(tmp, append(raw, '\n'), 0o644); err != nil {
 		return fmt.Errorf("writing settings: %w", err)
 	}
-	return os.Rename(tmp, s.path)
+	if err := os.Rename(tmp, s.path); err != nil {
+		return err
+	}
+	saved := cfg
+	s.cached = &saved
+	return nil
 }
 
 // ValidateAreas normalizes names in place and rejects duplicates, empty

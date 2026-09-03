@@ -306,6 +306,7 @@ quire today
 | `QUIRE_OPENAI_API_KEY` | _(none)_ | Turns on semantic search — **sends note text to the embeddings endpoint** |
 | `QUIRE_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible embeddings API |
 | `QUIRE_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
+| _(Settings → Time zone)_ | first browser's zone | Every date — today's note, due:today, ✅ stamps, the digest hour — is reckoned in it; set it in Settings, not the environment |
 | `QUIRE_EMBEDDING_COOLDOWN` | `30s` | How long a note sits unchanged before its changed sections are re-embedded |
 | `QUIRE_DIGEST_TO` / `QUIRE_DIGEST_TIME` | | Daily digest recipient and local HH:MM |
 | `QUIRE_URL` / `QUIRE_TOKEN` | | CLI verbs: which quire to talk to, and as whom |

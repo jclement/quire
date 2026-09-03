@@ -114,7 +114,9 @@ func scheduleDigest(ctx context.Context, cfg config.Config, svc *service.Service
 
 	go func() {
 		for {
-			now := time.Now()
+			// The digest hour is in the app's zone (Settings), not the
+			// container's, which is almost always UTC.
+			now := time.Now().In(svc.Location())
 			next := time.Date(now.Year(), now.Month(), now.Day(), at.Hour(), at.Minute(), 0, 0, now.Location())
 			if !next.After(now) {
 				next = next.AddDate(0, 0, 1)

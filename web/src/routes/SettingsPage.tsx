@@ -21,6 +21,7 @@ import {
   useHealth,
   useSemanticEnabled,
   useSemanticStatus,
+  useTimezone,
 } from "../api/queries.ts";
 import { AUTH_STATUS_KEY } from "../components/auth/AuthGate.tsx";
 import { RegisterPanel } from "../components/auth/AuthScreens.tsx";
@@ -79,6 +80,7 @@ export function SettingsPage() {
       <AreaSettings />
       <TemplateSettings />
       <AgentGuidanceSection />
+      <TimezoneSettings />
       <SemanticSettings />
       <EmailSettings />
       <AgentActivity />
@@ -180,6 +182,90 @@ function AgentGuidanceSection() {
 
 // Version and update status used to sit in a page footer; it belongs here,
 // where it costs no screen space on a phone.
+/** The zone every date is reckoned in: today's note, due:today, ✅ stamps,
+ * the digest hour. Taken from the first browser to open a fresh install;
+ * changeable here for the person who lives somewhere else than their laptop. */
+function TimezoneSettings() {
+  const { toast } = useUi();
+  const queryClient = useQueryClient();
+  const tz = useTimezone();
+  const [draft, setDraft] = useState<string | null>(null);
+  let browser = "";
+  try {
+    browser = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  } catch {
+    browser = "";
+  }
+  const value = draft ?? tz.data?.timezone ?? "";
+  const save = useMutation({
+    mutationFn: (zone: string) => api.setTimezone(zone),
+    onSuccess: (info) => {
+      queryClient.setQueryData(["timezone"], info);
+      setDraft(null);
+      toast(`Time zone: ${info.effective}`);
+    },
+    onError: (error) => toast(errorMessage(error)),
+  });
+  const zones = ((
+    Intl as unknown as { supportedValuesOf?: (k: string) => string[] }
+  ).supportedValuesOf?.("timeZone") ?? []) as string[];
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold text-heading">Time zone</h2>
+      <p className="text-xs text-muted">
+        Today's note, due dates and the digest hour are reckoned in this zone.
+        {tz.data ? (
+          <>
+            {" "}
+            Now:{" "}
+            <span className="font-mono text-body">
+              {tz.data.now.slice(0, 16).replace("T", " ")}
+            </span>{" "}
+            ({tz.data.effective})
+          </>
+        ) : null}
+      </p>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          save.mutate(value);
+        }}
+        className="flex flex-wrap items-center gap-2"
+      >
+        <input
+          list="quire-zones"
+          value={value}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="America/Edmonton"
+          aria-label="Time zone"
+          className="field-bare h-8 w-64 rounded border border-border bg-raised px-2 font-mono text-xs text-heading outline-none focus:border-accent"
+        />
+        <datalist id="quire-zones">
+          {zones.map((zone) => (
+            <option key={zone} value={zone} />
+          ))}
+        </datalist>
+        <button
+          type="submit"
+          disabled={save.isPending || value === (tz.data?.timezone ?? "")}
+          className="flex h-8 items-center rounded border border-border bg-accent px-2.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+        >
+          Save time zone
+        </button>
+        {browser && browser !== (tz.data?.timezone ?? "") ? (
+          <button
+            type="button"
+            onClick={() => save.mutate(browser)}
+            className="flex h-8 items-center rounded border border-border px-2.5 text-xs text-body hover:bg-hover hover:text-heading"
+          >
+            Use this device's ({browser})
+          </button>
+        ) : null}
+      </form>
+    </section>
+  );
+}
+
 /** Email is configured by environment; this shows what is set and sends a
  * test digest so a bad relay is found here, not by a missing morning mail. */
 function EmailSettings() {

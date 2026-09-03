@@ -33,6 +33,7 @@ import type {
   SemanticStatus,
   SearchMode,
   EmailStatus,
+  TimezoneInfo,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -201,6 +202,10 @@ export const api = {
     request<SearchResult[]>(`/api/v1/related?path=${encodeURIComponent(path)}`),
 
   semanticStatus: () => request<SemanticStatus>("/api/v1/semantic/status"),
+
+  timezone: () => request<TimezoneInfo>("/api/v1/timezone"),
+  setTimezone: (timezone: string) =>
+    request<TimezoneInfo>("/api/v1/timezone", jsonInit("PUT", { timezone })),
 
   emailStatus: () => request<EmailStatus>("/api/v1/email"),
   sendTestEmail: () =>

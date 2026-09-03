@@ -155,6 +155,14 @@ type SemanticStatus struct {
 	LastError string `json:"last_error"`
 }
 
+// TimezoneInfo is the configured zone, what it resolves to, and the
+// server's idea of now in it — so Settings can show "today is …".
+type TimezoneInfo struct {
+	Timezone  string `json:"timezone"`
+	Effective string `json:"effective"`
+	Now       string `json:"now"`
+}
+
 // EmailStatus is what Settings shows about email: whether SMTP and a digest
 // recipient are configured, and when the digest goes out.
 type EmailStatus struct {

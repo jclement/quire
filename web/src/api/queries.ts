@@ -1,6 +1,7 @@
 // TanStack Query bindings for the API: query keys, hooks, and the optimistic
 // task-toggle mutation. All cache keys are defined here so the SSE hook and
 // mutations invalidate the same names the views read.
+import { useEffect } from "react";
 import {
   useMutation,
   useQuery,
@@ -100,6 +101,36 @@ export function useSearch(q: string, mode: SearchMode = "text") {
     queryFn: () => api.search(scoped, mode, mode === "semantic" ? area : ""),
     enabled: q.trim().length > 0,
   });
+}
+
+/** The app's time zone. Unset on a fresh install, so the first browser to
+ * open the app hands over its own — the container's clock is UTC, and
+ * "today's note" in UTC is yesterday's or tomorrow's for most people. */
+export function useTimezone() {
+  return useQuery({
+    queryKey: ["timezone"],
+    queryFn: api.timezone,
+    staleTime: 60_000,
+  });
+}
+
+export function useTimezoneSync(): void {
+  const queryClient = useQueryClient();
+  const tz = useTimezone();
+  useEffect(() => {
+    if (!tz.data || tz.data.timezone !== "") return;
+    let browser = "";
+    try {
+      browser = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+    } catch {
+      return;
+    }
+    if (!browser) return;
+    void api
+      .setTimezone(browser)
+      .then((info) => queryClient.setQueryData(["timezone"], info))
+      .catch(() => {});
+  }, [tz.data, queryClient]);
 }
 
 /** Every tag in the vault with its count; feeds the tag chip typeahead. */

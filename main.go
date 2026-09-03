@@ -4,6 +4,10 @@
 package main
 
 import (
+	// Zone data travels in the binary: the distroless image has none, and
+	// the time-zone setting must resolve without it.
+	_ "time/tzdata"
+
 	"context"
 	"errors"
 	"fmt"

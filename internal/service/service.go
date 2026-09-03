@@ -39,9 +39,48 @@ type Service struct {
 	Now func() time.Time
 }
 
-// New returns a Service using the real clock.
+// New returns a Service whose clock reads in the configured time zone
+// (Settings, once assigned; the server's own until then).
 func New(v *vault.Vault, ix *index.Index) *Service {
-	return &Service{Vault: v, Index: ix, Now: time.Now}
+	s := &Service{Vault: v, Index: ix}
+	s.Now = func() time.Time { return time.Now().In(s.Location()) }
+	return s
+}
+
+// Location is the zone every date in the app is reckoned in.
+func (s *Service) Location() *time.Location {
+	if s.Settings == nil {
+		return time.Local
+	}
+	return s.Settings.Location()
+}
+
+// Timezone reports the setting and what it resolves to.
+func (s *Service) Timezone() TimezoneInfo {
+	info := TimezoneInfo{Effective: s.Location().String()}
+	if s.Settings != nil {
+		if cfg, err := s.Settings.Load(); err == nil {
+			info.Timezone = cfg.Timezone
+		}
+	}
+	info.Now = s.Now().Format(time.RFC3339)
+	return info
+}
+
+// SetTimezone stores an IANA zone name ("" for the server's own).
+func (s *Service) SetTimezone(name string) error {
+	if s.Settings == nil {
+		return fmt.Errorf("%w: settings are not available", ErrValidation)
+	}
+	if err := settings.ValidateTimezone(strings.TrimSpace(name)); err != nil {
+		return fmt.Errorf("%w: %v", ErrValidation, err)
+	}
+	cfg, err := s.Settings.Load()
+	if err != nil {
+		return err
+	}
+	cfg.Timezone = strings.TrimSpace(name)
+	return s.Settings.Save(cfg)
 }
 
 func (s *Service) today() string { return s.Now().Format("2006-01-02") }

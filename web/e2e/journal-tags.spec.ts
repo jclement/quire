@@ -13,7 +13,11 @@ function writeVault(rel: string, body: string) {
   writeFileSync(full, body);
 }
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+// Local calendar date, never toISOString(): that is the UTC date, which is
+// tomorrow every evening west of Greenwich — and the app reckons in the
+// browser's zone.
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const daysAgo = (n: number) => {
   const d = new Date();
   d.setDate(d.getDate() - n);

@@ -60,6 +60,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/search", s.handleSearch)
 	mux.HandleFunc("GET /api/v1/related", s.handleRelated)
 	mux.HandleFunc("GET /api/v1/semantic/status", s.handleSemanticStatus)
+	mux.HandleFunc("GET /api/v1/timezone", s.handleGetTimezone)
+	mux.HandleFunc("PUT /api/v1/timezone", s.handleSetTimezone)
 	mux.HandleFunc("GET /api/v1/email", s.handleEmailStatus)
 	mux.HandleFunc("POST /api/v1/email/test", s.handleEmailTest)
 	mux.HandleFunc("GET /api/v1/tags", s.handleListTags)

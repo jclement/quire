@@ -11,6 +11,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { useDocEvents } from "../api/useEvents.ts";
+import { useTimezoneSync } from "../api/queries.ts";
 import { currentMonthKey, isMonthKey } from "../lib/calendar.ts";
 import { isDocType } from "../lib/docs.ts";
 import { AppShell } from "../components/AppShell.tsx";
@@ -43,6 +44,7 @@ const TASK_VIEWS: TaskView[] = ["today", "upcoming", "waiting", "logbook"];
 
 function RootLayout() {
   useDocEvents();
+  useTimezoneSync();
   return (
     <>
       <GlobalKeys />

@@ -96,3 +96,23 @@ func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	writeData(w, http.StatusOK, out)
 }
+
+// ---- time zone ----
+
+func (s *Server) handleGetTimezone(w http.ResponseWriter, _ *http.Request) {
+	writeData(w, http.StatusOK, s.Service.Timezone())
+}
+
+func (s *Server) handleSetTimezone(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Timezone string `json:"timezone"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	if err := s.Service.SetTimezone(body.Timezone); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, s.Service.Timezone())
+}

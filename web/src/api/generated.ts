@@ -202,6 +202,15 @@ export interface SemanticStatus {
   last_error: string;
 }
 /**
+ * TimezoneInfo is the configured zone, what it resolves to, and the
+ * server's idea of now in it — so Settings can show "today is …".
+ */
+export interface TimezoneInfo {
+  timezone: string;
+  effective: string;
+  now: string;
+}
+/**
  * EmailStatus is what Settings shows about email: whether SMTP and a digest
  * recipient are configured, and when the digest goes out.
  */

@@ -15,6 +15,7 @@ export type {
   Drawing,
   SemanticStatus,
   EmailStatus,
+  TimezoneInfo,
   AuditEntry,
   DocType,
   Birthday,
