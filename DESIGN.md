@@ -380,6 +380,21 @@ touched. ISO weeks run Monday to Sunday and belong to the year holding their
 Thursday, which is why 2026-W01 starts on 29 December 2025 — `service/weeks.go`
 is pure so that arithmetic is testable without a clock.
 
+Two failures were silent and now are not. A repeating task only ever spawns
+its successor through quire's own toggle, and the vault is deliberately
+editable everywhere else, so a renewal ticked off in vim vanished; and a
+`🔁` spec outside the grammar was stored as no recurrence at all, so the
+marker sat in the task's own name doing nothing. `RecurrenceProblems`
+finds both — completed-and-repeating with no open sibling of the same text
+in the same document, and a `🔁` in the raw line with an empty parsed spec
+— and `RestoreRecurrence` writes the missing occurrence from the completed
+line, so the repair is the same code path as the toggle.
+
+Names shared by several documents are the other silent one: link
+resolution takes the lowest path deterministically, so the second Sarah
+Chen cannot be linked by name at all. `quire doctor` reports them, and the
+`[[` completion shows paths instead of types when titles collide.
+
 ## Journal and tags
 
 The journal (`/journal`) is a paged, newest-first read of daily notes, driven by

@@ -64,6 +64,7 @@ func (s *Service) WeekReview(label, area string) (WeekPayload, error) {
 		Prev: week.Prev, Next: week.Next,
 		Completed: []Task{}, Slipped: []Task{}, Waiting: []Task{},
 		Stalled: []DocMeta{}, Meetings: []DocMeta{}, Touched: []DocMeta{},
+		Recurrence: []RecurrenceProblem{},
 	}
 
 	if doc, err := s.GetDocument("weekly/" + week.Label + ".md"); err == nil {
@@ -94,6 +95,12 @@ func (s *Service) WeekReview(label, area string) (WeekPayload, error) {
 		return payload, err
 	}
 	payload.Stalled = metasFromRows(stalled)
+
+	problems, err := s.RecurrenceProblems()
+	if err != nil {
+		return payload, err
+	}
+	payload.Recurrence = problems
 
 	meetings, err := s.Index.MeetingsBetween(week.Start, week.End)
 	if err != nil {

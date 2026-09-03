@@ -251,6 +251,17 @@ func (s *Server) handleToggleTask(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, task)
 }
 
+// handleRestoreRecurrence writes the missing next occurrence of a repeating
+// task that was completed outside quire.
+func (s *Server) handleRestoreRecurrence(w http.ResponseWriter, r *http.Request) {
+	task, err := s.Service.RestoreRecurrence(r.PathValue("id"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, task)
+}
+
 // ---- daily & today ----
 
 func (s *Server) handleGetDaily(w http.ResponseWriter, r *http.Request) {

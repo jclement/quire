@@ -417,6 +417,116 @@ func (ix *Index) OpenTasksDue(day, area string) ([]TaskRow, error) {
 	return collectTasks(rows)
 }
 
+// TaskAt returns the task on one line of one document. Needed where a task
+// cannot be found by id: two occurrences of a repeating task share their
+// text, so they share a content hash and only the ordinal suffix separates
+// them — the line is the only unambiguous handle.
+func (ix *Index) TaskAt(docPath string, line int) (TaskRow, error) {
+	rows, err := ix.DB.Query(taskSelect+" WHERE t.doc_path = ? AND t.line = ?", docPath, line)
+	if err != nil {
+		return TaskRow{}, err
+	}
+	defer rows.Close()
+	tasks, err := collectTasks(rows)
+	if err != nil {
+		return TaskRow{}, err
+	}
+	if len(tasks) == 0 {
+		return TaskRow{}, fmt.Errorf("no task at %s:%d", docPath, line)
+	}
+	return tasks[0], nil
+}
+
+// RecurrenceProblem is a repeating task that has quietly stopped repeating.
+type RecurrenceProblem struct {
+	Task TaskRow
+	// Reason is "stopped" (completed with no next occurrence) or "unparsed"
+	// (a 🔁 marker the grammar does not understand, so it never repeated).
+	Reason string
+}
+
+// RecurrenceProblems finds repeating tasks that are no longer repeating.
+// The next occurrence is only ever spawned by quire's own toggle, and the
+// vault is deliberately editable everywhere else — so a renewal ticked off
+// in vim, or written with a spec the grammar does not know, disappears with
+// nothing said. This is the query that says it.
+func (ix *Index) RecurrenceProblems() ([]RecurrenceProblem, error) {
+	// Stopped: completed, repeating, and no open task with the same text
+	// remains in the same document to carry it forward.
+	stopped, err := ix.DB.Query(taskSelect + `
+		WHERE t.done = 1 AND t.recur != '' AND NOT EXISTS (
+			SELECT 1 FROM tasks o
+			WHERE o.done = 0 AND o.doc_path = t.doc_path AND o.text = t.text
+		)
+		ORDER BY t.completed_on DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("stopped recurrences: %w", err)
+	}
+	rows, err := collectTasks(stopped)
+	stopped.Close()
+	if err != nil {
+		return nil, err
+	}
+	var out []RecurrenceProblem
+	seen := map[string]bool{}
+	for _, r := range rows {
+		key := r.DocPath + "\x00" + r.Text
+		if seen[key] {
+			continue // one report per task, not one per past occurrence
+		}
+		seen[key] = true
+		out = append(out, RecurrenceProblem{Task: r, Reason: "stopped"})
+	}
+
+	// Unparsed: the line carries 🔁 but the grammar matched nothing, so it
+	// has never repeated and never will.
+	bad, err := ix.DB.Query(taskSelect + `
+		WHERE t.recur = '' AND t.raw_text LIKE '%🔁%'
+		ORDER BY t.doc_path`)
+	if err != nil {
+		return nil, fmt.Errorf("unparsed recurrences: %w", err)
+	}
+	defer bad.Close()
+	badRows, err := collectTasks(bad)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range badRows {
+		out = append(out, RecurrenceProblem{Task: r, Reason: "unparsed"})
+	}
+	return out, nil
+}
+
+// DuplicateName is one name that answers to more than one document, which
+// makes every link to it resolve to whichever path sorts first.
+type DuplicateName struct {
+	Name  string
+	Paths []string
+}
+
+// DuplicateNames finds names shared by several documents. ResolveLink picks
+// the lowest path deterministically and silently, so the others cannot be
+// linked by that name at all.
+func (ix *Index) DuplicateNames() ([]DuplicateName, error) {
+	rows, err := ix.DB.Query(`
+		SELECT name, group_concat(path, char(10)) FROM (
+			SELECT DISTINCT name, path FROM docnames ORDER BY path
+		) GROUP BY name HAVING COUNT(*) > 1 ORDER BY name`)
+	if err != nil {
+		return nil, fmt.Errorf("duplicate names: %w", err)
+	}
+	defer rows.Close()
+	var out []DuplicateName
+	for rows.Next() {
+		var name, paths string
+		if err := rows.Scan(&name, &paths); err != nil {
+			return nil, err
+		}
+		out = append(out, DuplicateName{Name: name, Paths: strings.Split(paths, "\n")})
+	}
+	return out, rows.Err()
+}
+
 // ProjectsWithoutNextAction returns active project documents that no open
 // task belongs to. GTD's most useful single question, and the one a vault
 // of markdown cannot answer by looking.

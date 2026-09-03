@@ -8,6 +8,7 @@ package service
 
 import (
 	"fmt"
+	"github.com/jclement/quire/internal/vault"
 	"regexp"
 	"strings"
 	"time"
@@ -101,4 +102,61 @@ func nextOccurrenceLine(line string, row index.TaskRow, today string) (string, e
 func replaceMarkerDate(line, marker, oldDate, newDate string) string {
 	re := regexp.MustCompile(regexp.QuoteMeta(marker) + `\s*` + regexp.QuoteMeta(oldDate))
 	return re.ReplaceAllString(line, marker+" "+newDate)
+}
+
+// RecurrenceProblems reports repeating tasks that have stopped repeating.
+func (s *Service) RecurrenceProblems() ([]RecurrenceProblem, error) {
+	rows, err := s.Index.RecurrenceProblems()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RecurrenceProblem, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, RecurrenceProblem{Task: taskFromRow(r.Task), Reason: r.Reason})
+	}
+	return out, nil
+}
+
+// RestoreRecurrence writes the missing next occurrence of a completed
+// repeating task, below the line that completed it — the repair for a
+// renewal ticked off outside quire. Refuses anything that is not a stopped
+// recurrence, so it cannot quietly duplicate live work.
+func (s *Service) RestoreRecurrence(id string) (Task, error) {
+	row, err := s.Index.TaskByID(id)
+	if err != nil {
+		return Task{}, fmt.Errorf("task %s: %w", id, vault.ErrNotFound)
+	}
+	if !row.Done || row.Recur == "" {
+		return Task{}, fmt.Errorf("%w: task %s is not a completed repeating task", ErrValidation, id)
+	}
+	f, err := s.Vault.Read(row.DocPath)
+	if err != nil {
+		return Task{}, err
+	}
+	lines := strings.Split(string(f.Raw), "\n")
+	at := findTaskLine(lines, row)
+	if at < 0 {
+		return Task{}, fmt.Errorf("%w: task %s: source line not found", ErrValidation, id)
+	}
+	// Build the successor from the completed line with its stamp removed, so
+	// the next occurrence looks exactly as the toggle would have written it.
+	original := stripCompletionStamp(strings.Replace(lines[at], "[x]", "[ ]", 1))
+	original = strings.Replace(original, "[X]", "[ ]", 1)
+	next, err := nextOccurrenceLine(original, row, s.today())
+	if err != nil {
+		return Task{}, fmt.Errorf("%w: recurrence %q: %s", ErrValidation, row.Recur, err)
+	}
+	lines = append(lines[:at+1], append([]string{next}, lines[at+1:]...)...)
+
+	doc, err := s.UpdateDocument(row.DocPath, strings.Join(lines, "\n"), f.SHA256)
+	if err != nil {
+		return Task{}, err
+	}
+	// By line, not by id: the successor shares its text with the occurrence
+	// above it, so they share a content hash.
+	fresh, err := s.Index.TaskAt(doc.Path, at+2)
+	if err != nil {
+		return Task{}, fmt.Errorf("restored task not found after indexing: %w", err)
+	}
+	return taskFromRow(fresh), nil
 }

@@ -374,6 +374,31 @@ func runDoctor() error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	// Names shared by several documents: every link to one of them resolves
+	// to whichever path sorts first, silently, so the others are unreachable
+	// by that name.
+	duplicates, err := svc.Index.DuplicateNames()
+	if err != nil {
+		return err
+	}
+	for _, d := range duplicates {
+		fmt.Printf("ambiguous name: %q answers to %s\n", d.Name, strings.Join(d.Paths, ", "))
+	}
+
+	// Repeating tasks that have quietly stopped repeating.
+	problems, err := svc.RecurrenceProblems()
+	if err != nil {
+		return err
+	}
+	for _, p := range problems {
+		switch p.Reason {
+		case "unparsed":
+			fmt.Printf("unreadable recurrence: %q in %s (the 🔁 spec matched nothing, so it never repeats)\n", p.Task.Text, p.Task.DocPath)
+		default:
+			fmt.Printf("stopped recurrence: %q in %s (completed with no next occurrence)\n", p.Task.Text, p.Task.DocPath)
+		}
+	}
+
 	// Unreferenced attachments: files no document mentions. Reported, never
 	// deleted — a reference may live outside the vault or be coming back.
 	unreferenced := 0
@@ -401,7 +426,7 @@ func runDoctor() error {
 		return attErr
 	}
 
-	if dangling == 0 && unreferenced == 0 {
+	if dangling == 0 && unreferenced == 0 && len(duplicates) == 0 && len(problems) == 0 {
 		fmt.Println("vault healthy: no dangling links, no unreferenced attachments")
 	} else {
 		fmt.Printf("%d dangling link(s), %d unreferenced attachment(s)\n", dangling, unreferenced)

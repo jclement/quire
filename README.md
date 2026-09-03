@@ -238,7 +238,12 @@ inside the week, what slipped, what is still delegated, which active projects
 have no open task at all, the meetings held and the documents touched — so a
 Friday review is a reading rather than a remembering. The week's own note
 (`weekly/2026-W36.md`) is created on demand from `templates/weekly.md`.
-Agents get the same payload through the `week_review` tool.
+It also lists **recurrences that stopped**: a `🔁` task completed anywhere
+other than quire (vim, Obsidian, a hand edit) never spawns its successor,
+and a `🔁` spec the grammar cannot read never repeated at all. Both used to
+fail in silence. "Restore" writes the occurrence the toggle would have
+written, lead time kept. Agents get the same payload through the
+`week_review` tool.
 
 ### Journal
 
@@ -339,6 +344,7 @@ quire today
 | `QUIRE_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible embeddings API |
 | `QUIRE_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
 | _(Settings → Time zone)_ | first browser's zone | Every date — today's note, due:today, ✅ stamps, the digest hour — is reckoned in it; set it in Settings, not the environment |
+| _(see `quire doctor`)_ | | Reports dangling links, ambiguous names, stopped recurrences and unreferenced attachments |
 | `QUIRE_EMBEDDING_COOLDOWN` | `30s` | How long a note sits unchanged before its changed sections are re-embedded |
 | `QUIRE_DIGEST_TO` / `QUIRE_DIGEST_TIME` | | Daily digest recipient and local HH:MM |
 | `QUIRE_URL` / `QUIRE_TOKEN` | | CLI verbs: which quire to talk to, and as whom |

@@ -184,3 +184,75 @@ func TestRenameRewritesLinks(t *testing.T) {
 		t.Errorf("title resolution after move = %q", got)
 	}
 }
+
+// TestRecurrenceProblems: the two ways a repeating task quietly stops
+// repeating, and the repair for the one that can be repaired.
+func TestRecurrenceProblems(t *testing.T) {
+	svc := newTestService(t)
+	writeVault(t, svc, map[string]string{
+		// Ticked off outside quire: no successor was ever written.
+		"notes/car.md": "# Car\n\n- [x] renew registration 📅 2026-08-01 🛫 2026-07-11 🔁 every year ✅ 2026-08-02\n",
+		// A healthy chain: completed, with the next one below it.
+		"notes/filter.md": "# Filter\n\n- [x] change the filter 📅 2026-08-01 🔁 every month ✅ 2026-08-01\n" +
+			"- [ ] change the filter 📅 2026-09-01 🔁 every month\n",
+		// A spec the grammar does not know, so it never repeated at all.
+		"notes/odd.md": "# Odd\n\n- [ ] water the plants 🔁 every fortnight\n",
+	})
+
+	problems, err := svc.RecurrenceProblems()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byText := map[string]string{}
+	for _, p := range problems {
+		byText[p.Task.Text] = p.Reason
+	}
+	if byText["renew registration"] != "stopped" {
+		t.Errorf("a recurrence completed with no successor should be reported: %+v", byText)
+	}
+	// The unknown spec is not stripped from the text, which is itself the
+	// tell: the marker is sitting in the task's name doing nothing.
+	if byText["water the plants 🔁 every fortnight"] != "unparsed" {
+		t.Errorf("an unparseable 🔁 spec should be reported: %+v", byText)
+	}
+	if _, flagged := byText["change the filter"]; flagged {
+		t.Errorf("a healthy chain must not be reported: %+v", byText)
+	}
+
+	// Repairing writes the occurrence the toggle would have written, keeping
+	// the lead time between defer and due.
+	var stopped Task
+	for _, p := range problems {
+		if p.Task.Text == "renew registration" {
+			stopped = p.Task
+		}
+	}
+	restored, err := svc.RestoreRecurrence(stopped.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.Due == nil || *restored.Due != "2027-08-01" {
+		t.Errorf("restored due = %v, want a year on", restored.Due)
+	}
+	if restored.Defer == nil || *restored.Defer != "2027-07-11" {
+		t.Errorf("restored defer = %v, want the 21-day lead time kept", restored.Defer)
+	}
+	f, _ := svc.Vault.Read("notes/car.md")
+	if !strings.Contains(string(f.Raw), "- [x] renew registration") {
+		t.Errorf("the completed line must survive:\n%s", f.Raw)
+	}
+
+	// Once repaired it stops being reported, and repairing again is refused.
+	again, err := svc.RecurrenceProblems()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range again {
+		if p.Task.Text == "renew registration" && p.Reason == "stopped" {
+			t.Errorf("repaired recurrence should no longer be reported")
+		}
+	}
+	if _, err := svc.RestoreRecurrence(restored.ID); err == nil {
+		t.Error("an open task is not a stopped recurrence")
+	}
+}

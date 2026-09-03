@@ -10,11 +10,12 @@ import {
   ChevronRight,
   Pencil,
   Sparkles,
+  RotateCcw,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { api, errorMessage } from "../api/client.ts";
 import { useEffectiveArea } from "../api/queries.ts";
-import type { DocMeta, Document } from "../api/types.ts";
+import type { DocMeta, Document, RecurrenceProblem } from "../api/types.ts";
 import { docHref, DOC_TYPE_INFO, isDocType } from "../lib/docs.ts";
 import { Markdown } from "../components/Markdown.tsx";
 import { TaskListFlat } from "../components/TaskList.tsx";
@@ -105,6 +106,26 @@ export function WeeklyPage({ week }: { week: string }) {
         </Section>
       ) : null}
 
+      {data.recurrence.length > 0 ? (
+        <Section
+          title="Recurrences that stopped"
+          count={data.recurrence.length}
+        >
+          <p className="mb-1.5 text-xs text-muted">
+            These carry a 🔁 but are not repeating any more — completed
+            somewhere other than here, or written with a spec quire cannot read.
+          </p>
+          <ul className="divide-y divide-border border-y border-border">
+            {data.recurrence.map((problem) => (
+              <RecurrenceRow
+                key={problem.task.id + problem.reason}
+                problem={problem}
+              />
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+
       {data.meetings.length > 0 ? (
         <Section title="Meetings" count={data.meetings.length}>
           <DocList docs={data.meetings} />
@@ -123,6 +144,43 @@ export function WeeklyPage({ week }: { week: string }) {
 
       <WeekNote week={data.week} note={data.note} />
     </div>
+  );
+}
+
+function RecurrenceRow({ problem }: { problem: RecurrenceProblem }) {
+  const queryClient = useQueryClient();
+  const restore = useMutation({
+    mutationFn: () => api.restoreRecurrence(problem.task.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["weekly"] });
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2 text-sm">
+      <span className="min-w-0 flex-1 truncate text-body">
+        {problem.task.text}
+      </span>
+      <RouterLink
+        to={docHref(problem.task.doc_path)}
+        className="truncate text-xs text-muted hover:text-heading"
+      >
+        {problem.task.doc_title}
+      </RouterLink>
+      {problem.reason === "stopped" ? (
+        <button
+          type="button"
+          onClick={() => restore.mutate()}
+          disabled={restore.isPending}
+          className="flex h-7 items-center gap-1 rounded border border-border px-2 text-xs text-body hover:bg-hover hover:text-heading disabled:opacity-50"
+        >
+          <RotateCcw className="size-3.5" aria-hidden="true" />
+          {restore.isPending ? "Restoring…" : "Restore"}
+        </button>
+      ) : (
+        <span className="font-mono text-[10px] text-warn">unreadable 🔁</span>
+      )}
+    </li>
   );
 }
 

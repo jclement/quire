@@ -178,9 +178,20 @@ type WeekPayload struct {
 	Waiting []Task `json:"waiting"`
 	// Stalled are active projects with no open task anywhere.
 	Stalled []DocMeta `json:"stalled"`
+	// Recurrence lists repeating tasks that quietly stopped repeating.
+	Recurrence []RecurrenceProblem `json:"recurrence"`
 	// Meetings held in the week, and documents touched in it.
 	Meetings []DocMeta `json:"meetings"`
 	Touched  []DocMeta `json:"touched"`
+}
+
+// RecurrenceProblem is a repeating task that has stopped repeating: either
+// completed with no next occurrence, or written with a 🔁 spec the grammar
+// does not understand. Both fail silently, which is why they are reported.
+type RecurrenceProblem struct {
+	Task Task `json:"task"`
+	// Reason is "stopped" or "unparsed".
+	Reason string `json:"reason"`
 }
 
 // Unwritten is a name the vault keeps referring to that has no document —

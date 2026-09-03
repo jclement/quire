@@ -246,10 +246,26 @@ export interface WeekPayload {
    */
   stalled: DocMeta[];
   /**
+   * Recurrence lists repeating tasks that quietly stopped repeating.
+   */
+  recurrence: RecurrenceProblem[];
+  /**
    * Meetings held in the week, and documents touched in it.
    */
   meetings: DocMeta[];
   touched: DocMeta[];
+}
+/**
+ * RecurrenceProblem is a repeating task that has stopped repeating: either
+ * completed with no next occurrence, or written with a 🔁 spec the grammar
+ * does not understand. Both fail silently, which is why they are reported.
+ */
+export interface RecurrenceProblem {
+  task: Task;
+  /**
+   * Reason is "stopped" or "unparsed".
+   */
+  reason: string;
 }
 /**
  * Unwritten is a name the vault keeps referring to that has no document —

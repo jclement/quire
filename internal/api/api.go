@@ -74,6 +74,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/tasks", s.handleListTasks)
 	mux.HandleFunc("POST /api/v1/tasks", s.handleCreateTask)
 	mux.HandleFunc("POST /api/v1/tasks/{id}/toggle", s.handleToggleTask)
+	mux.HandleFunc("POST /api/v1/tasks/{id}/restore-recurrence", s.handleRestoreRecurrence)
 	mux.HandleFunc("PATCH /api/v1/tasks/{id}", s.handleEditTask)
 
 	mux.HandleFunc("GET /api/v1/daily", s.handleListDaily)

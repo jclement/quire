@@ -70,3 +70,42 @@ test("weeks step backwards and forwards", async ({ page }) => {
   const bad = await page.request.get("/api/v1/weekly/2026-W99");
   expect(bad.status()).toBe(400);
 });
+
+test("a recurrence completed outside quire is spotted and repaired", async ({ page }) => {
+  // Ticked off the way vim or Obsidian would: completed, no successor.
+  await page.request.post("/api/v1/documents", {
+    data: {
+      type: "note",
+      title: "Vehicle",
+      markdown:
+        "# Vehicle\n\n- [x] renew the registration 📅 2026-08-01 🛫 2026-07-11 🔁 every year ✅ 2026-08-02\n",
+    },
+  });
+  await expect
+    .poll(async () => {
+      const res = await page.request.get("/api/v1/weekly/this");
+      const { data } = await res.json();
+      return (data.recurrence as { task: { text: string } }[])
+        .map((p) => p.task.text)
+        .join(",");
+    })
+    .toContain("renew the registration");
+
+  await page.goto("/weekly");
+  const section = page.getByRole("region", { name: "Recurrences that stopped" });
+  await expect(section).toContainText("renew the registration");
+  await section.getByRole("button", { name: "Restore" }).first().click();
+
+  // The next occurrence appears, a year on, with the lead time kept.
+  await expect
+    .poll(async () =>
+      ((await (await page.request.get("/api/v1/documents/notes/vehicle.md")).json()).data
+        .markdown as string),
+    )
+    .toContain("- [ ] renew the registration 📅 2027-08-01 🛫 2027-07-11 🔁 every year");
+  // And the completed line is still there: nothing was rewritten, only added.
+  const text = (
+    await (await page.request.get("/api/v1/documents/notes/vehicle.md")).json()
+  ).data.markdown as string;
+  expect(text).toContain("- [x] renew the registration");
+});

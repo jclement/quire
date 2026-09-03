@@ -61,7 +61,19 @@ async function wikilinkSource(
   let options: Completion[] = [];
   try {
     const docs = await api.listDocuments({ q: query, limit: WIKILINK_LIMIT });
-    options = docs.map((doc) => wikilinkCompletion(doc.title, doc.type));
+    // Two documents with the same title would otherwise be two identical
+    // rows that insert the same text and resolve to the same one. Show the
+    // path on those, so the choice is at least visible.
+    const seen = new Map<string, number>();
+    for (const doc of docs) {
+      seen.set(doc.title, (seen.get(doc.title) ?? 0) + 1);
+    }
+    options = docs.map((doc) =>
+      wikilinkCompletion(
+        doc.title,
+        (seen.get(doc.title) ?? 0) > 1 ? doc.path : doc.type,
+      ),
+    );
   } catch {
     // Backend down: still offer the raw-text entry below.
   }

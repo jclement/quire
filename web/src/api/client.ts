@@ -252,6 +252,13 @@ export const api = {
   /** Names linked to that have no document yet. */
   unwritten: () => request<Unwritten[]>("/api/v1/unwritten"),
 
+  /** Writes the missing next occurrence of a stopped repeating task. */
+  restoreRecurrence: (id: string) =>
+    request<Task>(
+      `/api/v1/tasks/${encodeURIComponent(id)}/restore-recurrence`,
+      jsonInit("POST", {}),
+    ),
+
   /** The weekly review; "this" (or "") is the current ISO week. */
   weekReview: (week: string, area = "") =>
     request<WeekPayload>(
