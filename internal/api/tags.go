@@ -116,3 +116,14 @@ func (s *Server) handleSetTimezone(w http.ResponseWriter, r *http.Request) {
 	}
 	writeData(w, http.StatusOK, s.Service.Timezone())
 }
+
+// handleListUnwritten: names the vault refers to that have no document yet.
+func (s *Server) handleListUnwritten(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	links, err := s.Service.UnwrittenLinks(limit)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, links)
+}

@@ -34,6 +34,7 @@ import type {
   SearchMode,
   EmailStatus,
   TimezoneInfo,
+  Unwritten,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -246,6 +247,9 @@ export const api = {
     ),
 
   listTags: () => request<TagCount[]>("/api/v1/tags"),
+
+  /** Names linked to that have no document yet. */
+  unwritten: () => request<Unwritten[]>("/api/v1/unwritten"),
 
   listAudit: (limit = 100) =>
     request<AuditEntry[]>(`/api/v1/audit?limit=${limit}`),

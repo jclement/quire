@@ -264,6 +264,30 @@ func insertDocNames(tx *sql.Tx, rel, title string, fm map[string]any) error {
 	return nil
 }
 
+// entityKeys are the frontmatter keys whose links a task inherits from the
+// document it sits in.
+var entityKeys = []string{"people", "company", "project", "owner"}
+
+// docEntities is every entity the document is about, as link targets. A
+// meeting's action items are about the people in that room whether or not
+// the line repeats their names — which it never does, because the templates
+// put the names in frontmatter and the items under a heading.
+func docEntities(fm map[string]any) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, key := range entityKeys {
+		for _, raw := range stringList(fm[key]) {
+			target := linkTarget(stripWikilink(raw))
+			if target == "" || seen[target] {
+				continue
+			}
+			seen[target] = true
+			out = append(out, target)
+		}
+	}
+	return out
+}
+
 func insertTasks(tx *sql.Tx, rel string, fm map[string]any, tasks []markdown.Task) error {
 	// The document's own project association is the fallback for tasks that
 	// don't name one: a `project:` frontmatter link, or the document itself
@@ -272,6 +296,7 @@ func insertTasks(tx *sql.Tx, rel string, fm map[string]any, tasks []markdown.Tas
 	if vault.InferType(rel) == vault.TypeProject {
 		docProject = normalizeName(strings.TrimSuffix(rel, ".md"))
 	}
+	inherited := docEntities(fm)
 
 	seen := map[string]int{}
 	for _, t := range tasks {
@@ -292,11 +317,27 @@ func insertTasks(tx *sql.Tx, rel string, fm map[string]any, tasks []markdown.Tas
 		if err != nil {
 			return fmt.Errorf("inserting task in %s: %w", rel, err)
 		}
+		linked := map[string]bool{}
 		for _, l := range t.Links {
-			if target := linkTarget(l.Raw); target == "" {
+			target := linkTarget(l.Raw)
+			if target == "" || linked[target] {
 				continue
-			} else if _, err := tx.Exec("INSERT INTO task_links (task_id, target_norm) VALUES (?, ?)", id, target); err != nil {
+			}
+			linked[target] = true
+			if _, err := tx.Exec("INSERT INTO task_links (task_id, target_norm) VALUES (?, ?)", id, target); err != nil {
 				return fmt.Errorf("inserting task link in %s: %w", rel, err)
+			}
+		}
+		// Then whatever the document itself is about, minus what the line
+		// already names — so "what am I still owed about Acme" sees the
+		// action items from every meeting with Acme in its frontmatter.
+		for _, target := range inherited {
+			if linked[target] {
+				continue
+			}
+			linked[target] = true
+			if _, err := tx.Exec("INSERT INTO task_links (task_id, target_norm) VALUES (?, ?)", id, target); err != nil {
+				return fmt.Errorf("inserting inherited task link in %s: %w", rel, err)
 			}
 		}
 	}

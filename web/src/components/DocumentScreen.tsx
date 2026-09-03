@@ -28,8 +28,11 @@ import {
   useCallback,
 } from "react";
 import { flushSync } from "react-dom";
-import { ApiError } from "../api/client.ts";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import { api, ApiError, errorMessage } from "../api/client.ts";
 import {
+  queryKeys,
   useDocument,
   useToggleTask,
   useRelated,
@@ -140,6 +143,8 @@ function DocumentView({
   const save = useDocumentSave(path, doc);
   // The share button lights up while a live link exists for this document.
   const defaultArea = useDefaultArea();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const shares = useShares();
   const isShared = (shares.data ?? []).some(
     (share) =>
@@ -193,6 +198,26 @@ function DocumentView({
     void save.save();
     setMode("read");
   };
+
+  // A dangling [[link]] clicked in read mode becomes a note, filed where
+  // this document is. The Unwritten page offers the other types.
+  const createMissing = useCallback(
+    (name: string) => {
+      api
+        .createDocument("note", name, undefined, doc.area || defaultArea)
+        .then((created) => {
+          void queryClient.invalidateQueries({ queryKey: ["documents"] });
+          void queryClient.invalidateQueries({ queryKey: ["unwritten"] });
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.document(path),
+          });
+          toast(`Created ${created.title}`);
+          void navigate({ to: docHref(created.path), search: { edit: true } });
+        })
+        .catch((error: unknown) => toast(errorMessage(error)));
+    },
+    [doc.area, defaultArea, path, navigate, queryClient, toast],
+  );
 
   // Read mode's "Edit table": open the grid on the nth table and, on save,
   // splice the result into the buffer and flush it through the same
@@ -389,6 +414,7 @@ function DocumentView({
                 links={doc.links}
                 tasks={doc.tasks}
                 onToggleTask={(task) => toggleTask.mutate(task)}
+                onCreateMissing={createMissing}
                 onEditTable={editTable}
               />
               <Backlinks doc={doc} />

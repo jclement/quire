@@ -27,6 +27,7 @@ import {
   X,
   type LucideIcon,
   ChevronDown,
+  SquareDashed,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { todayISO } from "../lib/dates.ts";
@@ -66,6 +67,12 @@ const LIBRARY_NAV: NavEntry[] = [
   },
 ];
 
+/** Vault-wide views that are about the whole library rather than one type. */
+const INVENTORY_NAV: NavEntry[] = [
+  { to: "/tags", label: "Tags", icon: Hash },
+  { to: "/unwritten", label: "Unwritten", icon: SquareDashed },
+];
+
 const MOBILE_NAV: NavEntry[] = [
   { to: "/today", label: "Today", icon: Sunrise },
   { to: "/tasks/today", label: "Tasks", icon: CheckSquare },
@@ -85,7 +92,6 @@ const JOURNAL_NAV: NavEntry = {
   label: "Journal",
   icon: BookOpen,
 };
-const TAGS_NAV: NavEntry = { to: "/tags", label: "Tags", icon: Hash };
 
 /** Daily changes at midnight, so compute the link target per render. */
 function dailyNavEntry(): NavEntry {
@@ -210,7 +216,9 @@ function NavSections({ onNavigate }: { onNavigate?: () => void }) {
       <NavLink entry={dailyNavEntry()} onNavigate={onNavigate} />
       <NavLink entry={JOURNAL_NAV} onNavigate={onNavigate} />
       <NavLink entry={CALENDAR_NAV} onNavigate={onNavigate} />
-      <NavLink entry={TAGS_NAV} onNavigate={onNavigate} />
+      {INVENTORY_NAV.map((entry) => (
+        <NavLink key={entry.to} entry={entry} onNavigate={onNavigate} />
+      ))}
       <div className="mt-auto border-t border-border pt-2">
         <NavLink
           entry={{ to: "/search", label: "Search", icon: Search }}

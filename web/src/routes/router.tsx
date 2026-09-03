@@ -33,6 +33,7 @@ import { CalendarPage } from "./CalendarPage.tsx";
 import { DailyPage } from "./DailyPage.tsx";
 import { JournalPage } from "./JournalPage.tsx";
 import { TagsPage } from "./TagsPage.tsx";
+import { UnwrittenPage } from "./UnwrittenPage.tsx";
 import { NotFoundPage } from "./NotFoundPage.tsx";
 import { SearchPage } from "./SearchPage.tsx";
 import { SettingsPage } from "./SettingsPage.tsx";
@@ -201,9 +202,16 @@ const tagsRoute = createRoute({
   component: TagsPage,
 });
 
+const unwrittenRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/unwritten",
+  component: UnwrittenPage,
+});
+
 const routeTree = rootRoute.addChildren([
   journalRoute,
   tagsRoute,
+  unwrittenRoute,
   indexRoute,
   todayRoute,
   inboxRoute,

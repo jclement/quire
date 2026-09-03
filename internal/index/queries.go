@@ -7,6 +7,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -372,15 +374,32 @@ func (ix *Index) TaskByID(id string) (TaskRow, error) {
 
 // TasksMentioning returns open tasks whose text links the document at path
 // (by any name it answers to) — the person/project page rollup.
+// TasksMentioning returns open tasks *elsewhere* that name this document —
+// its own are already on the page, and listing them twice is noise.
 func (ix *Index) TasksMentioning(path string) ([]TaskRow, error) {
 	rows, err := ix.DB.Query(taskSelect+`
-		WHERE t.done = 0 AND t.id IN (
+		WHERE t.done = 0 AND t.doc_path != ? AND t.id IN (
 			SELECT tl.task_id FROM task_links tl
 			JOIN docnames n ON n.name = tl.target_norm
 			WHERE n.path = ?
-		) ORDER BY t.due = '', t.due`, path)
+		) ORDER BY t.due = '', t.due`, path, path)
 	if err != nil {
 		return nil, fmt.Errorf("tasks mentioning %s: %w", path, err)
+	}
+	defer rows.Close()
+	return collectTasks(rows)
+}
+
+// TasksCompletedIn returns tasks completed in [from, to] (inclusive,
+// YYYY-MM-DD), newest first — "what did I actually finish this week".
+func (ix *Index) TasksCompletedIn(from, to, area string) ([]TaskRow, error) {
+	areaWhere, areaArgs := areaClause(area)
+	args := append([]any{from, to}, areaArgs...)
+	rows, err := ix.DB.Query(taskSelect+
+		" WHERE t.done = 1 AND t.completed_on != '' AND t.completed_on >= ? AND t.completed_on <= ?"+
+		areaWhere+" ORDER BY t.completed_on DESC, t.doc_path", args...)
+	if err != nil {
+		return nil, fmt.Errorf("tasks completed in %s..%s: %w", from, to, err)
 	}
 	defer rows.Close()
 	return collectTasks(rows)
@@ -398,6 +417,72 @@ func (ix *Index) OpenTasksDue(day, area string) ([]TaskRow, error) {
 	return collectTasks(rows)
 }
 
+// Unwritten is a name referred to by wikilinks that names no document —
+// "people I keep mentioning but have never written up".
+type Unwritten struct {
+	// Name is the link text as it was most often written.
+	Name string
+	// Refs is how many links point at it.
+	Refs int
+	// Sources are the documents doing the referring, newest first.
+	Sources []DocRow
+}
+
+// UnwrittenLinks lists dangling link targets, most-referenced first. This is
+// the same set `quire doctor` reports, as a working list rather than a
+// one-shot printout.
+func (ix *Index) UnwrittenLinks(limit int) ([]Unwritten, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := ix.DB.Query(`
+		SELECT l.target_norm, COUNT(*) AS refs,
+		       (SELECT l2.target_raw FROM links l2 WHERE l2.target_norm = l.target_norm LIMIT 1)
+		FROM links l
+		WHERE NOT EXISTS (SELECT 1 FROM docnames n WHERE n.name = l.target_norm)
+		GROUP BY l.target_norm
+		ORDER BY refs DESC, l.target_norm
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("listing unwritten links: %w", err)
+	}
+	defer rows.Close()
+	var out []Unwritten
+	for rows.Next() {
+		var norm, raw string
+		var refs int
+		if err := rows.Scan(&norm, &refs, &raw); err != nil {
+			return nil, err
+		}
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			name = norm
+		}
+		out = append(out, Unwritten{Name: name, Refs: refs})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// The referring documents, per name. One small query each: this list is
+	// short by construction and only read when someone opens the page.
+	for i := range out {
+		srcRows, err := ix.DB.Query(docSelect+`
+			JOIN links l ON l.src_path = d.path
+			WHERE l.target_norm = ?
+			GROUP BY d.path ORDER BY d.mtime DESC LIMIT 5`, normalizeName(out[i].Name))
+		if err != nil {
+			return nil, err
+		}
+		docs, err := collectDocs(srcRows)
+		srcRows.Close()
+		if err != nil {
+			return nil, err
+		}
+		out[i].Sources = docs
+	}
+	return out, nil
+}
+
 // ---- search ----
 
 // Search runs the shared query grammar: bare words go to FTS (last word as a
@@ -409,14 +494,20 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 		limit = 50
 	}
 	var terms []string
-	var docType, tag, due, area string
-	isTask := false
+	var docType, tag, due, area, after, before string
+	isTask, isDone := false, false
 	for _, tok := range strings.Fields(query) {
 		switch {
 		case strings.HasPrefix(tok, "area:"):
 			area = strings.TrimPrefix(tok, "area:")
 		case tok == "is:task":
 			isTask = true
+		case tok == "is:done":
+			isTask, isDone = true, true
+		case strings.HasPrefix(tok, "after:"):
+			after, _ = resolveSearchDate(strings.TrimPrefix(tok, "after:"), today)
+		case strings.HasPrefix(tok, "before:"):
+			before, _ = resolveSearchDate(strings.TrimPrefix(tok, "before:"), today)
 		case strings.HasPrefix(tok, "due:"):
 			isTask = true
 			due = strings.TrimPrefix(tok, "due:")
@@ -429,7 +520,7 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 		}
 	}
 	if isTask {
-		return ix.searchTasks(terms, tag, due, area, today, limit)
+		return ix.searchTasks(terms, tag, due, area, today, after, before, isDone, limit)
 	}
 
 	where := "WHERE 1=1"
@@ -453,6 +544,18 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 	if tag != "" {
 		where += " AND d.path IN (SELECT path FROM tags WHERE tag = ?)"
 		args = append(args, tag)
+	}
+	// Documents are dated by when the file last changed. The comparison is
+	// made on the UTC calendar day, which can differ from the local one for
+	// a few hours around midnight — immaterial for "notes from March", and
+	// worth the simplicity of not threading a zone through every query.
+	if after != "" {
+		where += " AND strftime('%Y-%m-%d', d.mtime, 'unixepoch') >= ?"
+		args = append(args, after)
+	}
+	if before != "" {
+		where += " AND strftime('%Y-%m-%d', d.mtime, 'unixepoch') <= ?"
+		args = append(args, before)
 	}
 
 	snippet := "''"
@@ -484,8 +587,13 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 // searchTasks answers `is:task` queries against the task index: substring
 // terms over the display text, tag/due filters. Hits carry the task text as
 // the title and the source document as the snippet.
-func (ix *Index) searchTasks(terms []string, tag, due, area, today string, limit int) ([]SearchHit, error) {
+func (ix *Index) searchTasks(terms []string, tag, due, area, today, after, before string, done bool, limit int) ([]SearchHit, error) {
 	where := "t.done = 0"
+	if done {
+		// Completed tasks are dated by their ✅ stamp, which the toggle
+		// writes in the owner's own zone — so this window is exact.
+		where = "t.done = 1"
+	}
 	args := []any{}
 	if clause, a := areaClause(area); clause != "" {
 		where += clause
@@ -514,11 +622,27 @@ func (ix *Index) searchTasks(terms []string, tag, due, area, today string, limit
 		where += " AND t.due = ?"
 		args = append(args, due)
 	}
+	dateCol := "t.due"
+	if done {
+		dateCol = "t.completed_on"
+	}
+	if after != "" {
+		where += " AND " + dateCol + " != '' AND " + dateCol + " >= ?"
+		args = append(args, after)
+	}
+	if before != "" {
+		where += " AND " + dateCol + " != '' AND " + dateCol + " <= ?"
+		args = append(args, before)
+	}
+	order := "t.due = '', t.due"
+	if done {
+		order = "t.completed_on DESC"
+	}
 
 	rows, err := ix.DB.Query(fmt.Sprintf(`
 		SELECT t.doc_path, t.text, COALESCE(d.title, t.doc_path)
 		FROM tasks t LEFT JOIN documents d ON d.path = t.doc_path
-		WHERE %s ORDER BY t.due = '', t.due LIMIT %d`, where, limit), args...)
+		WHERE %s ORDER BY %s LIMIT %d`, where, order, limit), args...)
 	if err != nil {
 		return nil, fmt.Errorf("task search: %w", err)
 	}
@@ -534,6 +658,58 @@ func (ix *Index) searchTasks(terms []string, tag, due, area, today string, limit
 	}
 	return hits, rows.Err()
 }
+
+// resolveSearchDate turns an after:/before: value into a YYYY-MM-DD anchor.
+// It takes an ISO date, "today"/"yesterday", a week/month/year window, or a
+// relative "-7d"/"-3w"/"-6m" — the vocabulary someone actually types when
+// asking "what did I do lately".
+func resolveSearchDate(raw, today string) (string, bool) {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	base, err := time.Parse("2006-01-02", today)
+	if err != nil {
+		base = time.Now()
+	}
+	shift := func(days int) (string, bool) {
+		return base.AddDate(0, 0, days).Format("2006-01-02"), true
+	}
+	switch raw {
+	case "":
+		return "", false
+	case "today":
+		return base.Format("2006-01-02"), true
+	case "yesterday":
+		return shift(-1)
+	case "week":
+		return shift(-7)
+	case "month":
+		return base.AddDate(0, -1, 0).Format("2006-01-02"), true
+	case "year":
+		return base.AddDate(-1, 0, 0).Format("2006-01-02"), true
+	}
+	if _, err := time.Parse("2006-01-02", raw); err == nil {
+		return raw, true
+	}
+	if m := relativeDateRe.FindStringSubmatch(raw); m != nil {
+		n, err := strconv.Atoi(m[1])
+		if err != nil {
+			return "", false
+		}
+		switch m[2] {
+		case "d":
+			return shift(-n)
+		case "w":
+			return shift(-7 * n)
+		case "m":
+			return base.AddDate(0, -n, 0).Format("2006-01-02"), true
+		case "y":
+			return base.AddDate(-n, 0, 0).Format("2006-01-02"), true
+		}
+	}
+	return "", false
+}
+
+// relativeDateRe matches "-7d", "7d", "-3w", "-6m", "-1y".
+var relativeDateRe = regexp.MustCompile(`^-?(\d+)([dwmy])$`)
 
 // ftsQuery builds a safe FTS5 MATCH expression: each term double-quoted (so
 // user punctuation can't inject FTS syntax), the final term as a prefix so

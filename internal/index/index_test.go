@@ -395,3 +395,31 @@ func TestAreaInheritance(t *testing.T) {
 		t.Errorf("area counts = %+v", counts)
 	}
 }
+
+func TestResolveSearchDate(t *testing.T) {
+	const today = "2026-09-03"
+	cases := map[string]string{
+		"2026-01-15": "2026-01-15",
+		"today":      "2026-09-03",
+		"yesterday":  "2026-09-02",
+		"week":       "2026-08-27",
+		"month":      "2026-08-03",
+		"year":       "2025-09-03",
+		"-7d":        "2026-08-27",
+		"3d":         "2026-08-31",
+		"-2w":        "2026-08-20",
+		"-6m":        "2026-03-03",
+		"-1y":        "2025-09-03",
+	}
+	for in, want := range cases {
+		got, ok := resolveSearchDate(in, today)
+		if !ok || got != want {
+			t.Errorf("resolveSearchDate(%q) = %q %v, want %q", in, got, ok, want)
+		}
+	}
+	for _, bad := range []string{"", "next tuesday", "2026-13-40", "soon"} {
+		if got, ok := resolveSearchDate(bad, today); ok {
+			t.Errorf("resolveSearchDate(%q) = %q, want refused", bad, got)
+		}
+	}
+}

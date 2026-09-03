@@ -159,6 +159,14 @@ type SemanticStatus struct {
 	LastError string `json:"last_error"`
 }
 
+// Unwritten is a name the vault keeps referring to that has no document —
+// a to-do list for the graph, which writes itself.
+type Unwritten struct {
+	Name    string    `json:"name"`
+	Refs    int       `json:"refs"`
+	Sources []DocMeta `json:"sources"`
+}
+
 // TimezoneInfo is the configured zone, what it resolves to, and the
 // server's idea of now in it — so Settings can show "today is …".
 type TimezoneInfo struct {

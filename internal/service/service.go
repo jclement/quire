@@ -502,6 +502,20 @@ func (s *Service) Search(q string, limit int) ([]SearchResult, error) {
 	return out, nil
 }
 
+// UnwrittenLinks lists wikilink targets with no document behind them, most
+// referred to first.
+func (s *Service) UnwrittenLinks(limit int) ([]Unwritten, error) {
+	rows, err := s.Index.UnwrittenLinks(limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Unwritten, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, Unwritten{Name: r.Name, Refs: r.Refs, Sources: metasFromRows(r.Sources)})
+	}
+	return out, nil
+}
+
 // ---- daily & today ----
 
 // GetDaily returns the daily note for date (vault.ErrNotFound if absent).

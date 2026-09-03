@@ -65,6 +65,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/email", s.handleEmailStatus)
 	mux.HandleFunc("POST /api/v1/email/test", s.handleEmailTest)
 	mux.HandleFunc("GET /api/v1/tags", s.handleListTags)
+	mux.HandleFunc("GET /api/v1/unwritten", s.handleListUnwritten)
 	mux.HandleFunc("GET /api/v1/areas", s.handleListAreas)
 	mux.HandleFunc("PUT /api/v1/areas", s.handleSetAreas)
 	mux.HandleFunc("GET /api/v1/templates", s.handleListTemplates)

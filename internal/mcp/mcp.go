@@ -108,6 +108,9 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 		sdk.AddTool(s, &sdk.Tool{Name: "list_areas", Annotations: readOnly,
 			Description: "The areas documents are filed under (work, personal, and any the owner has added) with counts. Areas partition everything except daily notes; pass one to search, list_documents, list_tasks or today to narrow to it, and to create_document to file under it."},
 			t.listAreas)
+		sdk.AddTool(s, &sdk.Tool{Name: "list_unwritten", Annotations: readOnly,
+			Description: "Names the vault links to that have no document yet — people, companies and projects mentioned in notes but never written up, most-referenced first, with the documents doing the referring. Use it to find what is worth creating, or before inventing a new page for something already being talked about."},
+			t.listUnwritten)
 		sdk.AddTool(s, &sdk.Tool{Name: "list_tags", Annotations: readOnly,
 			Description: "Every tag in the vault with how many documents carry it, most-used first. Use it to pick an existing tag rather than inventing a near-duplicate."},
 			t.listTags)
@@ -335,6 +338,15 @@ func (t *tools) relatedDocuments(_ context.Context, _ *sdk.CallToolRequest, in r
 		return nil, searchOut{}, err
 	}
 	return nil, searchOut{Results: hits}, nil
+}
+
+type unwrittenOut struct {
+	Unwritten []service.Unwritten `json:"unwritten"`
+}
+
+func (t *tools) listUnwritten(_ context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, unwrittenOut, error) {
+	links, err := t.svc.UnwrittenLinks(0)
+	return nil, unwrittenOut{Unwritten: links}, err
 }
 
 func (t *tools) getDocument(_ context.Context, _ *sdk.CallToolRequest, in pathIn) (*sdk.CallToolResult, service.Document, error) {

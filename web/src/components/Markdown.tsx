@@ -72,6 +72,8 @@ interface MarkdownProps {
    * in the editor. Takes precedence over onToggleTask when given.
    */
   onToggleLine?: (line: number) => void;
+  /** Turns an unresolved [[link]] into a click that creates the note. */
+  onCreateMissing?: (name: string) => void;
   /**
    * Offers "Edit table" on each rendered table; called with the table's
    * index in document order (matching lib/tables.ts findTables).
@@ -84,6 +86,7 @@ interface MarkdownContextValue {
   tasks: Task[];
   onToggleTask?: (task: Task) => void;
   onToggleLine?: (line: number) => void;
+  onCreateMissing?: (name: string) => void;
   onEditTable?: (index: number) => void;
   /** Source line a table starts on → its index, for the edit affordance. */
   tableIndexByLine: Map<number, number>;
@@ -107,6 +110,7 @@ export function Markdown({
   tasks = [],
   onToggleTask,
   onToggleLine,
+  onCreateMissing,
   onEditTable,
 }: MarkdownProps) {
   const context = useMemo(
@@ -115,6 +119,7 @@ export function Markdown({
       tasks,
       onToggleTask,
       onToggleLine,
+      onCreateMissing,
       onEditTable,
       headingIdsByLine: new Map(
         extractHeadings(markdown).map((heading) => [heading.line, heading.id]),
@@ -123,7 +128,15 @@ export function Markdown({
         onEditTable ? findTables(markdown).map((t, i) => [t.line, i]) : [],
       ),
     }),
-    [links, tasks, onToggleTask, onToggleLine, onEditTable, markdown],
+    [
+      links,
+      tasks,
+      onToggleTask,
+      onToggleLine,
+      onCreateMissing,
+      onEditTable,
+      markdown,
+    ],
   );
   return (
     <MarkdownContext.Provider value={context}>
@@ -169,7 +182,7 @@ function resolveWikilink(inner: string, links: Link[]): string | null {
 }
 
 function Anchor(props: ComponentProps<"a"> & ExtraProps) {
-  const { links } = useContext(MarkdownContext);
+  const { links, onCreateMissing } = useContext(MarkdownContext);
   const href = props.href ?? "";
   if (href.startsWith(TAG_HREF_PREFIX)) {
     const tag = decodeURIComponent(href.slice(TAG_HREF_PREFIX.length));
@@ -189,6 +202,21 @@ function Anchor(props: ComponentProps<"a"> & ExtraProps) {
   const inner = decodeURIComponent(href.slice(WIKILINK_HREF_PREFIX.length));
   const target = resolveWikilink(inner, links);
   if (!target) {
+    // Not written yet. Where the host can act on that, the link becomes the
+    // way to write it — a dangling link is a note waiting to be made, not
+    // an error to look at.
+    if (onCreateMissing) {
+      return (
+        <button
+          type="button"
+          onClick={() => onCreateMissing(inner)}
+          title={`${inner} is not written yet — click to create it`}
+          className="border-b border-dashed border-muted text-muted hover:border-accent hover:text-accent print:border-0"
+        >
+          {props.children}
+        </button>
+      );
+    }
     return (
       <span
         className="cursor-default border-b border-dashed border-muted text-muted"

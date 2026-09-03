@@ -208,6 +208,15 @@ export interface SemanticStatus {
   last_error: string;
 }
 /**
+ * Unwritten is a name the vault keeps referring to that has no document —
+ * a to-do list for the graph, which writes itself.
+ */
+export interface Unwritten {
+  name: string;
+  refs: number /* int */;
+  sources: DocMeta[];
+}
+/**
  * TimezoneInfo is the configured zone, what it resolves to, and the
  * server's idea of now in it — so Settings can show "today is …".
  */
