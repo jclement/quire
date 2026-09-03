@@ -117,6 +117,9 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 		sdk.AddTool(s, &sdk.Tool{Name: "today", Annotations: readOnly,
 			Description: "The composed 'what matters right now' payload: today's meetings, overdue and due tasks, available and waiting tasks, birthdays, recent documents, and the daily note. Start here for 'what should I work on' — it answers in one call what would take six."},
 			t.today)
+		sdk.AddTool(s, &sdk.Tool{Name: "week_review", Annotations: readOnly,
+			Description: "The weekly review for an ISO week (omit for this one): what was completed inside it, what slipped and is still open, what is still delegated, which active projects have no open task at all, the meetings held and the documents touched. This is the payload for a Friday retro or a status update — it answers 'what did I actually get done' from the index rather than from memory."},
+			t.weekReview)
 		sdk.AddTool(s, &sdk.Tool{Name: "person_context", Annotations: readOnly,
 			Description: "Everything about a person, project or company in one call: the document, its backlinks (every meeting and note that mentions it), and open tasks involving it. The right first call before a meeting or a 1:1. Accepts a name or a vault path."},
 			t.personContext)
@@ -338,6 +341,16 @@ func (t *tools) relatedDocuments(_ context.Context, _ *sdk.CallToolRequest, in r
 		return nil, searchOut{}, err
 	}
 	return nil, searchOut{Results: hits}, nil
+}
+
+type weekIn struct {
+	Week string `json:"week,omitempty" jsonschema:"ISO week like 2026-W36; omit for the current week"`
+	Area string `json:"area,omitempty" jsonschema:"area to narrow to; omit for all"`
+}
+
+func (t *tools) weekReview(_ context.Context, _ *sdk.CallToolRequest, in weekIn) (*sdk.CallToolResult, service.WeekPayload, error) {
+	payload, err := t.svc.WeekReview(in.Week, in.Area)
+	return nil, payload, err
 }
 
 type unwrittenOut struct {

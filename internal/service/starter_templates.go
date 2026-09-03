@@ -159,6 +159,21 @@ tags: [incident]
 
 - [ ] 
 `,
+	"templates/weekly.md": `---
+for: weekly
+description: The week: what it is for, and what it turned out to be.
+---
+# {{title}}
+
+## This week is for
+
+- 
+
+## Retro
+
+- 
+`,
+
 	"templates/weekly-review.md": `---
 for: note
 description: A weekly review — what landed, what slipped, what next week is for.

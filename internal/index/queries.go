@@ -417,6 +417,37 @@ func (ix *Index) OpenTasksDue(day, area string) ([]TaskRow, error) {
 	return collectTasks(rows)
 }
 
+// ProjectsWithoutNextAction returns active project documents that no open
+// task belongs to. GTD's most useful single question, and the one a vault
+// of markdown cannot answer by looking.
+func (ix *Index) ProjectsWithoutNextAction(area string) ([]DocRow, error) {
+	areaWhere, areaArgs := areaClause(area)
+	rows, err := ix.DB.Query(docSelect+`
+		WHERE d.type = 'project'
+		  AND COALESCE(json_extract(d.frontmatter_json, '$.status'), 'active')
+		      NOT IN ('completed', 'archived', 'someday')
+		  AND NOT EXISTS (
+		    SELECT 1 FROM tasks t
+		    WHERE t.done = 0 AND (
+		      t.doc_path = d.path
+		      OR t.project_norm != '' AND t.project_norm IN (
+		        SELECT n.name FROM docnames n WHERE n.path = d.path
+		      )
+		      OR t.id IN (
+		        SELECT tl.task_id FROM task_links tl
+		        JOIN docnames n2 ON n2.name = tl.target_norm
+		        WHERE n2.path = d.path
+		      )
+		    )
+		  )`+areaWhere+`
+		ORDER BY d.mtime DESC`, areaArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("projects without a next action: %w", err)
+	}
+	defer rows.Close()
+	return collectDocs(rows)
+}
+
 // Unwritten is a name referred to by wikilinks that names no document —
 // "people I keep mentioning but have never written up".
 type Unwritten struct {

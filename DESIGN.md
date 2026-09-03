@@ -368,6 +368,18 @@ The starter set is installed only from Settings, never automatically, and never
 over an existing file: quire does not drop files into a vault unasked, and a
 user's edited template must survive a re-install.
 
+## The weekly tier
+
+Daily notes are for capture; the week is for planning and looking back.
+`weekly/YYYY-Www.md` is a document type like any other, so it indexes,
+searches, links and templates for free. The review around it
+(`service/weekly.go`) is composed, never stored: completions inside the
+week, still-open work that was due before it ended, outstanding delegations,
+active projects that no open task points at, meetings held, documents
+touched. ISO weeks run Monday to Sunday and belong to the year holding their
+Thursday, which is why 2026-W01 starts on 29 December 2025 — `service/weeks.go`
+is pure so that arithmetic is testable without a clock.
+
 ## Journal and tags
 
 The journal (`/journal`) is a paged, newest-first read of daily notes, driven by

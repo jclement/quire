@@ -9,12 +9,19 @@
 /* eslint-disable */
 
 /**
- * The six first-class document types. The server only ever emits these:
+ * The first-class document types. The server only ever emits these:
  * a frontmatter `type:` outside the set is ignored in favour of the
  * directory the file lives in.
  */
 export type DocType =
-  "note" | "person" | "company" | "project" | "meeting" | "daily" | "template";
+  | "note"
+  | "person"
+  | "company"
+  | "project"
+  | "meeting"
+  | "daily"
+  | "weekly"
+  | "template";
 
 //////////
 // source: apitypes.go
@@ -206,6 +213,43 @@ export interface SemanticStatus {
    * LastError is the most recent embedding failure, "" when healthy.
    */
   last_error: string;
+}
+/**
+ * WeekPayload is the weekly review: what landed, what slipped, what is
+ * still owed, and what has gone quiet — composed from the index rather
+ * than remembered, and sitting above the week's own note.
+ */
+export interface WeekPayload {
+  week: string;
+  start: string;
+  end: string;
+  prev: string;
+  next: string;
+  /**
+   * Note is the week's own document, nil until it is written.
+   */
+  note: Document | null;
+  /**
+   * Completed is everything finished inside the week, newest first.
+   */
+  completed: Task[];
+  /**
+   * Slipped is still open and was due before the week ended.
+   */
+  slipped: Task[];
+  /**
+   * Waiting is delegated work still outstanding.
+   */
+  waiting: Task[];
+  /**
+   * Stalled are active projects with no open task anywhere.
+   */
+  stalled: DocMeta[];
+  /**
+   * Meetings held in the week, and documents touched in it.
+   */
+  meetings: DocMeta[];
+  touched: DocMeta[];
 }
 /**
  * Unwritten is a name the vault keeps referring to that has no document —

@@ -159,6 +159,30 @@ type SemanticStatus struct {
 	LastError string `json:"last_error"`
 }
 
+// WeekPayload is the weekly review: what landed, what slipped, what is
+// still owed, and what has gone quiet — composed from the index rather
+// than remembered, and sitting above the week's own note.
+type WeekPayload struct {
+	Week  string `json:"week"`
+	Start string `json:"start"`
+	End   string `json:"end"`
+	Prev  string `json:"prev"`
+	Next  string `json:"next"`
+	// Note is the week's own document, nil until it is written.
+	Note *Document `json:"note"`
+	// Completed is everything finished inside the week, newest first.
+	Completed []Task `json:"completed"`
+	// Slipped is still open and was due before the week ended.
+	Slipped []Task `json:"slipped"`
+	// Waiting is delegated work still outstanding.
+	Waiting []Task `json:"waiting"`
+	// Stalled are active projects with no open task anywhere.
+	Stalled []DocMeta `json:"stalled"`
+	// Meetings held in the week, and documents touched in it.
+	Meetings []DocMeta `json:"meetings"`
+	Touched  []DocMeta `json:"touched"`
+}
+
 // Unwritten is a name the vault keeps referring to that has no document —
 // a to-do list for the graph, which writes itself.
 type Unwritten struct {

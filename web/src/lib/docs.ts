@@ -9,6 +9,7 @@ import {
   NotebookPen,
   Users,
   type LucideIcon,
+  CalendarRange,
 } from "lucide-react";
 import type { DocType } from "../api/types.ts";
 
@@ -25,6 +26,7 @@ export const DOC_TYPE_INFO: Record<DocType, DocTypeInfo> = {
   project: { label: "Project", plural: "Projects", icon: FolderKanban },
   meeting: { label: "Meeting", plural: "Meetings", icon: CalendarDays },
   daily: { label: "Daily", plural: "Daily", icon: NotebookPen },
+  weekly: { label: "Weekly", plural: "Weekly", icon: CalendarRange },
   template: { label: "Template", plural: "Templates", icon: LayoutTemplate },
 };
 

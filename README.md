@@ -220,6 +220,16 @@ runs engineering — meeting, 1:1, decision record, project brief, incident
 review, weekly review, and a daily-note shape — without touching any template
 you already have.
 
+### Weekly
+
+`/weekly` is the tier above the daily note: planning and retro rather than
+capture. Everything above the note is composed from the index — what landed
+inside the week, what slipped, what is still delegated, which active projects
+have no open task at all, the meetings held and the documents touched — so a
+Friday review is a reading rather than a remembering. The week's own note
+(`weekly/2026-W36.md`) is created on demand from `templates/weekly.md`.
+Agents get the same payload through the `week_review` tool.
+
 ### Journal
 
 `/journal` is every daily note on one scrolling page, today first, history

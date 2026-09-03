@@ -127,3 +127,23 @@ func (s *Server) handleListUnwritten(w http.ResponseWriter, r *http.Request) {
 	}
 	writeData(w, http.StatusOK, links)
 }
+
+// ---- weekly ----
+
+func (s *Server) handleWeekReview(w http.ResponseWriter, r *http.Request) {
+	payload, err := s.Service.WeekReview(r.PathValue("week"), r.URL.Query().Get("area"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, payload)
+}
+
+func (s *Server) handleEnsureWeekly(w http.ResponseWriter, r *http.Request) {
+	doc, err := s.Service.EnsureWeekly(r.PathValue("week"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, doc)
+}

@@ -82,6 +82,13 @@ const MOBILE_NAV: NavEntry[] = [
 
 /** The month view and the journal sit with Daily: all three are the vault
  *  by date, not by type. */
+/** The week sits with Daily: both are the vault by date, one tier apart. */
+const WEEKLY_NAV: NavEntry = {
+  to: "/weekly",
+  label: "Weekly",
+  icon: CalendarRange,
+};
+
 const CALENDAR_NAV: NavEntry = {
   to: "/calendar",
   label: "Calendar",
@@ -214,6 +221,7 @@ function NavSections({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink key={entry.to} entry={entry} onNavigate={onNavigate} />
       ))}
       <NavLink entry={dailyNavEntry()} onNavigate={onNavigate} />
+      <NavLink entry={WEEKLY_NAV} onNavigate={onNavigate} />
       <NavLink entry={JOURNAL_NAV} onNavigate={onNavigate} />
       <NavLink entry={CALENDAR_NAV} onNavigate={onNavigate} />
       {INVENTORY_NAV.map((entry) => (

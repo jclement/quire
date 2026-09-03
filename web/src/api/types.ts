@@ -17,6 +17,7 @@ export type {
   EmailStatus,
   TimezoneInfo,
   Unwritten,
+  WeekPayload,
   AuditEntry,
   DocType,
   Birthday,

@@ -35,6 +35,7 @@ import type {
   EmailStatus,
   TimezoneInfo,
   Unwritten,
+  WeekPayload,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -250,6 +251,18 @@ export const api = {
 
   /** Names linked to that have no document yet. */
   unwritten: () => request<Unwritten[]>("/api/v1/unwritten"),
+
+  /** The weekly review; "this" (or "") is the current ISO week. */
+  weekReview: (week: string, area = "") =>
+    request<WeekPayload>(
+      `/api/v1/weekly/${encodeURIComponent(week || "this")}` +
+        (area ? `?area=${encodeURIComponent(area)}` : ""),
+    ),
+  createWeekly: (week: string) =>
+    request<Document>(
+      `/api/v1/weekly/${encodeURIComponent(week || "this")}`,
+      jsonInit("POST", {}),
+    ),
 
   listAudit: (limit = 100) =>
     request<AuditEntry[]>(`/api/v1/audit?limit=${limit}`),

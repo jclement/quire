@@ -21,6 +21,10 @@ const (
 	TypeProject DocType = "project"
 	TypeMeeting DocType = "meeting"
 	TypeDaily   DocType = "daily"
+	// TypeWeekly is a document under weekly/, named by ISO week
+	// (weekly/2026-W36.md): the planning and retro tier above the daily
+	// capture note.
+	TypeWeekly DocType = "weekly"
 	// TypeTemplate is a document under templates/: the shape new documents
 	// start from. Kept out of everyday listings and search.
 	TypeTemplate DocType = "template"
@@ -33,6 +37,7 @@ var typeDirs = map[string]DocType{
 	"projects":  TypeProject,
 	"meetings":  TypeMeeting,
 	"daily":     TypeDaily,
+	"weekly":    TypeWeekly,
 	"templates": TypeTemplate,
 }
 
@@ -44,6 +49,7 @@ var dirForType = map[DocType]string{
 	TypeProject:  "projects",
 	TypeMeeting:  "meetings",
 	TypeDaily:    "daily",
+	TypeWeekly:   "weekly",
 	TypeTemplate: "templates",
 }
 
@@ -79,6 +85,19 @@ func InferType(rel string) DocType {
 // DailyPath returns the canonical path for a day's daily note.
 func DailyPath(day time.Time) string {
 	return "daily/" + day.Format("2006-01-02") + ".md"
+}
+
+// WeeklyPath is the vault path for a day's ISO week: weekly/2026-W36.md.
+func WeeklyPath(day time.Time) string {
+	return "weekly/" + WeekOf(day) + ".md"
+}
+
+// WeekOf is the ISO week label ("2026-W36") a day falls in. ISO weeks start
+// on Monday and belong to the year holding their Thursday, which is why the
+// label's year is not always the day's.
+func WeekOf(day time.Time) string {
+	year, week := day.ISOWeek()
+	return fmt.Sprintf("%04d-W%02d", year, week)
 }
 
 // NewDocPath picks a path for a new document of the given type and title:

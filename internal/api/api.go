@@ -79,6 +79,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/daily", s.handleListDaily)
 	mux.HandleFunc("GET /api/v1/daily/{date}", s.handleGetDaily)
 	mux.HandleFunc("POST /api/v1/daily/{date}", s.handleEnsureDaily)
+	mux.HandleFunc("GET /api/v1/weekly/{week}", s.handleWeekReview)
+	mux.HandleFunc("POST /api/v1/weekly/{week}", s.handleEnsureWeekly)
 	mux.HandleFunc("GET /api/v1/today", s.handleToday)
 	mux.HandleFunc("GET /api/v1/calendar", s.handleCalendar)
 

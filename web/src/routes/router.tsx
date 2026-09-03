@@ -34,6 +34,7 @@ import { DailyPage } from "./DailyPage.tsx";
 import { JournalPage } from "./JournalPage.tsx";
 import { TagsPage } from "./TagsPage.tsx";
 import { UnwrittenPage } from "./UnwrittenPage.tsx";
+import { WeeklyPage } from "./WeeklyPage.tsx";
 import { NotFoundPage } from "./NotFoundPage.tsx";
 import { SearchPage } from "./SearchPage.tsx";
 import { SettingsPage } from "./SettingsPage.tsx";
@@ -208,10 +209,29 @@ const unwrittenRoute = createRoute({
   component: UnwrittenPage,
 });
 
+const weeklyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/weekly",
+  component: function WeeklyRouteComponent() {
+    return <WeeklyPage week="this" />;
+  },
+});
+
+const weeklyWeekRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/weekly/$week",
+  component: function WeeklyWeekRouteComponent() {
+    const { week } = weeklyWeekRoute.useParams();
+    return <WeeklyPage key={week} week={week} />;
+  },
+});
+
 const routeTree = rootRoute.addChildren([
   journalRoute,
   tagsRoute,
   unwrittenRoute,
+  weeklyRoute,
+  weeklyWeekRoute,
   indexRoute,
   todayRoute,
   inboxRoute,

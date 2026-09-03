@@ -29,7 +29,7 @@ packages:
       /* eslint-disable */
 
       /**
-       * The six first-class document types. The server only ever emits these:
+       * The first-class document types. The server only ever emits these:
        * a frontmatter `type:` outside the set is ignored in favour of the
        * directory the file lives in.
        */
@@ -40,4 +40,5 @@ packages:
         | "project"
         | "meeting"
         | "daily"
+        | "weekly"
         | "template";
