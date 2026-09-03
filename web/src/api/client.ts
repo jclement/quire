@@ -365,6 +365,10 @@ export const api = {
       jsonInit("PUT", { scene, svg }),
     ),
 
+  /** Files a line of prose in today's note — capture that is not an action. */
+  captureNote: (text: string) =>
+    request<Document>("/api/v1/capture/note", jsonInit("POST", { text })),
+
   /** Photo→task capture: any of file/text/due, at least one of file/text. */
   capture: (input: { file?: File; text?: string; due?: string }) => {
     const form = new FormData();

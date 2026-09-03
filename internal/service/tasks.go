@@ -82,11 +82,7 @@ func (s *Service) CreateTaskWithAttachment(text, due, deferDate string, att Atta
 		return Task{}, err
 	}
 
-	content := daily.Markdown
-	if !strings.HasSuffix(content, "\n") {
-		content += "\n"
-	}
-	content += line + "\n"
+	content := appendUnderHeading(daily.Markdown, captureHeading, line)
 
 	doc, err := s.UpdateDocument(daily.Path, content, daily.SHA256)
 	if err != nil {

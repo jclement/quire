@@ -220,6 +220,16 @@ runs engineering — meeting, 1:1, decision record, project brief, incident
 review, weekly review, and a daily-note shape — without touching any template
 you already have.
 
+### Capture
+
+`c` (or the button on mobile) opens quick capture. It takes a **task** or a
+plain **note** — not every thought is an action, and one forced into a
+checkbox sits in the task inbox pretending to be one. Tasks take Today,
+Tomorrow, Weekend, or an exact date without a second visit. Both land in the
+day's `## Captured` section when the daily template has one, rather than at
+the end of whatever the file has become by mid-afternoon. A photo attached
+to a task uploads and embeds inline.
+
 ### Weekly
 
 `/weekly` is the tier above the daily note: planning and retro rather than

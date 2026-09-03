@@ -89,3 +89,20 @@ func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	_, _ = w.Write(data)
 }
+
+// handleCaptureNote files a line of prose in today's daily note — the
+// half of capture that is not an action.
+func (s *Server) handleCaptureNote(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Text string `json:"text"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	doc, err := s.Service.CaptureNote(body.Text)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusCreated, doc)
+}
