@@ -35,6 +35,7 @@ import {
   useRelated,
   useSemanticEnabled,
   useShares,
+  useDefaultArea,
 } from "../api/queries.ts";
 import type { Document } from "../api/types.ts";
 import { formatRelativeTime } from "../lib/dates.ts";
@@ -138,6 +139,7 @@ function DocumentView({
   } = useUi();
   const save = useDocumentSave(path, doc);
   // The share button lights up while a live link exists for this document.
+  const defaultArea = useDefaultArea();
   const shares = useShares();
   const isShared = (shares.data ?? []).some(
     (share) =>
@@ -415,6 +417,7 @@ function DocumentView({
                     onSaveAndExit={exitEdit}
                     onBlur={() => void save.save()}
                     getTags={getTags}
+                    getArea={() => doc.area || defaultArea}
                     onTopLineChange={setEditorTopLine}
                     onContextChange={setEditorContext}
                   />
@@ -445,6 +448,7 @@ function DocumentView({
           onScrollToLine={(line) => editorRef.current?.scrollToLine(line)}
           backlinks={doc.backlinks}
           related={related.data ?? []}
+          openTasks={doc.open_tasks ?? []}
         />
       </div>
     </article>

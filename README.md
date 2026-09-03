@@ -189,6 +189,10 @@ to re-file it in place, and its colour shows as a dot wherever the area does.
 Daily notes never have an area — they belong to every one. `area:work` works in
 search too, and the CLI/MCP accept an area on listing and creation.
 
+A new document files under the area you are looking at, when that is
+exactly one — the switcher's area, or the area of the document you created
+it from. Several areas selected, or none, means nothing is guessed.
+
 A document without an area of its own inherits one through its links: a
 person files under their company, a project under its company (else its
 first person), a note or meeting under its first person (else company, then
@@ -230,6 +234,14 @@ alignment, and save. Pipes and line breaks typed into a cell are escaped for
 you. In the editor, a "Table" panel appears while the cursor is inside one,
 with **Reformat table** (⌘⌥T, pads every column to its widest cell), **Edit as
 grid**, and Tab moving between cells. Tables inside fenced code are left alone.
+
+### Entity pages
+
+A person, company or project page assembles itself: the rail carries **Open
+tasks** (every open task anywhere in the vault that names it — "what am I
+still owed about Acme"), **Linked from** (backlinks), and **Similar** when
+semantic search is on. Agents get the same rollup in one call through the
+`person_context` tool.
 
 ### Drawings
 

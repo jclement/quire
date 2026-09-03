@@ -294,11 +294,11 @@ func TestAreaClauseCombinesAreas(t *testing.T) {
 	}{
 		"":                 {"", 0},
 		"all":              {"", 0},
-		"work":             {"d.area IN (?)", 1},
-		"Work, personal":   {"d.area IN (?,?)", 2},
+		"work":             {"(d.area IN (?) OR d.type = 'daily')", 1},
+		"Work, personal":   {"(d.area IN (?,?) OR d.type = 'daily')", 2},
 		"none":             {"(d.area = '' AND d.type != 'daily')", 0},
-		"none,work":        {"(d.area = '' AND d.type != 'daily') OR d.area IN (?)", 1},
-		"work,work,,none,": {"(d.area = '' AND d.type != 'daily') OR d.area IN (?)", 1},
+		"none,work":        {"(d.area = '' AND d.type != 'daily') OR (d.area IN (?) OR d.type = 'daily')", 1},
+		"work,work,,none,": {"(d.area = '' AND d.type != 'daily') OR (d.area IN (?) OR d.type = 'daily')", 1},
 	}
 	for in, want := range cases {
 		clause, args := areaClause(in)

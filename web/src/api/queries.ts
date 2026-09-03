@@ -9,6 +9,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { api, type ListDocumentsParams } from "./client.ts";
+import { primaryArea } from "../lib/area.ts";
 import type {
   Task,
   TaskEdit,
@@ -77,6 +78,17 @@ export function useAreasEnabled(): boolean {
 export function useEffectiveArea(): string {
   const { area } = useUi();
   return useAreasEnabled() ? area : "";
+}
+
+/**
+ * The area a newly created document should file under: the one being
+ * looked at, when that is exactly one real area. Several areas selected,
+ * "All areas", or areas switched off all mean "let it inherit or stay
+ * unfiled" — guessing between two areas would be worse than not guessing.
+ */
+export function useDefaultArea(): string | undefined {
+  const area = primaryArea(useEffectiveArea());
+  return area === "" ? undefined : area;
 }
 
 export function useDocument(path: string) {

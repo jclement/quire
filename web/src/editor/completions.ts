@@ -19,13 +19,16 @@ function wikilinkCompletion(title: string, detail: string): Completion {
 /** Creates the missing note first, then links to the title the server settled
  * on — so the link resolves immediately. Falls back to a plain link if the
  * backend is unreachable (it will dangle until the note exists). */
-function createNoteCompletion(query: string): Completion {
+function createNoteCompletion(
+  query: string,
+  area: string | undefined,
+): Completion {
   return {
     label: `Create "${query}"`,
     detail: "new note",
     apply: (view: EditorView, _completion, from: number, to: number) => {
       void api
-        .createDocument("note", query)
+        .createDocument("note", query, undefined, area)
         .then((doc) => doc.title)
         .catch(() => query)
         .then((title) => {
@@ -38,8 +41,17 @@ function createNoteCompletion(query: string): Completion {
   };
 }
 
-export async function wikilinkSource(
+/**
+ * `[[` completion bound to the area new notes should file under (the one
+ * being looked at, when there is exactly one).
+ */
+export function makeWikilinkSource(getArea: () => string | undefined) {
+  return (context: CompletionContext) => wikilinkSource(context, getArea());
+}
+
+async function wikilinkSource(
   context: CompletionContext,
+  area: string | undefined,
 ): Promise<CompletionResult | null> {
   const match = context.matchBefore(/\[\[([^\][]*)$/);
   if (!match) return null;
@@ -57,7 +69,7 @@ export async function wikilinkSource(
     (option) => option.label.toLowerCase() === query.toLowerCase(),
   );
   if (query.trim() && !exactExists)
-    options.push(createNoteCompletion(query.trim()));
+    options.push(createNoteCompletion(query.trim(), area));
   if (options.length === 0) return null;
   // filter:false — the server already matched; keep its (and our) order.
   return { from, options, filter: false };

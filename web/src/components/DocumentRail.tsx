@@ -8,9 +8,10 @@
 // The outline follows the reader: in read mode via IntersectionObserver over
 // the rendered headings, in edit/split via the editor's top visible line
 // (where clicking scrolls the editor instead of the page).
+import { Square } from "lucide-react";
 import { Link as RouterLink } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import type { DocMeta, SearchResult } from "../api/types.ts";
+import type { DocMeta, SearchResult, Task } from "../api/types.ts";
 import { DOC_TYPE_INFO, docHref, isDocType } from "../lib/docs.ts";
 import type { Heading } from "../lib/headings.ts";
 import { MIN_OUTLINE_HEADINGS } from "../lib/headings.ts";
@@ -27,6 +28,8 @@ interface DocumentRailProps {
   backlinks: DocMeta[];
   /** Nearest documents by meaning (semantic search on); empty otherwise. */
   related?: SearchResult[];
+  /** Open tasks elsewhere that name this entity; empty for non-entities. */
+  openTasks?: Task[];
 }
 
 /** Left padding per heading level — H1 flush, deeper levels stepped in. */
@@ -39,11 +42,19 @@ export function DocumentRail({
   onScrollToLine,
   backlinks,
   related = [],
+  openTasks = [],
 }: DocumentRailProps) {
+  // Defensive: a payload from before this field existed has no key at all.
+  const tasks = openTasks ?? [];
   const activeId = useActiveHeading(headings, mode, activeLine);
 
   const showOutline = headings.length >= MIN_OUTLINE_HEADINGS;
-  if (!showOutline && backlinks.length === 0 && related.length === 0) {
+  if (
+    !showOutline &&
+    backlinks.length === 0 &&
+    related.length === 0 &&
+    tasks.length === 0
+  ) {
     return null;
   }
 
@@ -79,6 +90,39 @@ export function DocumentRail({
                 >
                   <span className="line-clamp-2">{heading.text}</span>
                 </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
+
+      {/* What is still owed about this person, company or project —
+          open tasks anywhere in the vault that name it. First in the rail
+          because it is the thing you act on. */}
+      {tasks.length > 0 ? (
+        <nav aria-label="Open tasks">
+          <RailHeading>Open tasks</RailHeading>
+          <ul className="border-l border-border">
+            {tasks.map((task) => (
+              <li key={task.id}>
+                <RouterLink
+                  to={docHref(task.doc_path)}
+                  title={`${task.text} — in ${task.doc_title}${task.due ? `, due ${task.due}` : ""}`}
+                  className="-ml-px flex items-start gap-1.5 border-l border-transparent py-0.5 pr-1 pl-2 text-xs leading-snug text-muted hover:border-border hover:text-body"
+                >
+                  <Square
+                    className="mt-0.5 size-3 shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span className="line-clamp-2">
+                    {task.text}
+                    {task.due ? (
+                      <span className="ml-1 whitespace-nowrap text-muted">
+                        {task.due.slice(5)}
+                      </span>
+                    ) : null}
+                  </span>
+                </RouterLink>
               </li>
             ))}
           </ul>

@@ -50,7 +50,11 @@ func areaClause(area string) (string, []any) {
 	}
 	if len(named) > 0 {
 		marks := strings.TrimSuffix(strings.Repeat("?,", len(named)), ",")
-		parts = append(parts, "d.area IN ("+marks+")")
+		// Daily notes ride along with every named area: they carry no area
+		// of their own because they belong to all of them, and they are the
+		// capture spine — narrowing to "personal" used to hide every task
+		// quick capture had just filed, which is how a system loses trust.
+		parts = append(parts, "(d.area IN ("+marks+") OR d.type = 'daily')")
 		for _, a := range named {
 			args = append(args, a)
 		}

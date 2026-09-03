@@ -191,3 +191,70 @@ test("a person inherits their company's area, and a note its first person's", as
     .toBe("personal");
   await expect(badge).not.toContainText("inherited");
 });
+
+test("new documents file under the area being looked at, and captures never hide", async ({
+  page,
+}) => {
+  await page.request.put("/api/v1/areas", {
+    data: { areas: [{ name: "work", color: "blue" }, { name: "personal", color: "green" }] },
+  });
+  // A task captured into today's daily note, and a personal note beside it.
+  await page.request.post("/api/v1/tasks", { data: { text: "captured while narrowed", due: "today" } });
+  await page.request.post("/api/v1/documents", {
+    data: { type: "note", title: "Narrow Personal", area: "personal", markdown: "# Narrow Personal\n\n- [ ] personal thing 📅 today\n" },
+  });
+
+  await page.goto("/");
+  await pickArea(page, "Personal");
+  await closeSwitcher(page);
+  // The daily note is in every area: narrowing must not hide what was just
+  // captured, or the day's captures silently vanish.
+  await expect(page.getByText("captured while narrowed").first()).toBeVisible();
+
+  // A person created from the typeahead files under the area on screen.
+  await page.goto("/browse/person");
+  await page.getByRole("button", { name: /new person/i }).click();
+  await page.getByRole("textbox").first().fill("Narrow Newperson");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Narrow Newperson" }).first()).toBeVisible();
+  const doc = await (await page.request.get("/api/v1/documents/people/narrow-newperson.md")).json();
+  expect(doc.data.area).toBe("personal");
+  expect(doc.data.markdown).toContain("area: personal");
+
+  // With several areas selected there is no single answer, so nothing is guessed.
+  await pickArea(page, "Work");
+  await closeSwitcher(page);
+  await page.goto("/browse/person");
+  await page.getByRole("button", { name: /new person/i }).click();
+  await page.getByRole("textbox").first().fill("Narrow Ambiguous");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Narrow Ambiguous" }).first()).toBeVisible();
+  const amb = await (await page.request.get("/api/v1/documents/people/narrow-ambiguous.md")).json();
+  expect(amb.data.area).toBe("");
+  await pickArea(page, "All areas");
+});
+
+test("an entity page shows the open tasks that name it", async ({ page }) => {
+  const person = (await (await page.request.post("/api/v1/documents", {
+    data: { type: "person", title: "Rolla Upp", markdown: "# Rolla Upp\n" },
+  })).json()).data.path as string;
+  await page.request.post("/api/v1/documents", {
+    data: {
+      type: "meeting",
+      title: "Rollup Sync",
+      markdown: "# Rollup Sync\n\n- [ ] send [[Rolla Upp]] the deck 📅 2026-09-10\n- [x] done thing about [[Rolla Upp]]\n",
+    },
+  });
+  await expect
+    .poll(async () => (await (await page.request.get(`/api/v1/documents/${person}`)).json()).data.open_tasks.length)
+    .toBe(1);
+
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto(`/doc/${person}`);
+  const rail = page.getByRole("navigation", { name: "Open tasks" });
+  await expect(rail).toBeVisible();
+  await expect(rail).toContainText("send");
+  // Completed tasks stay out of it, and the link goes to where the task lives.
+  await expect(rail).not.toContainText("done thing");
+  await expect(rail.getByRole("link").first()).toHaveAttribute("href", /rollup-sync/);
+});

@@ -55,9 +55,14 @@ func TestAreasPartitionEverythingButDaily(t *testing.T) {
 		}
 		return strings.Join(out, ",")
 	}
+	// A named area gets its own documents plus the daily notes, which
+	// belong to every area — never Holiday, which is filed elsewhere.
 	work, _ := svc.ListDocuments("", "", "work", 50)
 	if s := titles(work); !strings.Contains(s, "Roadmap") || !strings.Contains(s, "Standup") || strings.Contains(s, "Holiday") {
 		t.Errorf("work docs = %s", s)
+	}
+	if s := titles(work); !strings.Contains(s, "2026-09-01") {
+		t.Errorf("the daily note belongs to every area, missing from: %s", s)
 	}
 	// Unclassified: no area, and not a daily note.
 	none, _ := svc.ListDocuments("", "", "none", 50)
@@ -82,8 +87,11 @@ func TestAreasPartitionEverythingButDaily(t *testing.T) {
 	if s := taskTexts(workTasks); !strings.Contains(s, "ship it") || strings.Contains(s, "book flights") {
 		t.Errorf("work tasks = %s", s)
 	}
-	if s := taskTexts(workTasks); strings.Contains(s, "daily task") {
-		t.Errorf("a daily-note task must not appear under a single area: %s", s)
+	// The capture spine rides along with every named area: a task quick
+	// capture filed in today's note must not vanish when the switcher is
+	// narrowed, or the day's captures silently disappear.
+	if s := taskTexts(workTasks); !strings.Contains(s, "daily task") {
+		t.Errorf("a daily-note task belongs to every area, missing from: %s", s)
 	}
 	noneTasks, _ := svc.TasksIn("inbox", "none")
 	if s := taskTexts(noneTasks); s != "unfiled thought" {
@@ -95,8 +103,10 @@ func TestAreasPartitionEverythingButDaily(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(today.Meetings) != 0 || taskTexts(today.DueToday) != "book flights" {
-		t.Errorf("personal today = meetings %d, due %s", len(today.Meetings), taskTexts(today.DueToday))
+	due := taskTexts(today.DueToday)
+	if len(today.Meetings) != 0 || !strings.Contains(due, "book flights") ||
+		!strings.Contains(due, "daily task") || strings.Contains(due, "ship it") {
+		t.Errorf("personal today = meetings %d, due %s", len(today.Meetings), due)
 	}
 
 	// The search grammar knows area: too.
@@ -104,7 +114,7 @@ func TestAreasPartitionEverythingButDaily(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(hits) != 2 {
+	if len(hits) != 3 { // roadmap, standup, and the daily note
 		t.Errorf("area:work search = %d hits", len(hits))
 	}
 }

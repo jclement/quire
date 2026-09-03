@@ -3,12 +3,11 @@
 // lives in UiContext so it survives the palette closing). The server picks the
 // path; on success we navigate straight into the new document. The form mounts
 // fresh per open.
-import { isRealArea } from "../lib/area.ts";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../api/client.ts";
-import { useEffectiveArea, useTemplates } from "../api/queries.ts";
+import { useDefaultArea, useTemplates } from "../api/queries.ts";
 import type { DocType } from "../api/types.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import { noAutofill } from "../lib/noAutofill.ts";
@@ -34,7 +33,7 @@ export function NewDocDialog() {
 
 function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
   const navigate = useNavigate();
-  const area = useEffectiveArea();
+  const area = useDefaultArea();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   // Named templates for this type. The type's default (templates/<type>.md)
@@ -52,7 +51,7 @@ function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
         type,
         input.title,
         undefined,
-        isRealArea(area) ? area : undefined,
+        area,
         template || undefined,
       ),
     onSuccess: (doc) => {

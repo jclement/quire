@@ -83,6 +83,12 @@ export interface Document extends DocMeta {
   links: Link[];
   backlinks: DocMeta[];
   tasks: Task[];
+  /**
+   * OpenTasks are open tasks elsewhere in the vault that name this
+   * document — "what am I still owed about Acme". Entity documents only
+   * (person, company, project); empty for everything else.
+   */
+  open_tasks: Task[];
 }
 /**
  * Task is the API task shape.

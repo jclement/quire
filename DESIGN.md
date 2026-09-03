@@ -333,6 +333,13 @@ Chosen over fixed areas (a third one would need a code change) and over
 directory-based areas (`work/people/` collides with the type directories and
 breaks the imported-vault story). Decision made with the owner, 2026-09-02.
 
+A named area filter also matches daily notes. They carry no area because
+they belong to all of them, and they are where quick capture writes — a
+"personal" view that hid the morning's captures would quietly break the one
+promise capture makes. `areaClause` (index/queries.go) ORs `d.type = 'daily'`
+into the named branch; `none` still excludes them, since belonging to every
+area is not the same as being unclassified.
+
 Inheritance is derived, never written: `documents.area` is the effective
 area, `area_explicit` the file's own, `area_from` the path it came through.
 `PropagateAreas` (index/areas.go) recomputes all three from every file's

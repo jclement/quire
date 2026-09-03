@@ -15,7 +15,7 @@ import {
   type Ref,
   type RefObject,
 } from "react";
-import { makeTagSource, wikilinkSource } from "./completions.ts";
+import { makeTagSource, makeWikilinkSource } from "./completions.ts";
 import {
   editorHighlighting,
   editorKeymap,
@@ -58,6 +58,8 @@ interface MarkdownEditorProps {
   onBlur: () => void;
   /** Tag pool for `#` autocomplete (recent/loaded docs; a stub is fine). */
   getTags: () => string[];
+  /** Area a note created from `[[` completion files under; undefined for none. */
+  getArea?: () => string | undefined;
   /** 1-based top visible line, on scroll — drives the outline's highlight. */
   onTopLineChange?: (line: number) => void;
   /** What the cursor is on, after every selection or document change. */
@@ -72,6 +74,7 @@ export function MarkdownEditor({
   onSaveAndExit,
   onBlur,
   getTags,
+  getArea,
   onTopLineChange,
   onContextChange,
 }: MarkdownEditorProps) {
@@ -84,6 +87,7 @@ export function MarkdownEditor({
     onSaveAndExit,
     onBlur,
     getTags,
+    getArea,
     onTopLineChange,
     onContextChange,
   });
@@ -93,6 +97,7 @@ export function MarkdownEditor({
     onSaveAndExit,
     onBlur,
     getTags,
+    getArea,
     onTopLineChange,
     onContextChange,
   };
@@ -196,6 +201,7 @@ type CallbacksRef = RefObject<{
   onSaveAndExit: () => void;
   onBlur: () => void;
   getTags: () => string[];
+  getArea?: () => string | undefined;
   onTopLineChange?: (line: number) => void;
   onContextChange?: (context: EditorContext) => void;
 }>;
@@ -220,7 +226,7 @@ function buildExtensions(callbacks: CallbacksRef) {
     }),
     autocompletion({
       override: [
-        wikilinkSource,
+        makeWikilinkSource(() => callbacks.current.getArea?.()),
         makeTagSource(() => callbacks.current.getTags()),
       ],
     }),

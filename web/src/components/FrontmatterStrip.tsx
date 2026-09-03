@@ -27,6 +27,7 @@ import {
   useLinkEntity,
   useTags,
   type StripSync,
+  useDefaultArea,
 } from "../api/queries.ts";
 import type { Document } from "../api/types.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
@@ -52,6 +53,7 @@ export function FrontmatterStrip({
   sync?: StripSync;
 }) {
   const { toast } = useUi();
+  const defaultArea = useDefaultArea();
   const linkEntity = useLinkEntity(doc.path, sync);
   const [addingKey, setAddingKey] = useState<string | null>(null);
 
@@ -67,6 +69,9 @@ export function FrontmatterStrip({
   const areasEnabled = useAreasEnabled();
   const showArea = areasEnabled && doc.type !== "daily";
 
+  // A person or company created from here files where this document is —
+  // its own area when it has one, else the area being looked at.
+  const newDocArea = doc.area || defaultArea;
   const resolved = resolvedTargets(doc.links);
   const apply = (key: string, target: string, remove = false) => {
     setAddingKey(null);
@@ -93,6 +98,7 @@ export function FrontmatterStrip({
           resolved={resolved}
           adding={addingKey === linkKey.key}
           onAdding={(open) => setAddingKey(open ? linkKey.key : null)}
+          area={newDocArea}
           onLink={(target) => apply(linkKey.key, target)}
           onUnlink={(target) => apply(linkKey.key, target, true)}
         />
@@ -128,6 +134,7 @@ function LinkKeyChips({
   resolved,
   adding,
   onAdding,
+  area,
   onLink,
   onUnlink,
 }: {
@@ -136,6 +143,8 @@ function LinkKeyChips({
   resolved: Map<string, string>;
   adding: boolean;
   onAdding: (open: boolean) => void;
+  /** Files a document created from the typeahead; undefined for none. */
+  area: string | undefined;
   onLink: (target: string) => void;
   onUnlink: (target: string) => void;
 }) {
@@ -174,6 +183,7 @@ function LinkKeyChips({
       {adding ? (
         <AddLinkPopover
           linkKey={linkKey}
+          area={area}
           onClose={() => onAdding(false)}
           onPick={onLink}
         />
@@ -227,10 +237,12 @@ function LinkChip({
  */
 function AddLinkPopover({
   linkKey,
+  area,
   onClose,
   onPick,
 }: {
   linkKey: LinkKey;
+  area: string | undefined;
   onClose: () => void;
   onPick: (target: string) => void;
 }) {
@@ -245,7 +257,8 @@ function AddLinkPopover({
   const info = DOC_TYPE_INFO[linkKey.type];
 
   const create = useMutation({
-    mutationFn: (title: string) => api.createDocument(linkKey.type, title),
+    mutationFn: (title: string) =>
+      api.createDocument(linkKey.type, title, undefined, area),
     onSuccess: (created) => onPick(created.title),
   });
 

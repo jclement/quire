@@ -54,6 +54,10 @@ type Document struct {
 	Links       []Link         `json:"links"`
 	Backlinks   []DocMeta      `json:"backlinks"`
 	Tasks       []Task         `json:"tasks"`
+	// OpenTasks are open tasks elsewhere in the vault that name this
+	// document — "what am I still owed about Acme". Entity documents only
+	// (person, company, project); empty for everything else.
+	OpenTasks []Task `json:"open_tasks"`
 }
 
 // Task is the API task shape.
