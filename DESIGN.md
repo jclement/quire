@@ -171,6 +171,13 @@ dates parsed server-side, resolved ISO echoed back; ambiguous name resolution re
 candidates, never guesses), `complete_task`, `today` (the flagship composed call), and
 `person_context` (the rollup a person page shows, as JSON — meeting prep in one call).
 
+The surface is deliberately complete: an agent can do anything the app can,
+because a gap is a thing the owner has to do by hand at exactly the moment
+they asked an agent to handle it. Tests pin it — the tool list, the scope
+each tool sits behind, that every tool carries an annotation and a
+description long enough to teach when to use it, and that nothing named
+delete ever appears.
+
 Agent guardrails: read-only tokens are the default posture; no delete tool; every
 API/MCP write is audit-logged (principal, tool, path, when) — `audit_log` in auth.db,
 surfaced in Settings. The owner's own browser session is not audited on purpose: the

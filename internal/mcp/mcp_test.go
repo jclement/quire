@@ -204,3 +204,117 @@ func TestOwnerGuidanceReachesInstructions(t *testing.T) {
 		t.Errorf("cleared guidance still delivered")
 	}
 }
+
+// TestAgentCoversTheWholeVault walks the surface the way an agent actually
+// would across a working day: file a thought, put a task on a project with
+// the full grammar, reshape it, tidy a name, and repair a recurrence that
+// was ticked off in an editor. Anything an agent cannot do here, a person
+// has to do by hand.
+func TestAgentCoversTheWholeVault(t *testing.T) {
+	s := connect(t)
+
+	// A thought that is not an action goes into the day as prose.
+	day := call(t, s, "capture_note", map[string]any{
+		"text": "the solver slows above 800 wells",
+	})
+	if !strings.Contains(day["markdown"].(string), "- the solver slows above 800 wells") {
+		t.Errorf("capture_note did not file prose: %v", day["markdown"])
+	}
+	if strings.Contains(day["markdown"].(string), "- [ ] the solver") {
+		t.Error("a captured thought must not become a checkbox")
+	}
+
+	// Today's note exists on demand, without writing to it.
+	ensured := call(t, s, "ensure_daily", map[string]any{})
+	if ensured["path"] != day["path"] {
+		t.Errorf("ensure_daily = %v, want today's note %v", ensured["path"], day["path"])
+	}
+
+	// A project, and a task filed on it with every marker.
+	call(t, s, "create_document", map[string]any{"type": "project", "title": "Apollo"})
+	task := call(t, s, "create_task", map[string]any{
+		"text": "size the rollout", "path": "projects/apollo.md",
+		"due": "2026-10-01", "priority": 1, "waiting": true, "recur": "every month",
+	})
+	if task["doc_path"] != "projects/apollo.md" {
+		t.Errorf("task landed in %v, not the project", task["doc_path"])
+	}
+	if task["priority"].(float64) != 1 || task["waiting"] != true || task["recur"] != "every month" {
+		t.Errorf("markers lost: %+v", task)
+	}
+
+	// Reshaping it: rename, delegate, stop repeating — one call each field.
+	edited := call(t, s, "edit_task", map[string]any{
+		"id": task["id"], "text": "size the staged rollout", "recur": "", "waiting": false,
+	})
+	if edited["text"] != "size the staged rollout" || edited["recur"] != nil || edited["waiting"] != false {
+		t.Errorf("edit_task = %+v", edited)
+	}
+	if edited["due"] != "2026-10-01" || edited["priority"].(float64) != 1 {
+		t.Errorf("edit_task disturbed untouched markers: %+v", edited)
+	}
+
+	// Relationships go both ways.
+	call(t, s, "create_document", map[string]any{"type": "person", "title": "Sarah Chen"})
+	linked := call(t, s, "link_entity", map[string]any{
+		"path": "projects/apollo.md", "key": "people", "target": "Sarah Chen",
+	})
+	if !strings.Contains(linked["markdown"].(string), "Sarah Chen") {
+		t.Errorf("link_entity did not write the link: %v", linked["markdown"])
+	}
+	unlinked := call(t, s, "unlink_entity", map[string]any{
+		"path": "projects/apollo.md", "key": "people", "target": "Sarah Chen",
+	})
+	if strings.Contains(unlinked["markdown"].(string), "[[Sarah Chen]]") {
+		t.Errorf("unlink_entity left the link: %v", unlinked["markdown"])
+	}
+
+	// A note that turned out to be a person moves, and its links follow.
+	call(t, s, "create_document", map[string]any{
+		"type": "note", "title": "Bo Vance", "body": "# Bo Vance\n\nCTO somewhere.\n",
+	})
+	call(t, s, "append_to_document", map[string]any{
+		"path": "projects/apollo.md", "markdown": "Spoke to [[Bo Vance]] about staging.",
+	})
+	renamed := call(t, s, "rename_document", map[string]any{
+		"path": "notes/bo-vance.md", "new_path": "people/bo-vance.md",
+	})
+	moved := renamed["document"].(map[string]any)
+	if moved["path"] != "people/bo-vance.md" {
+		t.Errorf("rename_document left it at %v", moved["path"])
+	}
+	if moved["type"] != "person" {
+		t.Errorf("moving to people/ should retype the document, got %v", moved["type"])
+	}
+	apollo := call(t, s, "get_document", map[string]any{"path": "projects/apollo.md"})
+	if !strings.Contains(apollo["markdown"].(string), "Bo Vance") {
+		t.Errorf("the reference should survive the rename: %v", apollo["markdown"])
+	}
+	// Templates are discoverable rather than guessed at.
+	templates := call(t, s, "list_templates", map[string]any{})
+	if templates["templates"] == nil {
+		t.Error("list_templates returned nothing at all")
+	}
+
+	// A recurrence ticked off in an editor is spotted and repaired.
+	call(t, s, "create_document", map[string]any{
+		"type": "note", "title": "Vehicle",
+		"body": "# Vehicle\n\n- [x] renew rego 📅 2026-08-01 🛫 2026-07-11 🔁 every year ✅ 2026-08-02\n",
+	})
+	week := call(t, s, "week_review", map[string]any{})
+	problems, _ := week["recurrence"].([]any)
+	var stoppedID string
+	for _, p := range problems {
+		row := p.(map[string]any)
+		if row["reason"] == "stopped" {
+			stoppedID = row["task"].(map[string]any)["id"].(string)
+		}
+	}
+	if stoppedID == "" {
+		t.Fatalf("week_review should report the stopped recurrence: %+v", week["recurrence"])
+	}
+	restored := call(t, s, "restore_recurrence", map[string]any{"id": stoppedID})
+	if restored["due"] != "2027-08-01" || restored["defer"] != "2027-07-11" {
+		t.Errorf("restore_recurrence = %+v, want next year with the lead time kept", restored)
+	}
+}

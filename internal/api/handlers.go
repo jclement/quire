@@ -217,11 +217,22 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		Text  string `json:"text"`
 		Due   string `json:"due"`
 		Defer string `json:"defer"`
+		// The rest of the grammar, all optional; path targets a document
+		// other than today's note.
+		Path     string `json:"path"`
+		Section  string `json:"section"`
+		Priority int    `json:"priority"`
+		Waiting  bool   `json:"waiting"`
+		Recur    string `json:"recur"`
 	}
 	if !decodeBody(w, r, &body) {
 		return
 	}
-	task, err := s.Service.CreateTask(body.Text, body.Due, body.Defer)
+	task, err := s.Service.CreateTaskWith(service.TaskSpec{
+		Path: body.Path, Text: body.Text, Due: body.Due, Defer: body.Defer,
+		Priority: body.Priority, Waiting: body.Waiting, Recur: body.Recur,
+		Section: body.Section,
+	})
 	if err != nil {
 		writeServiceError(w, err)
 		return

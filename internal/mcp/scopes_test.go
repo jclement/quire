@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,9 +82,17 @@ func TestToolsAreScoped(t *testing.T) {
 		write = auth.ScopeWrite
 		tasks = auth.ScopeTasks
 	)
-	readTools := []string{"search", "list_documents", "get_document", "get_daily", "list_tasks", "list_tags", "list_areas", "today", "person_context"}
-	writeTools := []string{"create_document", "update_document", "append_to_document", "link_entity", "set_frontmatter"}
-	taskTools := []string{"create_task", "complete_task", "edit_task"}
+	readTools := []string{
+		"search", "list_documents", "get_document", "get_daily", "get_weekly",
+		"list_daily", "list_tasks", "list_tags", "list_areas", "list_templates",
+		"list_unwritten", "today", "week_review", "calendar", "person_context",
+	}
+	writeTools := []string{
+		"create_document", "update_document", "append_to_document",
+		"link_entity", "unlink_entity", "rename_document", "set_frontmatter",
+		"capture_note", "ensure_daily", "ensure_weekly",
+	}
+	taskTools := []string{"create_task", "complete_task", "edit_task", "restore_recurrence"}
 
 	for _, tc := range []struct {
 		name    string
@@ -180,5 +189,72 @@ func TestMutatingToolsAreAudited(t *testing.T) {
 	}
 	if len(ownerRec.rows) != 0 {
 		t.Errorf("owner's calls must not be audited: %+v", ownerRec.rows)
+	}
+}
+
+// TestSurfaceIsCompleteAndDocumented pins the whole agent surface: nothing
+// exists that these lists do not name, and every tool carries a description
+// that says when to reach for it rather than restating its own name. The
+// tool list is the agent's entire documentation — a tool added without one
+// is a tool that will be used wrongly or not at all.
+func TestSurfaceIsCompleteAndDocumented(t *testing.T) {
+	server := newServer(newScopeTestService(t), "test", allowAll, "owner", nil)
+	clientTransport, serverTransport := sdk.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
+		t.Fatal(err)
+	}
+	session, err := sdk.NewClient(&sdk.Implementation{Name: "surface-probe", Version: "0"}, nil).
+		Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { session.Close() })
+	res, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Semantic tools register only when an embeddings key is configured, so
+	// they are absent here by construction.
+	want := map[string]bool{
+		"search": true, "list_documents": true, "get_document": true,
+		"get_daily": true, "get_weekly": true, "list_daily": true,
+		"list_tasks": true, "list_tags": true, "list_areas": true,
+		"list_templates": true, "list_unwritten": true, "today": true,
+		"week_review": true, "calendar": true, "person_context": true,
+		"create_document": true, "update_document": true,
+		"append_to_document": true, "link_entity": true, "unlink_entity": true,
+		"rename_document": true, "set_frontmatter": true, "capture_note": true,
+		"ensure_daily": true, "ensure_weekly": true,
+		"create_task": true, "complete_task": true, "edit_task": true,
+		"restore_recurrence": true,
+	}
+	for _, tool := range res.Tools {
+		if !want[tool.Name] {
+			t.Errorf("tool %q is not in the documented surface — add it to the lists above and to README", tool.Name)
+		}
+		delete(want, tool.Name)
+		if len(tool.Description) < 80 {
+			t.Errorf("tool %q needs a description that teaches when to use it, got %q", tool.Name, tool.Description)
+		}
+		if tool.Annotations == nil {
+			t.Errorf("tool %q has no annotations, so clients cannot tell whether it writes", tool.Name)
+		}
+	}
+	for name := range want {
+		t.Errorf("tool %q is missing from the surface", name)
+	}
+}
+
+// TestDeleteStaysAbsent: no tool may delete a document. Losing work to an
+// agent is the one failure a notes vault cannot come back from, and REST
+// plus git are the deliberate way out.
+func TestDeleteStaysAbsent(t *testing.T) {
+	for _, name := range toolNames(t, newServer(newScopeTestService(t), "test", allowAll, "owner", nil)) {
+		if strings.Contains(strings.ToLower(name), "delete") ||
+			strings.Contains(strings.ToLower(name), "remove_document") {
+			t.Errorf("a destructive tool appeared on the agent surface: %q", name)
+		}
 	}
 }

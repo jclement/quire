@@ -358,14 +358,20 @@ Settings and stored as an ordinary vault document (`AGENTS.md`). Edit it in the
 app or in vim; the next agent session gets it, no restart.
 
 quire is agent-operable by design: a Streamable-HTTP MCP server at `/mcp` exposes the
-same service layer as the UI. Sixteen tools, each annotated (read-only / additive /
-destructive) so clients know what deserves a confirmation:
+same service layer as the UI. Twenty-nine tools (thirty-one with an embeddings
+key), each annotated read-only / additive / destructive so clients know what
+deserves a confirmation. Anything the app can do, an agent can do:
 
 | Scope | Tools |
 |---|---|
-| read | `search` (full-text + `type:` `tag:` `is:task` `due:`), `semantic_search` and `related_documents` (when a key is set), `list_documents`, `get_document`, `get_daily`, `list_tasks`, `list_tags`, `today`, `person_context` |
-| write | `create_document`, `append_to_document`, `update_document` (hash-guarded), `link_entity`, `set_frontmatter` |
-| tasks | `create_task`, `complete_task`, `edit_task` (snooze / reprioritise) |
+| read | **Find** `search` (full-text + `type:` `tag:` `area:` `is:task` `is:done` `due:` `after:` `before:`), `semantic_search` and `related_documents` (with an embeddings key), `list_documents`, `list_unwritten`, `list_tags`, `list_areas`, `list_templates` · **Read** `get_document`, `get_daily`, `get_weekly`, `list_daily` · **Compose** `today`, `week_review`, `calendar`, `person_context`, `list_tasks` |
+| write | **Documents** `create_document`, `append_to_document`, `update_document` (hash-guarded), `rename_document` (rewrites links) · **Metadata** `set_frontmatter`, `link_entity`, `unlink_entity` · **Journal** `capture_note` (prose into today's note), `ensure_daily`, `ensure_weekly` |
+| tasks | `create_task` (any document, any marker: due, defer, priority, waiting, repeat), `complete_task`, `edit_task` (reschedule, delegate, repeat, rename), `restore_recurrence` |
+
+The tool list is the agent's documentation, so each description says when to
+reach for it rather than restating its name — and a test pins the whole
+surface, refusing a tool that arrives without a description, an annotation or
+a scope.
 
 There is deliberately no delete tool. **Every mutating tool call and every REST
 write by a token or connected app is recorded** — Settings → Agent activity shows

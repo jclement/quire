@@ -85,6 +85,10 @@ func (s *Service) SetTimezone(name string) error {
 
 func (s *Service) today() string { return s.Now().Format("2006-01-02") }
 
+// Today2006 is today's date in the configured zone, for transports that
+// need to default a date parameter.
+func (s *Service) Today2006() string { return s.today() }
+
 // ---- conversions ----
 
 func metaFromRow(d index.DocRow) DocMeta {

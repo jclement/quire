@@ -24,6 +24,28 @@ type TaskEdit struct {
 	Due      *string `json:"due"`
 	Defer    *string `json:"defer"`
 	Priority *int    `json:"priority"` // 0 none, 1 high, 2 medium, 3 low
+	// Waiting toggles the ⏳ delegation marker.
+	Waiting *bool `json:"waiting"`
+	// Recur sets the 🔁 spec ("every month", "every 3 weeks when done");
+	// an empty string stops it repeating.
+	Recur *string `json:"recur"`
+	// Text replaces the task's words, keeping every marker on the line.
+	// The content hash changes with it, so the returned task has a new id.
+	Text *string `json:"text"`
+}
+
+// TaskSpec is everything a new task can carry. Path targets a document
+// other than today's daily note — a project page, a meeting — so an agent
+// can file work where it belongs rather than only in the day.
+type TaskSpec struct {
+	Path     string
+	Text     string
+	Due      string
+	Defer    string
+	Priority int
+	Waiting  bool
+	Recur    string
+	Section  string
 }
 
 // TaskView re-exports the index views for transports.
@@ -42,6 +64,86 @@ func (s *Service) TasksIn(view, area string) ([]Task, error) {
 // needed) — quick capture's contract: no required fields, lands in Inbox.
 func (s *Service) CreateTask(text, due, deferDate string) (Task, error) {
 	return s.CreateTaskWithAttachment(text, due, deferDate, Attachment{})
+}
+
+// CreateTaskWith is the full form: any of the task grammar's markers, and
+// any document as the target. An empty Path means today's daily note.
+func (s *Service) CreateTaskWith(spec TaskSpec) (Task, error) {
+	spec.Text = strings.TrimSpace(spec.Text)
+	if spec.Text == "" {
+		return Task{}, fmt.Errorf("%w: task text is required", ErrValidation)
+	}
+	due, err := ParseWhen(spec.Due, s.Now())
+	if err != nil {
+		return Task{}, fmt.Errorf("%w: due date: %s", ErrValidation, err)
+	}
+	deferDate, err := ParseWhen(spec.Defer, s.Now())
+	if err != nil {
+		return Task{}, fmt.Errorf("%w: defer date: %s", ErrValidation, err)
+	}
+	if spec.Recur != "" {
+		if _, _, _, err := parseRecur(spec.Recur); err != nil {
+			return Task{}, fmt.Errorf("%w: %s (try \"every month\" or \"every 3 weeks when done\")", ErrValidation, err)
+		}
+	}
+	if spec.Priority < 0 || spec.Priority > 3 {
+		return Task{}, fmt.Errorf("%w: priority must be 0 (none), 1 (high), 2 (medium) or 3 (low)", ErrValidation)
+	}
+
+	line := "- [ ] " + spec.Text
+	if sym, ok := prioritySymbols[spec.Priority]; ok {
+		line += " " + sym
+	}
+	if due != "" {
+		line += " 📅 " + due
+	}
+	if deferDate != "" {
+		line += " 🛫 " + deferDate
+	}
+	if spec.Waiting {
+		line += " ⏳"
+	}
+	if spec.Recur != "" {
+		line += " 🔁 " + spec.Recur
+	}
+
+	target := spec.Path
+	if target == "" {
+		daily, err := s.EnsureDaily(s.today())
+		if err != nil {
+			return Task{}, err
+		}
+		target = daily.Path
+	}
+	doc, err := s.GetDocument(target)
+	if err != nil {
+		return Task{}, err
+	}
+	section := spec.Section
+	if section == "" && target == "daily/"+s.today()+".md" {
+		section = captureHeading
+	}
+	content := appendUnderHeading(doc.Markdown, strings.ToLower(section), line)
+	written, err := s.UpdateDocument(doc.Path, content, doc.SHA256)
+	if err != nil {
+		return Task{}, err
+	}
+	return s.taskOnLastMatchingLine(written, spec.Text)
+}
+
+// taskOnLastMatchingLine finds the task just written: the last line whose
+// scanned text matches, resolved through the index for its real id.
+func (s *Service) taskOnLastMatchingLine(doc Document, text string) (Task, error) {
+	scanned := markdown.Scan(doc.Path, []byte(doc.Markdown))
+	for i := len(scanned.Tasks) - 1; i >= 0; i-- {
+		if !strings.Contains(scanned.Tasks[i].Text, strings.Fields(text)[0]) {
+			continue
+		}
+		if row, err := s.Index.TaskAt(doc.Path, scanned.Tasks[i].Line); err == nil {
+			return taskFromRow(row), nil
+		}
+	}
+	return Task{}, fmt.Errorf("created task not found after indexing")
 }
 
 // CreateTaskWithAttachment is the photo→task gesture: one call captures a
@@ -194,6 +296,23 @@ func (s *Service) EditTask(id string, edit TaskEdit) (Task, error) {
 	if edit.Priority != nil {
 		line = setPriority(line, *edit.Priority)
 	}
+	if edit.Waiting != nil {
+		line = setWaiting(line, *edit.Waiting)
+	}
+	if edit.Recur != nil {
+		if *edit.Recur != "" {
+			if _, _, _, err := parseRecur(*edit.Recur); err != nil {
+				return Task{}, fmt.Errorf("%w: %s", ErrValidation, err)
+			}
+		}
+		line = setRecur(line, row.Recur, *edit.Recur)
+	}
+	if edit.Text != nil {
+		if strings.TrimSpace(*edit.Text) == "" {
+			return Task{}, fmt.Errorf("%w: task text cannot be empty", ErrValidation)
+		}
+		line = setTaskText(line, row.Text, strings.TrimSpace(*edit.Text))
+	}
 	lines[lineIdx] = line
 
 	if _, err := s.UpdateDocument(row.DocPath, strings.Join(lines, "\n"), f.SHA256); err != nil {
@@ -226,6 +345,40 @@ func setMarkerDate(line, marker, oldDate, newDate string) string {
 }
 
 var prioritySymbols = map[int]string{1: "⏫", 2: "🔼", 3: "🔽"}
+
+// setWaiting adds or removes the ⏳ delegation marker.
+func setWaiting(line string, waiting bool) string {
+	has := strings.Contains(line, "⏳")
+	switch {
+	case waiting && !has:
+		return line + " ⏳"
+	case !waiting && has:
+		return strings.TrimRight(strings.ReplaceAll(strings.ReplaceAll(line, " ⏳", ""), "⏳", ""), " ")
+	}
+	return line
+}
+
+// setRecur replaces, adds or removes the 🔁 spec, leaving the rest alone.
+func setRecur(line, oldSpec, newSpec string) string {
+	if oldSpec != "" {
+		re := regexp.MustCompile(`\s*🔁\s*` + regexp.QuoteMeta(oldSpec))
+		line = strings.TrimRight(re.ReplaceAllString(line, ""), " ")
+	}
+	if newSpec == "" {
+		return line
+	}
+	return line + " 🔁 " + newSpec
+}
+
+// setTaskText swaps the task's words, keeping every marker in place. The
+// text is matched as the scanner sees it, so markers are never disturbed.
+func setTaskText(line, oldText, newText string) string {
+	at := strings.Index(line, oldText)
+	if at < 0 {
+		return line
+	}
+	return line[:at] + newText + line[at+len(oldText):]
+}
 
 func setPriority(line string, priority int) string {
 	for _, sym := range prioritySymbols {
