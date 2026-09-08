@@ -45,11 +45,20 @@ export function useDocEvents(): void {
     let retryMs = INITIAL_RETRY_MS;
     let disposed = false;
 
+    let everConnected = false;
     const connect = () => {
       if (disposed) return;
       source = new EventSource("/api/v1/events");
       source.addEventListener("open", () => {
         retryMs = INITIAL_RETRY_MS;
+        // Anything that changed while the stream was down was never
+        // announced and never will be — there is no replay. Re-reading on
+        // reconnect is the only way back to the truth, and connections do
+        // drop: a tunnel hiccup is enough.
+        if (everConnected) {
+          void queryClient.invalidateQueries();
+        }
+        everConnected = true;
       });
       source.addEventListener("doc", (event) => {
         try {

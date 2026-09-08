@@ -156,7 +156,12 @@ on the target, and person/company/project pages assemble themselves from them.
 
 A new document opens straight into the editor, in whichever of Edit or Split
 you used last (remembered per device, like the theme). `e` edits, ⌘E cycles
-read → edit → split, and Escape or Read flushes the save. In Split, the
+read → edit → split, and Escape or Read flushes the save. A note changing
+underneath you — an agent through MCP, vim, a `git pull`, another tab —
+shows up live: read mode follows the file, and the editor takes the change
+too whenever you have not typed anything. Once you have unsaved work the
+buffer is left alone and saving raises the conflict banner instead, where
+you choose. In Split, the
 preview's checkboxes flip the task in the editor buffer, so they save with
 whatever else you are typing.
 

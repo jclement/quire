@@ -287,6 +287,18 @@ toolbar is stateless: it is handed an `EditorContext` (line, in-table,
 heading level, parsed task, callout) after every selection change and runs
 commands from editor/commands.ts against the live view.
 
+Live reload: the watcher notices an outside change, the index publishes it
+on `/api/v1/events`, and every open tab invalidates the queries that could
+be showing it. Read mode follows for free because its text is derived from
+the query rather than copied. The editor is the hard case — it owns a
+buffer CodeMirror mutates — and it now takes the change whenever the buffer
+is untouched, which is both a freshness fix and a data-loss fix: the clean
+path refreshes its base sha, so a stale buffer used to save straight over
+the other process with no conflict at all. A dirty buffer is never touched
+from underneath and still conflicts on save, where the owner chooses. Events
+are not replayed, so a reconnect re-reads everything: the stream drops, and
+what changed while it was down was announced to nobody.
+
 A failed save is not believed until the server is asked. A response lost
 in transit (the tunnel dropping it) leaves the write applied; the client's
 retry then carries the old base sha, gets a 409, and would show a conflict

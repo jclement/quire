@@ -219,6 +219,23 @@ function DocumentView({
     [doc.area, defaultArea, path, navigate, queryClient, toast],
   );
 
+  // A change from somewhere else — an agent, vim, another tab — while the
+  // buffer is untouched: take it. Read mode already does, because its text
+  // is derived from the query; the editor holds its own copy and did not,
+  // so it showed stale content and then saved over the other process's work
+  // without even a conflict (its base sha had been quietly refreshed). An
+  // untouched buffer has nothing of the owner's to lose, so adopting is
+  // safe; a dirty one is left alone and still conflicts on save.
+  useEffect(() => {
+    if (mode === "read" || save.status !== "saved") return;
+    const { body } = splitFrontmatter(doc.markdown);
+    editorRef.current?.adopt(body);
+    setLiveText(body);
+    // save.status is the gate, not a trigger: adopt() no-ops when the text
+    // already matches, so our own saves cause no churn here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.sha256, doc.markdown, mode]);
+
   // Read mode's "Edit table": open the grid on the nth table and, on save,
   // splice the result into the buffer and flush it through the same
   // conflict-checked path an editor save takes.
