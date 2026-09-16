@@ -95,6 +95,29 @@
     Consolas, monospace;
 }
 
+/* Both faces ship contextual alternates that redraw character pairs as one
+   glyph: `=>` becomes ⇒, `->` becomes →, `!=` becomes ≠. Inter does it in
+   prose and JetBrains Mono does it in code, so it is not only an editor
+   problem. The bytes never change, but what you typed is not what you see,
+   and in an editor a glyph spanning two characters makes selecting and
+   arrowing through them feel broken.
+
+   So: contextual alternates off everywhere, and in the mono face standard
+   ligatures too — a monospace grid should stay one glyph per column. Prose
+   keeps Inter's fi/fl, which is typography rather than a disguise. */
+html {
+  font-feature-settings: "calt" 0;
+}
+.cm-editor,
+.font-mono,
+code,
+pre {
+  font-variant-ligatures: none;
+  font-feature-settings:
+    "liga" 0,
+    "calt" 0;
+}
+
 html,
 body,
 #root {
