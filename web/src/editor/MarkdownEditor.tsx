@@ -16,6 +16,7 @@ import {
   type RefObject,
 } from "react";
 import { makeTagSource, makeWikilinkSource } from "./completions.ts";
+import { highlightMark } from "./highlightMark.ts";
 import {
   cursorBreathingRoom,
   editorHighlighting,
@@ -215,7 +216,11 @@ function buildExtensions(callbacks: CallbacksRef) {
     // codeLanguages gives fenced blocks real per-language highlighting;
     // each grammar is a lazily-imported chunk, so it costs nothing until a
     // note actually contains that language.
-    markdown({ base: markdownLanguage, codeLanguages: languages }),
+    markdown({
+      base: markdownLanguage,
+      codeLanguages: languages,
+      extensions: [highlightMark],
+    }),
     editorTheme,
     editorHighlighting,
     cursorBreathingRoom,

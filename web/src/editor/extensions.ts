@@ -8,6 +8,7 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorSelection } from "@codemirror/state";
 import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
+import { highlightTag } from "./highlightMark.ts";
 
 /** Lines of breathing room kept below the cursor while typing. */
 const BOTTOM_GUTTER_PX = 96;
@@ -100,6 +101,13 @@ const markdownHighlight = HighlightStyle.define([
   { tag: tags.heading, color: "var(--syn-heading)", fontWeight: "600" },
   { tag: tags.strong, color: "var(--heading)", fontWeight: "700" },
   { tag: tags.emphasis, color: "var(--heading)", fontStyle: "italic" },
+  // The same yellow the rendered page paints, so a highlight looks like
+  // itself in both views.
+  {
+    tag: highlightTag,
+    backgroundColor: "var(--highlight)",
+    color: "var(--heading)",
+  },
   {
     tag: tags.strikethrough,
     textDecoration: "line-through",
