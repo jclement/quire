@@ -327,6 +327,8 @@ function VisionSettings() {
         <p className="text-xs text-muted">
           On. A pasted image is described by the vision model and the
           description becomes its alt text, so screenshots turn up in search.
+          Images already in notes are described in the background after each
+          start, until none are left.
         </p>
       ) : (
         <p className="text-xs text-muted">

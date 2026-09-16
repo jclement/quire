@@ -99,6 +99,20 @@ func (v *Vault) Write(rel string, content []byte, baseSHA string) (File, error) 
 	return v.Read(rel)
 }
 
+// WriteKeepingModTime is Write for maintenance rewrites: the content changes
+// but the file keeps modTime, so nothing that sorts or windows by
+// modification — recent documents, the weekly review's "touched" — mistakes
+// the rewrite for real work on the note.
+func (v *Vault) WriteKeepingModTime(rel string, content []byte, baseSHA string, modTime time.Time) (File, error) {
+	if _, err := v.Write(rel, content, baseSHA); err != nil {
+		return File{}, err
+	}
+	if err := os.Chtimes(v.abs(rel), time.Now(), modTime); err != nil {
+		return File{}, fmt.Errorf("restoring modified time of %s: %w", rel, err)
+	}
+	return v.Read(rel)
+}
+
 // writeAtomic writes via a same-directory temp file + fsync + rename, so a
 // crash never leaves a half-written document and the rename stays atomic
 // (cross-device renames aren't).

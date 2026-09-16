@@ -76,6 +76,10 @@ type Config struct {
 	// OpenAI-compatible servers serve embeddings without serving vision, so
 	// this stays off (the default) until a model is named.
 	VisionModel string `yaml:"vision_model"`
+	// VisionBackfill describes images already in notes — those whose alt
+	// text is still a filename — in the background after startup. On by
+	// default when vision is on; each image costs one call, once.
+	VisionBackfill bool `yaml:"vision_backfill"`
 	// EmbeddingModel names the embeddings model to use.
 	EmbeddingModel string `yaml:"embedding_model"`
 	// EmbeddingCooldown is how long a note must go unchanged before its
@@ -127,13 +131,14 @@ func (c Config) StateDir() string { return filepath.Join(c.DataDir, ".quire") }
 // directories so callers can rely on them existing.
 func Load() (Config, error) {
 	cfg := Config{
-		DataDir:     "./data",
-		Addr:        "127.0.0.1:8321",
-		BaseURL:     DefaultBaseURL,
-		AuthMode:    AuthNone,
-		LogLevel:    "info",
-		Git:         true,
-		UpdateCheck: true,
+		DataDir:        "./data",
+		Addr:           "127.0.0.1:8321",
+		BaseURL:        DefaultBaseURL,
+		AuthMode:       AuthNone,
+		LogLevel:       "info",
+		Git:            true,
+		UpdateCheck:    true,
+		VisionBackfill: true,
 	}
 
 	if v := os.Getenv("QUIRE_DATA_DIR"); v != "" {
@@ -203,6 +208,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("QUIRE_VISION_MODEL"); v != "" {
 		cfg.VisionModel = v
+	}
+	if v := os.Getenv("QUIRE_VISION_BACKFILL"); v != "" {
+		cfg.VisionBackfill = v != "false" && v != "0"
 	}
 	if v := os.Getenv("QUIRE_EMBEDDING_COOLDOWN"); v != "" {
 		cfg.EmbeddingCooldown = v

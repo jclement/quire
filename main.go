@@ -190,6 +190,9 @@ func runServe() error {
 	if cfg.OpenAIAPIKey != "" && cfg.VisionModel != "" {
 		svc.Vision = vision.NewClient(cfg.OpenAIBaseURL, cfg.OpenAIAPIKey, cfg.VisionModel)
 		slog.Info("screenshot descriptions on", "model", svc.Vision.Model, "endpoint", svc.Vision.BaseURL)
+		if cfg.VisionBackfill {
+			go backfillImageDescriptions(ctx, svc)
+		}
 	}
 
 	shares := share.NewManager(authStore, svc, cfg.BaseURL)
@@ -325,6 +328,31 @@ func runServe() error {
 		committer.Wait(10 * time.Second)
 	}
 	return nil
+}
+
+// backfillStartDelay lets startup, the initial index sync and the first
+// requests finish before the backfill starts spending on a model.
+const backfillStartDelay = 30 * time.Second
+
+// backfillImageDescriptions describes images pasted before vision was on.
+// Every restart runs it, which is fine: it is idempotent, so once the vault
+// is caught up a run finds nothing and makes no calls.
+func backfillImageDescriptions(ctx context.Context, svc *service.Service) {
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(backfillStartDelay):
+	}
+	report, err := svc.BackfillImageDescriptions(ctx)
+	attrs := []any{"found", report.Found, "described", report.Described,
+		"failed", report.Failed, "skipped", report.Skipped, "documents", report.Documents}
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			slog.Warn("image description backfill stopped", append(attrs, "err", err)...)
+		}
+		return
+	}
+	slog.Info("image description backfill done", attrs...)
 }
 
 func runReindex() error {

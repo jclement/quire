@@ -36,6 +36,7 @@ const CLEAN_ENV = {
   QUIRE_EMBEDDING_MODEL: "",
   QUIRE_EMBEDDING_COOLDOWN: "",
   QUIRE_VISION_MODEL: "",
+  QUIRE_VISION_BACKFILL: "",
   QUIRE_LOG_LEVEL: "warn",
 };
 
@@ -101,6 +102,9 @@ export default defineConfig({
         // Screenshot descriptions, against the same fake — so the alt text
         // an upload writes is exercised rather than assumed.
         QUIRE_VISION_MODEL: "test-vision",
+        // Off: a background rewrite firing 30s into the run would race
+        // whatever spec happened to be editing a note. Go tests cover it.
+        QUIRE_VISION_BACKFILL: "false",
       },
     },
     {

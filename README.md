@@ -349,6 +349,7 @@ quire today
 | `QUIRE_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible embeddings API |
 | `QUIRE_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
 | `QUIRE_VISION_MODEL` | _(none)_ | Turns on screenshot descriptions — **sends pasted images to this endpoint**. Needs `QUIRE_OPENAI_API_KEY`; separate because many OpenAI-compatible servers do embeddings but not vision |
+| `QUIRE_VISION_BACKFILL` | `true` | With vision on: after startup, describe images already in notes whose alt text is still a filename. Rewrites only that alt text and keeps modified times; one call per image, once — later starts find nothing to do |
 | _(Settings → Time zone)_ | first browser's zone | Every date — today's note, due:today, ✅ stamps, the digest hour — is reckoned in it; set it in Settings, not the environment |
 | _(see `quire doctor`)_ | | Reports dangling links, ambiguous names, stopped recurrences and unreferenced attachments |
 | `QUIRE_EMBEDDING_COOLDOWN` | `30s` | How long a note sits unchanged before its changed sections are re-embedded |

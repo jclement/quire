@@ -490,6 +490,20 @@ because a third party had a bad minute is a large one.
 Alt text is sanitised before it is written: a `]` would close the reference
 early and a newline would break it outright.
 
+Images pasted before vision was on are caught up by a backfill that starts
+30s after boot (`internal/service/backfill.go`, off with
+`QUIRE_VISION_BACKFILL=false`). It describes only references whose alt text is
+empty or a bare filename — a heuristic, but prose someone typed rarely ends in
+`.png` — and skips fenced blocks and inline code, using the same fence rule as
+the scanner so the two agree about what is code. It rewrites just the alt
+bytes, re-reading each note right before its hash-guarded write, and keeps the
+note's modified time: `mtime` orders recent documents and fills the weekly
+review's "touched", and a maintenance pass must not make fifty old notes look
+like this week's work. Each distinct image is described once however many
+notes embed it, rate limits are retried with backoff, and a described alt is
+no longer filename-shaped — so the run is idempotent, and every start after
+the vault is caught up costs nothing.
+
 Agents get `read_attachment`, which returns the image itself as MCP image
 content — better than OCR, since the model reads the screenshot rather than
 just its glyphs. The tool points at the alt text first, so the common case
