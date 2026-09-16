@@ -1,6 +1,7 @@
 package share
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -104,11 +105,11 @@ func TestShareLifecycle(t *testing.T) {
 
 func TestShareAttachmentGating(t *testing.T) {
 	m, svc := newTestManager(t)
-	att, err := svc.SaveAttachment("dosage.png", strings.NewReader("png-bytes"))
+	att, err := svc.SaveAttachment(context.Background(), "dosage.png", strings.NewReader("png-bytes"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	secret, err := svc.SaveAttachment("secret.png", strings.NewReader("secret-bytes"))
+	secret, err := svc.SaveAttachment(context.Background(), "secret.png", strings.NewReader("secret-bytes"))
 	if err != nil {
 		t.Fatal(err)
 	}

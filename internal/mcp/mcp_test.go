@@ -18,6 +18,13 @@ import (
 // connect spins up an in-memory MCP client/server pair over the real server
 // wiring, so the tool schemas and handlers are exercised end to end.
 func connect(t *testing.T) *sdk.ClientSession {
+	session, _ := connectWithService(t)
+	return session
+}
+
+// connectWithService is connect, handing back the service too, so a test can
+// seed the vault with something a tool then reads.
+func connectWithService(t *testing.T) (*sdk.ClientSession, *service.Service) {
 	t.Helper()
 	v, err := vault.New(t.TempDir())
 	if err != nil {
@@ -43,7 +50,7 @@ func connect(t *testing.T) *sdk.ClientSession {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { session.Close() })
-	return session
+	return session, svc
 }
 
 func call(t *testing.T, s *sdk.ClientSession, tool string, args map[string]any) map[string]any {

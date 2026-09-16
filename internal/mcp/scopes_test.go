@@ -220,9 +220,9 @@ func TestSurfaceIsCompleteAndDocumented(t *testing.T) {
 	want := map[string]bool{
 		"search": true, "list_documents": true, "get_document": true,
 		"get_daily": true, "get_weekly": true, "list_daily": true,
-		"list_tasks": true, "list_tags": true, "list_areas": true,
-		"list_templates": true, "list_unwritten": true, "today": true,
-		"week_review": true, "calendar": true, "person_context": true,
+		"read_attachment": true, "list_tasks": true, "list_tags": true,
+		"list_areas": true, "list_templates": true, "list_unwritten": true,
+		"today": true, "week_review": true, "calendar": true, "person_context": true,
 		"create_document": true, "update_document": true,
 		"append_to_document": true, "link_entity": true, "unlink_entity": true,
 		"rename_document": true, "set_frontmatter": true, "capture_note": true,

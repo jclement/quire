@@ -11,7 +11,27 @@ const PNG = Buffer.from(
   "base64",
 );
 
-test("an uploaded attachment lands in the vault and serves back", async ({ request }) => {
+test("an uploaded screenshot arrives described, not merely named", async ({
+  request,
+}) => {
+  const res = await request.post("/api/v1/attachments", {
+    multipart: {
+      file: { name: "screen shot.png", mimeType: "image/png", buffer: PNG },
+    },
+  });
+  expect(res.status()).toBe(201);
+  const { data } = await res.json();
+
+  // The alt slot carries the description, not the filename — which is what
+  // makes a screenshot findable by full-text and semantic search later.
+  expect(data.markdown).toBe(
+    `![A test screenshot in image/png format.](${data.path})`,
+  );
+});
+
+test("an uploaded attachment lands in the vault and serves back", async ({
+  request,
+}) => {
   const res = await request.post("/api/v1/attachments", {
     multipart: {
       file: { name: "screen shot.png", mimeType: "image/png", buffer: PNG },

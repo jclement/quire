@@ -35,6 +35,7 @@ const CLEAN_ENV = {
   QUIRE_OPENAI_BASE_URL: "",
   QUIRE_EMBEDDING_MODEL: "",
   QUIRE_EMBEDDING_COOLDOWN: "",
+  QUIRE_VISION_MODEL: "",
   QUIRE_LOG_LEVEL: "warn",
 };
 
@@ -60,7 +61,10 @@ export default defineConfig({
     {
       name: "app",
       testIgnore: /auth\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${PORT}` },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: `http://127.0.0.1:${PORT}`,
+      },
     },
     {
       name: "auth",
@@ -94,6 +98,9 @@ export default defineConfig({
         QUIRE_OPENAI_BASE_URL: `http://127.0.0.1:${FAKE_OPENAI_PORT}/v1`,
         // Embed at once; the suite is not going to wait out a 30s cooldown.
         QUIRE_EMBEDDING_COOLDOWN: "0s",
+        // Screenshot descriptions, against the same fake — so the alt text
+        // an upload writes is exercised rather than assumed.
+        QUIRE_VISION_MODEL: "test-vision",
       },
     },
     {

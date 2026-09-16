@@ -71,6 +71,11 @@ type Config struct {
 	// OpenAIBaseURL is the OpenAI-compatible API root; any compatible
 	// server (Ollama, LiteLLM, a proxy) works here.
 	OpenAIBaseURL string `yaml:"openai_base_url"`
+	// VisionModel turns on screenshot descriptions, reusing OpenAIAPIKey and
+	// OpenAIBaseURL. Separate from the key on purpose: plenty of
+	// OpenAI-compatible servers serve embeddings without serving vision, so
+	// this stays off (the default) until a model is named.
+	VisionModel string `yaml:"vision_model"`
 	// EmbeddingModel names the embeddings model to use.
 	EmbeddingModel string `yaml:"embedding_model"`
 	// EmbeddingCooldown is how long a note must go unchanged before its
@@ -195,6 +200,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("QUIRE_EMBEDDING_MODEL"); v != "" {
 		cfg.EmbeddingModel = v
+	}
+	if v := os.Getenv("QUIRE_VISION_MODEL"); v != "" {
+		cfg.VisionModel = v
 	}
 	if v := os.Getenv("QUIRE_EMBEDDING_COOLDOWN"); v != "" {
 		cfg.EmbeddingCooldown = v

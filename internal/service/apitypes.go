@@ -97,6 +97,9 @@ type Health struct {
 	// SemanticSearch is whether an embeddings key is configured — the UI
 	// shows the Semantic toggle only when it is.
 	SemanticSearch bool `json:"semantic_search"`
+	// Vision reports whether pasted screenshots get described. A bool, not
+	// the model name: this endpoint is unauthenticated.
+	Vision bool `json:"vision"`
 	// Git is whether the vault is git-backed (on by default; QUIRE_GIT=false
 	// turns it off), so the UI can say whether a deletion is recoverable.
 	Git bool `json:"git"`

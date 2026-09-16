@@ -1,8 +1,9 @@
-// A stand-in OpenAI /v1/embeddings endpoint for the Playwright suite — the
-// same bag-of-words fake as internal/semantic/semantictest, so texts that
-// share words come out similar and ranking is deterministic. Started by
-// playwright.config.ts as a third webServer; the app instance points
-// QUIRE_OPENAI_BASE_URL at it.
+// A stand-in OpenAI endpoint for the Playwright suite, serving both
+// /v1/embeddings and /v1/chat/completions (vision, for screenshot alt text).
+// The embeddings half is the same bag-of-words fake as
+// internal/semantic/semantictest, so texts that share words come out similar
+// and ranking is deterministic. Started by playwright.config.ts as a third
+// webServer; the app instance points QUIRE_OPENAI_BASE_URL at it.
 const port = Number(process.env.FAKE_OPENAI_PORT ?? 8353);
 
 function fnv1a(s: string): number {
@@ -28,16 +29,49 @@ Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
     if (url.pathname === "/health") return new Response("ok");
-    if (url.pathname !== "/v1/embeddings" || req.method !== "POST") {
+    if (req.method !== "POST")
       return new Response("not found", { status: 404 });
-    }
     if (req.headers.get("authorization") !== "Bearer test-key") {
       return Response.json({ error: { message: "bad key" } }, { status: 401 });
+    }
+
+    // Vision: a fixed sentence, so a spec can assert the alt text the app
+    // wrote without depending on a model's phrasing. It echoes the image's
+    // media type to prove the data URL actually arrived.
+    if (url.pathname === "/v1/chat/completions") {
+      const chat = (await req.json()) as {
+        messages: {
+          content: { type: string; image_url?: { url: string } }[];
+        }[];
+      };
+      const part = chat.messages?.[0]?.content?.find(
+        (c) => c.type === "image_url",
+      );
+      const url_ = part?.image_url?.url ?? "";
+      if (!url_.startsWith("data:image/")) {
+        return Response.json(
+          { error: { message: "no image" } },
+          { status: 400 },
+        );
+      }
+      const kind = url_.slice("data:".length, url_.indexOf(";"));
+      return Response.json({
+        choices: [
+          { message: { content: `A test screenshot in ${kind} format.` } },
+        ],
+      });
+    }
+
+    if (url.pathname !== "/v1/embeddings") {
+      return new Response("not found", { status: 404 });
     }
     const body = (await req.json()) as { input: string[]; dimensions?: number };
     const dims = body.dimensions ?? 512;
     return Response.json({
-      data: body.input.map((text, index) => ({ index, embedding: vector(text, dims) })),
+      data: body.input.map((text, index) => ({
+        index,
+        embedding: vector(text, dims),
+      })),
     });
   },
 });

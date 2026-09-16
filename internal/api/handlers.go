@@ -19,6 +19,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Version:         s.Version,
 		UpdateAvailable: available,
 		SemanticSearch:  s.Service.SemanticEnabled(),
+		Vision:          s.Service.VisionEnabled(),
 		Git:             s.Git,
 	})
 }

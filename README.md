@@ -348,6 +348,7 @@ quire today
 | `QUIRE_OPENAI_API_KEY` | _(none)_ | Turns on semantic search — **sends note text to the embeddings endpoint** |
 | `QUIRE_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible embeddings API |
 | `QUIRE_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
+| `QUIRE_VISION_MODEL` | _(none)_ | Turns on screenshot descriptions — **sends pasted images to this endpoint**. Needs `QUIRE_OPENAI_API_KEY`; separate because many OpenAI-compatible servers do embeddings but not vision |
 | _(Settings → Time zone)_ | first browser's zone | Every date — today's note, due:today, ✅ stamps, the digest hour — is reckoned in it; set it in Settings, not the environment |
 | _(see `quire doctor`)_ | | Reports dangling links, ambiguous names, stopped recurrences and unreferenced attachments |
 | `QUIRE_EMBEDDING_COOLDOWN` | `30s` | How long a note sits unchanged before its changed sections are re-embedded |
@@ -369,7 +370,7 @@ deserves a confirmation. Anything the app can do, an agent can do:
 
 | Scope | Tools |
 |---|---|
-| read | **Find** `search` (full-text + `type:` `tag:` `area:` `is:task` `is:done` `due:` `after:` `before:`), `semantic_search` and `related_documents` (with an embeddings key), `list_documents`, `list_unwritten`, `list_tags`, `list_areas`, `list_templates` · **Read** `get_document`, `get_daily`, `get_weekly`, `list_daily` · **Compose** `today`, `week_review`, `calendar`, `person_context`, `list_tasks` |
+| read | **Find** `search` (full-text + `type:` `tag:` `area:` `is:task` `is:done` `due:` `after:` `before:`), `semantic_search` and `related_documents` (with an embeddings key), `list_documents`, `list_unwritten`, `list_tags`, `list_areas`, `list_templates` · **Read** `get_document`, `get_daily`, `get_weekly`, `list_daily`, `read_attachment` (see a pasted screenshot) · **Compose** `today`, `week_review`, `calendar`, `person_context`, `list_tasks` |
 | write | **Documents** `create_document`, `append_to_document`, `update_document` (hash-guarded), `rename_document` (rewrites links) · **Metadata** `set_frontmatter`, `link_entity`, `unlink_entity` · **Journal** `capture_note` (prose into today's note), `ensure_daily`, `ensure_weekly` |
 | tasks | `create_task` (any document, any marker: due, defer, priority, waiting, repeat), `complete_task`, `edit_task` (reschedule, delegate, repeat, rename), `restore_recurrence` |
 

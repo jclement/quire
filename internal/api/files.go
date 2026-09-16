@@ -23,7 +23,7 @@ func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) 
 	}
 	defer file.Close()
 
-	att, err := s.Service.SaveAttachment(header.Filename, file)
+	att, err := s.Service.SaveAttachment(r.Context(), header.Filename, file)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -43,7 +43,7 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 	var att service.Attachment
 	if file, header, err := r.FormFile("file"); err == nil {
 		defer file.Close()
-		att, err = s.Service.SaveAttachment(header.Filename, file)
+		att, err = s.Service.SaveAttachment(r.Context(), header.Filename, file)
 		if err != nil {
 			writeServiceError(w, err)
 			return

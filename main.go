@@ -36,6 +36,7 @@ import (
 	"github.com/jclement/quire/internal/share"
 	"github.com/jclement/quire/internal/update"
 	"github.com/jclement/quire/internal/vault"
+	"github.com/jclement/quire/internal/vision"
 	"github.com/jclement/quire/internal/webui"
 )
 
@@ -181,6 +182,14 @@ func runServe() error {
 			embedder.Notify(ev)
 		}
 		slog.Info("semantic search on", "model", client.Model, "endpoint", client.BaseURL, "cooldown", embedder.Cooldown)
+	}
+
+	// Screenshot descriptions: the same credential and endpoint as
+	// embeddings, but gated on its own model name because an
+	// OpenAI-compatible server that does embeddings may not do vision.
+	if cfg.OpenAIAPIKey != "" && cfg.VisionModel != "" {
+		svc.Vision = vision.NewClient(cfg.OpenAIBaseURL, cfg.OpenAIAPIKey, cfg.VisionModel)
+		slog.Info("screenshot descriptions on", "model", svc.Vision.Model, "endpoint", svc.Vision.BaseURL)
 	}
 
 	shares := share.NewManager(authStore, svc, cfg.BaseURL)

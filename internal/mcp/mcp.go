@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/jclement/quire/internal/auth"
 	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/vault"
+	"github.com/jclement/quire/internal/vision"
 )
 
 // Handler returns the Streamable HTTP handler for /mcp. A server is built
@@ -99,6 +101,9 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 		sdk.AddTool(s, &sdk.Tool{Name: "get_document", Annotations: readOnly,
 			Description: "Fetch a document by vault path: raw markdown plus parsed structure (frontmatter, links with resolution, backlinks, tasks with ids) and the sha256 that update_document needs. Use search or list_documents to find paths."},
 			t.getDocument)
+		sdk.AddTool(s, &sdk.Tool{Name: "read_attachment", Annotations: readOnly,
+			Description: "Look at an image attachment — a pasted screenshot, a photo — returning the image itself so you can read what is in it. Take the path from a document's markdown: ![alt](attachments/2026/09/name.png). Check the alt text first; when the owner's vault has vision enabled it already describes the image, and reading the file is only worth it when the alt text does not answer the question. Images only (png, jpeg, gif, webp); other attachments are not readable this way."},
+			t.readAttachment)
 		sdk.AddTool(s, &sdk.Tool{Name: "get_daily", Annotations: readOnly,
 			Description: "Today's daily note (or a given date's). The daily note is the capture spine: quick thoughts and captured tasks land here. Returns not-found rather than creating one; create_task or append_to_document will create it on write."},
 			t.getDaily)
@@ -432,6 +437,45 @@ func (t *tools) listUnwritten(_ context.Context, _ *sdk.CallToolRequest, _ struc
 func (t *tools) getDocument(_ context.Context, _ *sdk.CallToolRequest, in pathIn) (*sdk.CallToolResult, service.Document, error) {
 	doc, err := t.svc.GetDocument(in.Path)
 	return nil, doc, err
+}
+
+// maxInlineAttachment bounds what may come back through a tool result. The
+// bytes are base64'd into a JSON response an agent has to hold in context,
+// so a 50MB vault file is not something to hand over inline.
+const maxInlineAttachment = 8 << 20
+
+// attachmentIn takes an attachment path, not a document path — the schema
+// hint matters, because the two look alike and only one of them works here.
+type attachmentIn struct {
+	Path string `json:"path" jsonschema:"vault-relative attachment path as it appears in a document's markdown, e.g. attachments/2026/09/screen-a1b2.png"`
+}
+
+// attachmentOut is the structured half of read_attachment; the image itself
+// rides in the result's Content.
+type attachmentOut struct {
+	Path     string `json:"path"`
+	MIMEType string `json:"mime_type"`
+	Bytes    int    `json:"bytes"`
+}
+
+func (t *tools) readAttachment(_ context.Context, _ *sdk.CallToolRequest, in attachmentIn) (*sdk.CallToolResult, attachmentOut, error) {
+	mimeType := vision.MIMEType(path.Ext(in.Path))
+	if mimeType == "" {
+		return nil, attachmentOut{}, fmt.Errorf("%q is not a readable image (png, jpeg, gif and webp are)", in.Path)
+	}
+	raw, err := t.svc.ReadAttachment(in.Path)
+	if err != nil {
+		return nil, attachmentOut{}, err
+	}
+	if len(raw) > maxInlineAttachment {
+		return nil, attachmentOut{}, fmt.Errorf("%q is %dMB, over the %dMB limit for reading inline",
+			in.Path, len(raw)>>20, maxInlineAttachment>>20)
+	}
+	// Data is raw here: encoding/json base64s a []byte on the way out, which
+	// is exactly what the wire format wants.
+	return &sdk.CallToolResult{
+		Content: []sdk.Content{&sdk.ImageContent{Data: raw, MIMEType: mimeType}},
+	}, attachmentOut{Path: in.Path, MIMEType: mimeType, Bytes: len(raw)}, nil
 }
 
 func (t *tools) createDocument(_ context.Context, _ *sdk.CallToolRequest, in createDocIn) (*sdk.CallToolResult, service.Document, error) {

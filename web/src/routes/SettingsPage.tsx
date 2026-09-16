@@ -22,6 +22,7 @@ import {
   useSemanticEnabled,
   useSemanticStatus,
   useTimezone,
+  useVisionEnabled,
 } from "../api/queries.ts";
 import { AUTH_STATUS_KEY } from "../components/auth/AuthGate.tsx";
 import { RegisterPanel } from "../components/auth/AuthScreens.tsx";
@@ -82,6 +83,7 @@ export function SettingsPage() {
       <AgentGuidanceSection />
       <TimezoneSettings />
       <SemanticSettings />
+      <VisionSettings />
       <EmailSettings />
       <AgentActivity />
       <AboutSection />
@@ -307,6 +309,32 @@ function EmailSettings() {
             {send.isPending ? "Sending…" : "Send test email"}
           </button>
         </div>
+      )}
+    </section>
+  );
+}
+
+/** Screenshot descriptions are configured by environment too; this says
+ * whether a pasted image arrives described or merely named. */
+function VisionSettings() {
+  const enabled = useVisionEnabled();
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold text-heading">
+        Screenshot descriptions
+      </h2>
+      {enabled ? (
+        <p className="text-xs text-muted">
+          On. A pasted image is described by the vision model and the
+          description becomes its alt text, so screenshots turn up in search.
+        </p>
+      ) : (
+        <p className="text-xs text-muted">
+          Off. Set <code className="font-mono">QUIRE_VISION_MODEL</code> (with{" "}
+          <code className="font-mono">QUIRE_OPENAI_API_KEY</code>) to have
+          pasted screenshots described — the image is then sent to that
+          endpoint.
+        </p>
       )}
     </section>
   );

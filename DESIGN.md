@@ -461,6 +461,40 @@ stays findable the ordinary way. Tests never touch OpenAI —
 `semantictest.Server` (Go) and `e2e/fake-openai.ts` (Playwright) serve a
 bag-of-words fake with the real request/response shape.
 
+## Screenshot descriptions
+
+Opt-in, keyed on `QUIRE_VISION_MODEL` rather than on the API key alone:
+`QUIRE_OPENAI_BASE_URL` is documented as any compatible server, and plenty of
+them serve embeddings without serving vision, so keying this off the key
+would turn "semantic search works" into "every paste 404s". With it unset
+nothing changes — an attachment keeps being labelled with its filename.
+
+`internal/vision` is one `/chat/completions` client. The image goes as a
+base64 data URL, because the vault is private and there is no address the API
+could fetch. The description lands in the alt slot that `![...](path)`
+already had, which is the whole trick: it is markdown on disk, so it is
+backed up, diffed, read by any other editor, and indexed by both full-text
+and embeddings for free — no sidecar table, no new format, and screenshots
+become searchable.
+
+Describing happens synchronously in `SaveAttachment`, which sounds wrong and
+is not: the editor already inserts a placeholder on paste and swaps it for
+the server's markdown when the upload returns, so the cost is a slightly
+longer swap rather than a blocked editor. It is bounded by a 25s timeout and
+fails soft in every direction — vision off, a format no API accepts (`.svg`
+is markup and `.heic`/`.avif` are rejected, so the gate is narrower than the
+app's own `isImageExt`), an oversized image, a slow or failing call — because
+an image labelled with its filename is a small loss and a paste that fails
+because a third party had a bad minute is a large one.
+
+Alt text is sanitised before it is written: a `]` would close the reference
+early and a newline would break it outright.
+
+Agents get `read_attachment`, which returns the image itself as MCP image
+content — better than OCR, since the model reads the screenshot rather than
+just its glyphs. The tool points at the alt text first, so the common case
+costs no image transfer at all.
+
 ## Drawings
 
 An Excalidraw drawing is two vault files with one stem: `x.excalidraw` (the

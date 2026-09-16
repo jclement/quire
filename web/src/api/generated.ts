@@ -143,6 +143,11 @@ export interface Health {
    */
   semantic_search: boolean;
   /**
+   * Vision reports whether pasted screenshots get described. A bool, not
+   * the model name: this endpoint is unauthenticated.
+   */
+  vision: boolean;
+  /**
    * Git is whether the vault is git-backed (on by default; QUIRE_GIT=false
    * turns it off), so the UI can say whether a deletion is recoverable.
    */

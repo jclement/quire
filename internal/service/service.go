@@ -18,6 +18,7 @@ import (
 	"github.com/jclement/quire/internal/semantic"
 	"github.com/jclement/quire/internal/settings"
 	"github.com/jclement/quire/internal/vault"
+	"github.com/jclement/quire/internal/vision"
 )
 
 // ErrValidation marks a caller mistake — a missing field, a date that
@@ -35,6 +36,10 @@ type Service struct {
 	Settings *settings.Store
 	// Semantic is the embedding pipeline; nil unless an API key is set.
 	Semantic *semantic.Embedder
+	// Vision describes pasted screenshots; nil unless a vision model is
+	// named. Separate from Semantic because the same endpoint often serves
+	// embeddings without serving vision.
+	Vision *vision.Client
 	// Now allows tests to pin the clock.
 	Now func() time.Time
 }

@@ -159,6 +159,11 @@ export function useSemanticEnabled(): boolean {
   return useHealth().data?.semantic_search === true;
 }
 
+/** Whether a vision model is configured — gates the screenshot-description UI. */
+export function useVisionEnabled(): boolean {
+  return useHealth().data?.vision === true;
+}
+
 export function useRelated(path: string, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.related(path),
