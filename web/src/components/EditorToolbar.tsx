@@ -350,10 +350,24 @@ function TaskDetails({
         aria-label="Task details"
         onSubmit={(event) => {
           event.preventDefault();
+          // A task with no words is not a task; the serializer would write a
+          // bare checkbox no view could name.
+          if (draft.text.trim() === "") return;
           onApply(draft);
         }}
         className="absolute top-full left-0 z-20 mt-1 grid w-64 grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 rounded border border-border bg-raised p-3 font-sans text-xs shadow-lg"
       >
+        <label htmlFor="task-text" className="text-muted">
+          Task
+        </label>
+        <input
+          id="task-text"
+          autoFocus
+          value={draft.text}
+          onChange={(event) => setDraft({ ...draft, text: event.target.value })}
+          placeholder="what needs doing"
+          className={field}
+        />
         <label htmlFor="task-due" className="text-muted">
           Due
         </label>

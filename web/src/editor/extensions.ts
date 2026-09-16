@@ -9,6 +9,31 @@ import { EditorSelection } from "@codemirror/state";
 import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 
+/** Lines of breathing room kept below the cursor while typing. */
+const BOTTOM_GUTTER_PX = 96;
+
+/**
+ * Keep room below the cursor when typing at the end of a note.
+ *
+ * The editor grows to its full content height and the page is what
+ * scrolls, so CodeMirror follows the cursor by scrolling an ancestor —
+ * which it does correctly, and lands flush against the last pixel row of
+ * the window. On a phone it lands underneath the fixed nav bar, which is
+ * not an ancestor and which CodeMirror therefore cannot see at all: the
+ * line being typed sits behind it.
+ *
+ * scrollMargins is the facet for exactly this — "something overlaps me,
+ * keep this much clear" — and it feeds the same scroll that already
+ * happens, so there is no scroll listener of our own to fight with.
+ */
+export const cursorBreathingRoom = EditorView.scrollMargins.of(() => {
+  // Measured rather than assumed: the bar carries a safe-area inset, and
+  // it is display:none on desktop, where this correctly contributes 0.
+  const bar = document.querySelector('nav[aria-label="Primary"]');
+  const covered = bar ? bar.getBoundingClientRect().height : 0;
+  return { bottom: BOTTOM_GUTTER_PX + covered };
+});
+
 export const editorTheme = EditorView.theme({
   "&": {
     fontSize: "13px",
@@ -18,6 +43,7 @@ export const editorTheme = EditorView.theme({
     fontFamily: "var(--font-mono)",
     caretColor: "var(--accent)",
     padding: "12px 0",
+    paddingBottom: "var(--editor-scroll-past-end, 96px)",
     lineHeight: "1.65",
   },
   ".cm-line": { padding: "0 12px" },

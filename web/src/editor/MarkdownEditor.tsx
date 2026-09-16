@@ -17,6 +17,7 @@ import {
 } from "react";
 import { makeTagSource, makeWikilinkSource } from "./completions.ts";
 import {
+  cursorBreathingRoom,
   editorHighlighting,
   editorKeymap,
   editorTheme,
@@ -217,6 +218,7 @@ function buildExtensions(callbacks: CallbacksRef) {
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     editorTheme,
     editorHighlighting,
+    cursorBreathingRoom,
     EditorView.lineWrapping,
     // No smart quotes / autocap on mobile keyboards; spellcheck stays on for prose.
     EditorView.contentAttributes.of({

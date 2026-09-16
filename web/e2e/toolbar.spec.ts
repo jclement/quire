@@ -117,3 +117,30 @@ test("the properties strip stays live while editing", async ({ page }) => {
   expect(after).toContain("area: work");
   expect(after).toContain("tags: [live]");
 });
+
+test("the task popup edits the task's own words", async ({ page }) => {
+  const { path, editor } = await openInEditor(
+    page,
+    "Task Rename",
+    "# Task Rename\n\n- [ ] draft the memo 📅 2026-09-10 ⏫\n",
+  );
+  await editor.getByText("draft the memo").click();
+  await toolbar(page).getByRole("button", { name: "Task", exact: true }).click();
+
+  const details = page.getByRole("dialog", { name: "Task details" });
+  const text = details.getByLabel("Task", { exact: true });
+  await expect(text).toHaveValue("draft the memo");
+  await text.fill("draft the board memo");
+  await details.getByRole("button", { name: "Apply" }).click();
+
+  // The words change; every marker on the line survives.
+  await expect(editor).toContainText("- [ ] draft the board memo");
+  await expect(editor).toContainText("📅 2026-09-10");
+  await expect(editor).toContainText("⏫");
+  await page.keyboard.press("ControlOrMeta+s");
+  // Markers come back in canonical order — priority, then dates — whatever
+  // order they were written in, which is the serializer's contract.
+  await expect
+    .poll(() => diskText(page, path))
+    .toContain("- [ ] draft the board memo ⏫ 📅 2026-09-10");
+});

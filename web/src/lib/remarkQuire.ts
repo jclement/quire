@@ -2,7 +2,7 @@
 // Obsidian callouts. Operating at the mdast level (rather than preprocessing
 // the source string) means code spans and fenced blocks are naturally exempt,
 // and source line numbers stay intact for task-checkbox mapping.
-import type { Blockquote, Paragraph, Root, Text } from "mdast";
+import type { Blockquote, Emphasis, Paragraph, Root, Text } from "mdast";
 import { visit } from "unist-util-visit";
 import { parseCalloutMarker } from "./callouts.ts";
 import { splitWikilinks } from "./wikilinks.ts";
@@ -20,12 +20,53 @@ export const TAG_HREF_PREFIX = "#tag:";
 // a tag, so it is excluded — the same rule Obsidian applies.
 const TAG_RE = /(^|[\s(])#([\p{L}\p{N}_\/-]*\p{L}[\p{L}\p{N}_\/-]*)/gu;
 
+// `==highlight==`, as Obsidian and most note apps write it. Must start and
+// end on a non-space so `a == b` in prose is arithmetic, not a highlight,
+// and cannot span lines.
+const HIGHLIGHT_RE = /==(?=\S)([^\n]*?\S)==/g;
+
 export function remarkQuire() {
   return (tree: Root) => {
+    // Before the others: they split text nodes, and a highlight wrapping a
+    // wikilink would no longer be one string to match against.
+    transformHighlights(tree);
     transformWikilinks(tree);
     transformHashtags(tree);
     transformCallouts(tree);
   };
+}
+
+/** Wraps `==text==` in a <mark>. mdast has no highlight node, so hName tells
+ * mdast-to-hast which element to emit — the same mechanism the callout
+ * transform uses for its data attributes. */
+function transformHighlights(tree: Root): void {
+  visit(tree, "text", (node: Text, index, parent) => {
+    if (!parent || index === undefined) return;
+    const value = node.value;
+    if (!value.includes("==")) return;
+    const pieces: Array<Text | Emphasis> = [];
+    let last = 0;
+    for (const match of value.matchAll(HIGHLIGHT_RE)) {
+      if (match.index > last) {
+        pieces.push({
+          type: "text",
+          value: value.slice(last, match.index),
+        } as Text);
+      }
+      pieces.push({
+        type: "emphasis",
+        data: { hName: "mark" },
+        children: [{ type: "text", value: match[1]! } as Text],
+      } as Emphasis);
+      last = match.index + match[0].length;
+    }
+    if (pieces.length === 0) return;
+    if (last < value.length) {
+      pieces.push({ type: "text", value: value.slice(last) } as Text);
+    }
+    parent.children.splice(index, 1, ...(pieces as never[]));
+    return index + pieces.length;
+  });
 }
 
 /** Splits `[[…]]` out of text nodes into link nodes the renderer can resolve. */

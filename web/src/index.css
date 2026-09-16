@@ -31,6 +31,7 @@
   --warn: #9a6700;
   --ok: #1a7f37;
   --code-bg: #f3f1ec;
+  --highlight: #fbefa3;
   /* Editor syntax colors (markdown source). Distinct enough to scan
      structure at a glance, muted enough to read prose through. */
   --syn-heading: #1a4fb4;
@@ -65,6 +66,7 @@
   --warn: #d9a53f;
   --ok: #4cae6a;
   --code-bg: #212228;
+  --highlight: #574d1f;
   --syn-heading: #79a6ff;
   --syn-marker: #6b6a65;
   --syn-link: #8688ee;
@@ -93,6 +95,20 @@
   --font-mono:
     "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo,
     Consolas, monospace;
+}
+
+/* Room below the last line of the editor, so the cursor can rise off the
+   bottom edge instead of the page simply ending underneath it. Paired with
+   the scrollMargins facet in editor/extensions.ts: that asks to keep the
+   cursor clear of the bottom, this is what makes the room to do it. On a
+   phone it also clears the fixed nav bar (h-14) and the safe-area inset. */
+:root {
+  --editor-scroll-past-end: 96px;
+}
+@media (max-width: 767px) {
+  :root {
+    --editor-scroll-past-end: calc(96px + 3.5rem + env(safe-area-inset-bottom));
+  }
 }
 
 /* Both faces ship contextual alternates that redraw character pairs as one
@@ -218,6 +234,14 @@ select:focus-visible {
 }
 .prose-quire code {
   @apply rounded bg-code-bg px-1 py-0.5 font-mono text-[0.85em];
+}
+/* ==highlight==. Background only: the text keeps its own colour so a
+   highlight inside a link or bold still reads as what it is. */
+.prose-quire mark {
+  background: var(--highlight);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 0.15em;
 }
 .prose-quire pre {
   @apply overflow-x-auto rounded border border-border bg-code-bg p-3;
