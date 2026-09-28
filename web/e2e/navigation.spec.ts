@@ -85,3 +85,47 @@ test("a mermaid diagram renders as SVG, not as code", async ({ page }) => {
     timeout: 20_000,
   });
 });
+
+test("a mermaid diagram opens fullscreen on click and Escape closes it", async ({ page }) => {
+  const created = await page.request.post("/api/v1/documents", {
+    data: {
+      type: "note",
+      title: "Zoom Diagram",
+      markdown: "# Zoom Diagram\n\n```mermaid\ngraph LR;\n  A-->B;\n```\n",
+    },
+  });
+  const { data } = await created.json();
+
+  await page.goto(`/doc/${data.path}`);
+  const diagram = page.getByRole("button", { name: "View diagram fullscreen" });
+  await expect(diagram).toBeVisible({ timeout: 20_000 });
+  await diagram.click();
+
+  const viewer = page.getByRole("dialog", { name: "Diagram" });
+  await expect(viewer.locator("svg").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(viewer).toBeHidden();
+  // Escape belonged to the viewer: the page is still in read mode.
+  await expect(diagram).toBeVisible();
+});
+
+test("an image opens fullscreen on click", async ({ page }) => {
+  // A 1×1 PNG as a data URL keeps the test free of an upload round-trip.
+  const png =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const created = await page.request.post("/api/v1/documents", {
+    data: {
+      type: "note",
+      title: "Zoom Image",
+      markdown: `# Zoom Image\n\n![A pixel](${png})\n`,
+    },
+  });
+  const { data } = await created.json();
+
+  await page.goto(`/doc/${data.path}`);
+  await page.getByRole("img", { name: "A pixel" }).click();
+  const viewer = page.getByRole("dialog", { name: "A pixel" });
+  await expect(viewer.getByRole("img", { name: "A pixel" })).toBeVisible();
+  await viewer.getByRole("button", { name: "Close" }).click();
+  await expect(viewer).toBeHidden();
+});

@@ -24,10 +24,12 @@ import {
   createContext,
   lazy,
   Suspense,
+  useCallback,
   useContext,
   useMemo,
   useState,
   type ComponentProps,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 import type { ElementContent } from "hast";
@@ -53,6 +55,7 @@ import {
   TAG_HREF_PREFIX,
   WIKILINK_HREF_PREFIX,
 } from "../lib/remarkQuire.ts";
+import { Lightbox } from "./Lightbox.tsx";
 
 // Both are heavy and rare per-page; each stays in its own chunk and loads only
 // when a matching fence is actually rendered.
@@ -405,6 +408,29 @@ function Blockquote(props: ComponentProps<"blockquote"> & ExtraProps) {
 
 // ---- Images ----
 
+/**
+ * Click-to-enlarge for a rendered image. An image inside a link stays a link:
+ * the click is the author's, not ours.
+ */
+function useImageLightbox(src: string, alt: string | undefined) {
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+  const onClick = (event: MouseEvent<HTMLImageElement>) => {
+    if (event.currentTarget.closest("a")) return;
+    setOpen(true);
+  };
+  const viewer = open ? (
+    <Lightbox label={alt || "Image"} onClose={close}>
+      <img
+        src={src}
+        alt={alt}
+        className="max-h-full max-w-full object-contain"
+      />
+    </Lightbox>
+  ) : null;
+  return { onClick, viewer };
+}
+
 // Vault-relative references ("attachments/2026/09/x.png") are what lives in
 // the markdown so files stay meaningful to external editors; the server
 // serves those bytes at /api/v1/files/<path>.
@@ -424,7 +450,24 @@ function Img(props: ComponentProps<"img"> & ExtraProps) {
       />
     );
   }
-  return <img {...rest} src={resolved} loading="lazy" />;
+  return <ZoomableImg {...rest} src={resolved} />;
+}
+
+function ZoomableImg({ src, alt, className, ...rest }: ComponentProps<"img">) {
+  const { onClick, viewer } = useImageLightbox(src ?? "", alt);
+  return (
+    <>
+      <img
+        {...rest}
+        src={src}
+        alt={alt}
+        loading="lazy"
+        onClick={onClick}
+        className={`cursor-zoom-in ${className ?? ""}`}
+      />
+      {viewer}
+    </>
+  );
 }
 
 /**
@@ -437,14 +480,19 @@ function DrawingImg({
   ...rest
 }: ComponentProps<"img"> & { scenePath: string }) {
   const version = useDrawingVersion(scenePath);
+  const versioned = version ? `${src}?v=${version}` : (src ?? "");
+  const { onClick, viewer } = useImageLightbox(versioned, rest.alt);
   return (
     <span className="group relative inline-block max-w-full">
       <img
         {...rest}
-        src={version ? `${src}?v=${version}` : src}
+        src={versioned}
         loading="lazy"
         data-drawing={scenePath}
+        onClick={onClick}
+        className={`cursor-zoom-in ${rest.className ?? ""}`}
       />
+      {viewer}
       <button
         type="button"
         onClick={() => requestDrawingEdit(scenePath)}

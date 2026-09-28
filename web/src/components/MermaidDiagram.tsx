@@ -4,10 +4,11 @@
 // theme toggles, or when the page is about to be printed (the print stylesheet
 // forces the light palette, and a dark diagram on white paper reads as a black
 // slab). A parse error falls back to the raw code with a note; it can never
-// crash the page.
-import { useEffect, useId, useState } from "react";
+// crash the page. A click opens the diagram fullscreen, scaled to the viewport.
+import { useCallback, useEffect, useId, useState } from "react";
 import mermaid from "mermaid";
 import { registerPrintHook } from "../lib/printing.ts";
+import { Lightbox } from "./Lightbox.tsx";
 
 /** One render at an explicit theme. mermaid.initialize is global state, so the
  *  theme has to be set immediately before each render rather than once. */
@@ -29,6 +30,8 @@ async function renderDiagram(
 export default function MermaidDiagram({ code }: { code: string }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const collapse = useCallback(() => setExpanded(false), []);
   const [darkTheme, setDarkTheme] = useState(() =>
     document.documentElement.classList.contains("dark"),
   );
@@ -93,10 +96,32 @@ export default function MermaidDiagram({ code }: { code: string }) {
     );
   }
   return (
-    <div
-      className="my-3 flex justify-center overflow-x-auto rounded border border-border bg-raised p-3 print:overflow-visible print:break-inside-avoid"
-      // Mermaid's own SVG output for this document's code — not remote HTML.
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label="View diagram fullscreen"
+        onClick={() => setExpanded(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setExpanded(true);
+          }
+        }}
+        className="my-3 flex cursor-zoom-in justify-center overflow-x-auto rounded border border-border bg-raised p-3 print:overflow-visible print:break-inside-avoid"
+        // Mermaid's own SVG output for this document's code — not remote HTML.
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+      {expanded && (
+        <Lightbox label="Diagram" onClose={collapse}>
+          <div
+            // Mermaid pins max-width to the diagram's natural size; lifted
+            // here so a small diagram grows to fill the screen too.
+            className="flex size-full items-center justify-center rounded bg-raised p-4 [&>svg]:!h-full [&>svg]:!max-h-full [&>svg]:!w-full [&>svg]:!max-w-full"
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        </Lightbox>
+      )}
+    </>
   );
 }
