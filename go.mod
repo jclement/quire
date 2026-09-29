@@ -3,11 +3,13 @@ module github.com/jclement/quire
 go 1.27.0
 
 require (
+	github.com/emersion/go-ical v0.0.0-20250609112844-439c63cef608
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/go-webauthn/webauthn v0.18.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/teambition/rrule-go v1.8.2
 	github.com/wneessen/go-mail v0.8.1
 	github.com/yuin/goldmark v1.8.5
 	golang.org/x/crypto v0.55.0
