@@ -11,6 +11,7 @@ import { useState } from "react";
 import { api, errorMessage } from "../api/client.ts";
 import { useDefaultArea } from "../api/queries.ts";
 import type { DocType, LikelyMatch, Unwritten } from "../api/types.ts";
+import { addAliasErrorMessage } from "../lib/aliases.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { SkeletonRows } from "../components/Skeleton.tsx";
@@ -84,7 +85,11 @@ function UnwrittenRow({ entry }: { entry: Unwritten }) {
       void queryClient.invalidateQueries({ queryKey: ["document"] });
       toast(`${doc.title} now answers to “${entry.name}”`);
     },
-    onError: (error) => toast(errorMessage(error)),
+    onError: (error, match) => {
+      toast(addAliasErrorMessage(error, entry.name, match.title));
+      // A conflict means the page moved on; show the row as it now is.
+      void queryClient.invalidateQueries({ queryKey: ["unwritten"] });
+    },
   });
   const matches = entry.likely_matches ?? [];
 
