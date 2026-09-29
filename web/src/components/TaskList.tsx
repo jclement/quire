@@ -444,7 +444,7 @@ function WaitingBadge({
 
 /** Task text with wikilinks, `code`, and **bold** rendered lightly — no block
  * markdown, this is a one-line row. */
-function InlineTaskText({ text }: { text: string }) {
+export function InlineTaskText({ text }: { text: string }) {
   return (
     <>
       {splitWikilinks(text).map((segment, at) =>

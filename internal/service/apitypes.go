@@ -120,7 +120,7 @@ type WaitingGroup struct {
 // SearchResult is one search hit.
 type SearchResult struct {
 	Path    string `json:"path"`
-	Type    string `json:"type" tstype:"DocType | \"task\""`
+	Type    string `json:"type" tstype:"DocType | \"task\" | \"decision\""`
 	Title   string `json:"title"`
 	Snippet string `json:"snippet"`
 	// Score is cosine similarity for semantic results; absent for full-text.
@@ -260,6 +260,35 @@ type LikelyMatch struct {
 	// Reason is why it was suggested: first_name ("Frances"), prefix
 	// ("Fran", "James B") or initials ("FB").
 	Reason string `json:"reason" tstype:"\"first_name\" | \"prefix\" | \"initials\""`
+}
+
+// Decision is one entry in the decision log: a bullet under a "Decisions"
+// heading (kind inline, usually in a meeting note) or a whole document
+// tagged decision (kind record, whose text is its title).
+type Decision struct {
+	Kind string `json:"kind" tstype:"\"inline\" | \"record\""`
+	// Text is the decision as written — markdown, wikilinks intact.
+	Text string `json:"text"`
+	// Date is the source's own date (frontmatter date:, a daily note's
+	// day), else the day its file last changed. YYYY-MM-DD.
+	Date string `json:"date"`
+	// Path, Title and Type are the source document's; Line is where the
+	// bullet sits (0 for a record).
+	Path  string `json:"path"`
+	Title string `json:"title"`
+	Type  string `json:"type" tstype:"DocType"`
+	Line  int    `json:"line"`
+	Area  string `json:"area"`
+	// Entities are the people, companies and projects it is about: linked
+	// in the bullet, or in the source document's frontmatter.
+	Entities []EntityRef `json:"entities"`
+}
+
+// EntityRef is a person, company or project, by path, for chips and links.
+type EntityRef struct {
+	Path  string `json:"path"`
+	Title string `json:"title"`
+	Type  string `json:"type" tstype:"DocType"`
 }
 
 // TimezoneInfo is the configured zone, what it resolves to, and the

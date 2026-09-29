@@ -327,6 +327,17 @@ removes with ×, and "+" offers the vault's existing tags or takes a new one.
 every tag sized by use; tags in prose, in Browse rows and on the tags page all
 link to the `tag:x` search. Purely numeric `#123` is not a tag.
 
+### Decisions
+
+`/decisions` is the decision log, newest first: every bullet under a heading named
+**Decisions** (plural, any level — the starter meeting template has one between Notes
+and Action items) plus every document tagged `decision` (the decision template). Each
+row shows its date — the note's `date:`, a daily note's day, else when the file last
+changed — the decision, where it was made, and the people, companies and projects it
+is about (linked in the bullet, or in the note's `people:`/`project:`/`company:`).
+Filter by text there or by the area switcher; search takes `is:decision` too.
+Person, company and project pages list their decisions in the rail.
+
 ### Calendar
 
 `/calendar` shows the month at a glance: which days have a daily note, what
@@ -335,8 +346,9 @@ documents you touched, meetings held, tasks completed.
 ### Search
 
 One grammar everywhere (UI, API, MCP, CLI): full-text terms, `type:meeting`,
-`tag:x`, and task search with `is:task`, `due:today`, `due:overdue`, `due:week`,
-`due:2026-09-15`.
+`tag:x`, task search with `is:task`, `due:today`, `due:overdue`, `due:week`,
+`due:2026-09-15`, and the decision log with `is:decision` (which takes `after:` /
+`before:` against the decision's date).
 
 **Semantic search** is opt-in: set `QUIRE_OPENAI_API_KEY` and a **Semantic**
 toggle appears on the search page (and `?mode=semantic` on the API, plus
@@ -398,13 +410,13 @@ Settings and stored as an ordinary vault document (`AGENTS.md`). Edit it in the
 app or in vim; the next agent session gets it, no restart.
 
 quire is agent-operable by design: a Streamable-HTTP MCP server at `/mcp` exposes the
-same service layer as the UI. Thirty-two tools (thirty-four with an embeddings
+same service layer as the UI. Thirty-three tools (thirty-five with an embeddings
 key), each annotated read-only / additive / destructive so clients know what
 deserves a confirmation. Anything the app can do, an agent can do:
 
 | Scope | Tools |
 |---|---|
-| read | **Find** `search` (full-text + `type:` `tag:` `area:` `is:task` `is:done` `due:` `after:` `before:`), `semantic_search` and `related_documents` (with an embeddings key), `list_documents`, `list_unwritten`, `list_tags`, `list_areas`, `list_templates` · **Read** `get_document`, `get_daily`, `get_weekly`, `list_daily`, `read_attachment` (see a pasted screenshot) · **Compose** `today`, `week_review`, `calendar`, `person_context`, `list_tasks` |
+| read | **Find** `search` (full-text + `type:` `tag:` `area:` `is:task` `is:done` `is:decision` `due:` `after:` `before:`), `semantic_search` and `related_documents` (with an embeddings key), `list_documents`, `list_unwritten`, `list_decisions`, `list_tags`, `list_areas`, `list_templates` · **Read** `get_document`, `get_daily`, `get_weekly`, `list_daily`, `read_attachment` (see a pasted screenshot) · **Compose** `today`, `week_review`, `calendar`, `person_context`, `list_tasks` |
 | write | **Documents** `create_document`, `append_to_document`, `update_document` (hash-guarded), `rename_document` (rewrites links) · **Metadata** `set_frontmatter`, `link_entity`, `unlink_entity`, `add_alias` · **Journal** `capture_note` (prose into today's note), `ensure_daily`, `ensure_weekly` · **Triage** `task_to_note` (a task that is really a note becomes one) |
 | tasks | `create_task` (any document, any marker: due, defer, priority, waiting — with `waiting_on` a name — repeat), `complete_task`, `edit_task` (reschedule, delegate to someone, repeat, rename), `restore_recurrence` |
 

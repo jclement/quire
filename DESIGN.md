@@ -118,7 +118,8 @@ Everything in index.db is derivable from a full parse of `vault/`.
 
 Schema (core): `documents(path PK, type, title, mtime, size, sha256, frontmatter_json)`,
 `links(src_path, target_path, target_raw, display, position)`, `tags(path, tag)`,
-`tasks(...)`, `fts` (FTS5, porter unicode61), `attachments(...)`.
+`tasks(...)`, `decisions(...)` / `decision_links(...)` (see Decisions), `fts` (FTS5,
+porter unicode61), `attachments(...)`.
 
 Watcher: fsnotify over `vault/`, 300ms debounce keyed by path, one indexer goroutine
 (serialized, no lock games). Startup full-scan diffs `(mtime, size)` and re-hashes on
@@ -126,6 +127,35 @@ mismatch, catching changes made while quire was down. `git pull` bursts are abso
 the debounce + rescan, not per-event thrash. The app's own writes are ignored via a
 recently-written `(path, sha256)` set. Each index update publishes an SSE event on
 `/api/v1/events` so open tabs refresh live.
+
+## Decisions
+
+A decision is either a **record** — a document tagged `decision`, one row whose text is
+its title — or **inline**: a top-level bullet under a heading named `Decisions` (plural,
+any level, case-insensitive, trailing colon allowed) in any document, running to the
+next heading of the same or higher level. Plural is the whole disambiguation: the
+decision template's singular `## Decision` section *is* the record, and reading it
+again would count every record twice. Empty template bullets, checkboxes (tasks),
+indented sub-bullets (elaboration) and fenced blocks are not decisions; templates never
+contribute.
+
+Both are extracted at index time (`markdown.ScanDecisions`, `index/decisions.go`) into
+`decisions(id, doc_path, kind, line, text, date)` and `decision_links(decision_id,
+target_norm)`, the latter joined through `docnames` exactly like `task_links`. A
+decision is linked to the wikilinks in its bullet plus the source's entity frontmatter
+(`people`, `company`, `project`, `owner`) — a meeting's decisions are about the people
+in the room whether or not the bullet names them; a record is about everything it
+links to. The date is the source's `date:` frontmatter, else a daily note's day, else
+the file's mtime day (UTC, as search's `after:` uses) — the last drifts with edits,
+which is why the decision template now puts `date:` in frontmatter. Entity filters
+match decisions linked to the entity *or made on its own page*. The log is `GET
+/api/v1/decisions`, `/decisions`, `is:decision` in search, the entity rail, and MCP
+`list_decisions`.
+
+Schema v6 added the two tables in place (`migrateV5ToV6`, one transaction like every
+step, after v4→v5 when coming from older): the tables are created and every document's
+`(size, sha256)` fingerprint invalidated, so the startup scan re-reads every file while
+the embeddings — keyed on content, not those columns — survive.
 
 ## Tasks
 
@@ -429,7 +459,8 @@ area, `area_explicit` the file's own, `area_from` the path it came through.
 `PropagateAreas` (index/areas.go) recomputes all three from every file's
 frontmatter links after each index change — a few thousand rows of JSON and
 a map lookup per link, milliseconds — so there is no dependency tracking to
-get wrong. The v3→v4 and v4→v5 schema changes are in-place `ALTER`s, since
+get wrong. The v3→v4, v4→v5 and v5→v6 schema changes are in place (`ALTER`s, and v6's
+new decision tables), since
 dropping index.db would also drop the embeddings. Each migration step runs in
 one transaction with `user_version` set inside it; a failure rolls back to the
 old version intact and is reported at startup rather than answered with a

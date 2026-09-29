@@ -86,6 +86,7 @@ func TestToolsAreScoped(t *testing.T) {
 		"search", "list_documents", "get_document", "get_daily", "get_weekly",
 		"list_daily", "list_tasks", "list_tags", "list_areas", "list_templates",
 		"list_unwritten", "today", "week_review", "calendar", "person_context",
+		"list_decisions",
 	}
 	writeTools := []string{
 		"create_document", "update_document", "append_to_document",
@@ -221,7 +222,7 @@ func TestSurfaceIsCompleteAndDocumented(t *testing.T) {
 		"search": true, "list_documents": true, "get_document": true,
 		"get_daily": true, "get_weekly": true, "list_daily": true,
 		"read_attachment": true, "list_tasks": true, "list_tags": true,
-		"list_areas": true, "list_templates": true, "list_unwritten": true,
+		"list_areas": true, "list_templates": true, "list_unwritten": true, "list_decisions": true,
 		"today": true, "week_review": true, "calendar": true, "person_context": true,
 		"create_document": true, "update_document": true,
 		"append_to_document": true, "link_entity": true, "unlink_entity": true,

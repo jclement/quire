@@ -35,6 +35,7 @@ import {
   queryKeys,
   useDocument,
   useToggleTask,
+  useDecisions,
   useRelated,
   useSemanticEnabled,
   useShares,
@@ -155,6 +156,12 @@ function DocumentView({
   // Related-by-meaning needs the embeddings pipeline; the hook stays
   // disabled (no request) when it is off.
   const related = useRelated(path, useSemanticEnabled() && mode === "read");
+  // What has been decided about this person, company or project — every
+  // area, like the open tasks beside it: the page is the entity, not a view.
+  const decisions = useDecisions(
+    { entity: path, area: "" },
+    doc.type === "person" || doc.type === "company" || doc.type === "project",
+  );
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const toggleTask = useToggleTask();
   // Editor buffer mirrored into state for the split preview and the outline
@@ -493,6 +500,7 @@ function DocumentView({
           related={related.data ?? []}
           openTasks={doc.open_tasks ?? []}
           waitingOn={doc.waiting_on ?? []}
+          decisions={decisions.data ?? []}
         />
       </div>
     </article>

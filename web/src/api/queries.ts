@@ -8,7 +8,11 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import { api, type ListDocumentsParams } from "./client.ts";
+import {
+  api,
+  type DecisionParams,
+  type ListDocumentsParams,
+} from "./client.ts";
 import { primaryArea } from "../lib/area.ts";
 import type {
   Task,
@@ -220,6 +224,17 @@ export function useCalendar(month: string) {
   return useQuery({
     queryKey: queryKeys.calendar(month),
     queryFn: () => api.calendar(month),
+  });
+}
+
+/** The decision log, narrowed to the current area unless one is given. */
+export function useDecisions(params: DecisionParams, enabled = true) {
+  const area = useEffectiveArea();
+  const scoped = { ...params, area: params.area ?? area };
+  return useQuery({
+    queryKey: ["decisions", scoped],
+    queryFn: () => api.listDecisions(scoped),
+    enabled,
   });
 }
 

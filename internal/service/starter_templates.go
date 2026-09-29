@@ -43,6 +43,10 @@ description: A meeting with attendees, an agenda, and action items that become t
 
 - 
 
+## Decisions
+
+- 
+
 ## Action items
 
 - [ ] 
@@ -112,11 +116,11 @@ tags: [one-on-one]
 for: note
 description: A decision record — context, options considered, the call, and its consequences.
 tags: [decision]
+date: "{{date}}"
 ---
 # {{title}}
 
 **Status:** proposed
-**Date:** {{date}}
 
 ## Context
 

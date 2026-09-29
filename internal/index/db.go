@@ -12,7 +12,7 @@ import (
 )
 
 // schemaVersion is stored in PRAGMA user_version. Bump on any schema change.
-const schemaVersion = 5 // v5: tasks.waiting_since / waiting_on_raw, task_links.ord / target_raw
+const schemaVersion = 6 // v6: decisions / decision_links
 
 const schema = `
 CREATE TABLE documents (
@@ -107,6 +107,34 @@ CREATE VIRTUAL TABLE fts USING fts5(
 	path UNINDEXED, title, body, tags,
 	tokenize = 'porter unicode61'
 );
+` + decisionsSchema
+
+// decisionsSchema is separate so the v5 → v6 upgrade can create exactly
+// these tables in place.
+const decisionsSchema = `
+-- Decisions: bullets under a "Decisions" heading in any document (kind
+-- 'inline', the meeting-note case) and documents tagged decision (kind
+-- 'record', line 0, text = title). date is the source's own date — its
+-- frontmatter date:, a daily note's day, else the file's mtime day.
+CREATE TABLE decisions (
+	id       INTEGER PRIMARY KEY,
+	doc_path TEXT NOT NULL,
+	kind     TEXT NOT NULL,
+	line     INTEGER NOT NULL,
+	text     TEXT NOT NULL,
+	date     TEXT NOT NULL
+);
+CREATE INDEX decisions_doc ON decisions(doc_path);
+CREATE INDEX decisions_date ON decisions(date);
+
+-- What a decision is about: wikilinks in the bullet plus the source
+-- document's entity frontmatter, joined through docnames like task_links.
+CREATE TABLE decision_links (
+	decision_id INTEGER NOT NULL,
+	target_norm TEXT NOT NULL
+);
+CREATE INDEX decision_links_decision ON decision_links(decision_id);
+CREATE INDEX decision_links_target ON decision_links(target_norm);
 `
 
 // Open opens (or creates) index.db at path, recreating the schema from
@@ -129,10 +157,10 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 	if version == schemaVersion {
 		return db, false, nil
 	}
-	// v3 → v4 → v5 add columns; everything else in the file (embeddings
-	// above all, which cost money to rebuild) stays. Each step is one
-	// transaction, so a failure leaves the file exactly as it was — and is
-	// reported, never answered with a rebuild that would discard the
+	// v3 → v4 → v5 → v6 are additive; everything else in the file
+	// (embeddings above all, which cost money to rebuild) stays. Each step
+	// is one transaction, so a failure leaves the file exactly as it was —
+	// and is reported, never answered with a rebuild that would discard the
 	// embeddings the migration exists to keep.
 	if version == 3 {
 		if err := migrateV3ToV4(db); err != nil {
@@ -142,6 +170,12 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 	}
 	if version == 4 {
 		if err := migrateV4ToV5(db); err != nil {
+			return nil, false, err
+		}
+		version = 5
+	}
+	if version == 5 {
+		if err := migrateV5ToV6(db); err != nil {
 			return nil, false, err
 		}
 		return db, false, nil
@@ -195,6 +229,13 @@ func migrateV4ToV5(db *sql.DB) error {
 		"ALTER TABLE task_links ADD COLUMN ord INTEGER NOT NULL DEFAULT -1",
 		"UPDATE documents SET size = -1, sha256 = ''",
 	)
+}
+
+// migrateV5ToV6 adds the decision tables, which only reading every file
+// again can fill — so, like v5, every document is marked stale for the
+// startup scan, while the embeddings (keyed on content) are left alone.
+func migrateV5ToV6(db *sql.DB) error {
+	return migrate(db, 6, decisionsSchema, "UPDATE documents SET size = -1, sha256 = ''")
 }
 
 func recreate(db *sql.DB) error {

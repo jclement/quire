@@ -11,6 +11,7 @@ import type {
   AuthStatus,
   CalendarMonth,
   ConnectedApp,
+  Decision,
   DocMeta,
   DocType,
   Document,
@@ -108,6 +109,15 @@ function jsonInit(method: string, payload: unknown): RequestInit {
 /** Encodes a vault path for use in a URL, keeping its slashes literal. */
 function encodeVaultPath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
+}
+
+/** Filters for the decision log (GET /api/v1/decisions). */
+export interface DecisionParams {
+  /** Every word must appear in the decision or its source's title. */
+  q?: string;
+  /** A vault path (or name): decisions about it, or made in its page. */
+  entity?: string;
+  area?: string;
 }
 
 export interface ListDocumentsParams {
@@ -268,6 +278,16 @@ export const api = {
 
   /** Names linked to that have no document yet. */
   unwritten: () => request<Unwritten[]>("/api/v1/unwritten"),
+
+  /** The decision log, newest first; every filter is optional. */
+  listDecisions: (params: DecisionParams = {}) => {
+    const search = new URLSearchParams();
+    if (params.q) search.set("q", params.q);
+    if (params.entity) search.set("entity", params.entity);
+    if (params.area) search.set("area", params.area);
+    const qs = search.toString();
+    return request<Decision[]>(`/api/v1/decisions${qs ? `?${qs}` : ""}`);
+  },
 
   /** Adds a name the document answers to, keeping its existing aliases. */
   addAlias: (path: string, alias: string) =>

@@ -122,6 +122,12 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 	if err := insertTasks(tx, rel, fm, doc.Tasks); err != nil {
 		return false, err
 	}
+	if err := insertDecisions(tx, decisionSource{
+		path: rel, title: title, docType: docType, fm: fm, tags: tags,
+		links: doc.Links, raw: f.Raw, modified: f.ModTime,
+	}); err != nil {
+		return false, err
+	}
 	if _, err := tx.Exec(`INSERT INTO fts (path, title, body, tags) VALUES (?, ?, ?, ?)`,
 		rel, title, doc.Body, strings.Join(allTags, " ")); err != nil {
 		return false, fmt.Errorf("inserting fts row for %s: %w", rel, err)
@@ -229,6 +235,8 @@ func deleteDocRows(tx *sql.Tx, rel string) error {
 		"DELETE FROM tags WHERE path = ?",
 		"DELETE FROM task_links WHERE task_id IN (SELECT id FROM tasks WHERE doc_path = ?)",
 		"DELETE FROM tasks WHERE doc_path = ?",
+		"DELETE FROM decision_links WHERE decision_id IN (SELECT id FROM decisions WHERE doc_path = ?)",
+		"DELETE FROM decisions WHERE doc_path = ?",
 		"DELETE FROM fts WHERE path = ?",
 		"DELETE FROM documents WHERE path = ?",
 	}

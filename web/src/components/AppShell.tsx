@@ -22,6 +22,7 @@ import {
   Search,
   Settings,
   BookOpen,
+  Gavel,
   Hash,
   Sunrise,
   X,
@@ -71,6 +72,7 @@ const LIBRARY_NAV: NavEntry[] = [
 const INVENTORY_NAV: NavEntry[] = [
   { to: "/tags", label: "Tags", icon: Hash },
   { to: "/unwritten", label: "Unwritten", icon: SquareDashed },
+  { to: "/decisions", label: "Decisions", icon: Gavel },
 ];
 
 const MOBILE_NAV: NavEntry[] = [

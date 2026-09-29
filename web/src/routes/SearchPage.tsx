@@ -4,6 +4,7 @@
 // tags that we parse ourselves — no HTML injection.
 import { useNavigate } from "@tanstack/react-router";
 import {
+  Gavel,
   CheckSquare,
   SearchX,
   Search as SearchIcon,
@@ -101,7 +102,7 @@ export function SearchPage({
         <p className="py-8 text-center text-xs text-muted">
           {effectiveMode === "semantic"
             ? "Describe what you're looking for — results are ranked by meaning, not exact words."
-            : "Search titles and full text. Filters: type: tag: is:task"}
+            : "Search titles and full text. Filters: type: tag: is:task is:decision"}
         </p>
       ) : results.data.length === 0 ? (
         <EmptyState
@@ -131,10 +132,13 @@ function ResultList({ results }: { results: SearchResult[] }) {
         const Icon =
           result.type === "task"
             ? CheckSquare
-            : DOC_TYPE_INFO[result.type].icon;
+            : result.type === "decision"
+              ? Gavel
+              : DOC_TYPE_INFO[result.type].icon;
         return (
           <li
-            key={result.path}
+            // Task and decision hits share their document's path.
+            key={`${result.path}#${at}`}
             ref={nav.rowRef(at)}
             tabIndex={-1}
             onClick={() => {

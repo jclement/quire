@@ -19,6 +19,8 @@ export type {
   RecurrenceProblem,
   Unwritten,
   LikelyMatch,
+  Decision,
+  EntityRef,
   WeekPayload,
   AuditEntry,
   DocType,

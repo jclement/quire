@@ -31,6 +31,7 @@ import { GlobalKeys } from "../keys/GlobalKeys.tsx";
 import { BrowsePage } from "./BrowsePage.tsx";
 import { CalendarPage } from "./CalendarPage.tsx";
 import { DailyPage } from "./DailyPage.tsx";
+import { DecisionsPage } from "./DecisionsPage.tsx";
 import { JournalPage } from "./JournalPage.tsx";
 import { TagsPage } from "./TagsPage.tsx";
 import { UnwrittenPage } from "./UnwrittenPage.tsx";
@@ -209,6 +210,12 @@ const unwrittenRoute = createRoute({
   component: UnwrittenPage,
 });
 
+const decisionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/decisions",
+  component: DecisionsPage,
+});
+
 const weeklyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/weekly",
@@ -230,6 +237,7 @@ const routeTree = rootRoute.addChildren([
   journalRoute,
   tagsRoute,
   unwrittenRoute,
+  decisionsRoute,
   weeklyRoute,
   weeklyWeekRoute,
   indexRoute,

@@ -243,6 +243,24 @@ paths:
         companies the name probably means (first name, title prefix, or
         capital initials), strongest reason only.
       responses: { "200": { description: "data: Unwritten[] — name, refs, sources, likely_matches" } }
+  /api/v1/decisions:
+    get:
+      summary: The decision log, newest first
+      description: >
+        Bullets under any heading named "Decisions" (kind inline — the meeting
+        template has one) and documents tagged `decision` (kind record, text =
+        title; the record's own singular "Decision" section is not counted
+        again). Dated by the source's frontmatter `date:`, a daily note's day,
+        else its mtime day. Each carries the people, companies and projects it
+        is about: linked in the bullet or in the source's frontmatter.
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: "every word must appear in the decision or its source's title" }
+        - { name: entity, in: query, schema: { type: string }, description: "vault path or name — decisions about it, or made in its page" }
+        - { name: area, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }
+      responses:
+        "200": { description: "data: Decision[] — kind, text, date, path, title, type, line, area, entities" }
+        "400": { description: "VALIDATION_ERROR — entity names no document" }
   /api/v1/shares:
     get:
       summary: List share links (revoked included — audit trail)

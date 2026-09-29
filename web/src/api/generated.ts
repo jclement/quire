@@ -180,7 +180,7 @@ export interface WaitingGroup {
  */
 export interface SearchResult {
   path: string;
-  type: DocType | "task";
+  type: DocType | "task" | "decision";
   title: string;
   snippet: string;
   /**
@@ -364,6 +364,45 @@ export interface LikelyMatch {
    * ("Fran", "James B") or initials ("FB").
    */
   reason: "first_name" | "prefix" | "initials";
+}
+/**
+ * Decision is one entry in the decision log: a bullet under a "Decisions"
+ * heading (kind inline, usually in a meeting note) or a whole document
+ * tagged decision (kind record, whose text is its title).
+ */
+export interface Decision {
+  kind: "inline" | "record";
+  /**
+   * Text is the decision as written — markdown, wikilinks intact.
+   */
+  text: string;
+  /**
+   * Date is the source's own date (frontmatter date:, a daily note's
+   * day), else the day its file last changed. YYYY-MM-DD.
+   */
+  date: string;
+  /**
+   * Path, Title and Type are the source document's; Line is where the
+   * bullet sits (0 for a record).
+   */
+  path: string;
+  title: string;
+  type: DocType;
+  line: number /* int */;
+  area: string;
+  /**
+   * Entities are the people, companies and projects it is about: linked
+   * in the bullet, or in the source document's frontmatter.
+   */
+  entities: EntityRef[];
+}
+/**
+ * EntityRef is a person, company or project, by path, for chips and links.
+ */
+export interface EntityRef {
+  path: string;
+  title: string;
+  type: DocType;
 }
 /**
  * TimezoneInfo is the configured zone, what it resolves to, and the

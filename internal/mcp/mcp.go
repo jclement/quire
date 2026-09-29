@@ -71,6 +71,9 @@ Working rules:
 - Processing the inbox means every task leaves it: give it a due or defer
   date, delegate it (edit_task waiting_on), park it (#someday), complete it,
   or — when it was never an action — task_to_note.
+- Decisions are bullets under a "Decisions" heading (meeting notes have one)
+  or whole documents tagged decision; list_decisions reads them all. Check it
+  before re-opening a settled question.
 - Never invent a document path; find it with search first.`
 
 func newServer(svc *service.Service, version string, allows func(string) bool, principal string, audit Auditor) *sdk.Server {
@@ -91,7 +94,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 	// Reading the vault.
 	if allows(auth.ScopeRead) {
 		sdk.AddTool(s, &sdk.Tool{Name: "search", Annotations: readOnly,
-			Description: "Search the vault. Bare words are full-text (title and body, ranked); filters combine with them: type:<note|person|company|project|meeting|daily>, tag:<tag>, area:<work|personal|none>, is:task (search tasks instead of documents), due:today | due:overdue | due:week | due:YYYY-MM-DD. Returns paths — use get_document for content. Always search before guessing a path."},
+			Description: "Search the vault. Bare words are full-text (title and body, ranked); filters combine with them: type:<note|person|company|project|meeting|daily>, tag:<tag>, area:<work|personal|none>, is:task (search tasks instead of documents), is:decision (search the decision log), due:today | due:overdue | due:week | due:YYYY-MM-DD. Returns paths — use get_document for content. Always search before guessing a path."},
 			t.search)
 		if svc.SemanticEnabled() {
 			sdk.AddTool(s, &sdk.Tool{Name: "semantic_search", Annotations: readOnly,
@@ -202,6 +205,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 	}
 
 	registerAliasTools(s, t, allows)
+	registerDecisionTools(s, t, allows)
 
 	return s
 }

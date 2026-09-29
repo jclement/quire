@@ -8,13 +8,14 @@
 // The outline follows the reader: in read mode via IntersectionObserver over
 // the rendered headings, in edit/split via the editor's top visible line
 // (where clicking scrolls the editor instead of the page).
-import { Hourglass, Square } from "lucide-react";
+import { Gavel, Hourglass, Square } from "lucide-react";
 import { Link as RouterLink } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import type { DocMeta, SearchResult, Task } from "../api/types.ts";
+import type { Decision, DocMeta, SearchResult, Task } from "../api/types.ts";
 import { DOC_TYPE_INFO, docHref, isDocType } from "../lib/docs.ts";
 import type { Heading } from "../lib/headings.ts";
 import { MIN_OUTLINE_HEADINGS } from "../lib/headings.ts";
+import { splitWikilinks } from "../lib/wikilinks.ts";
 
 interface DocumentRailProps {
   headings: Heading[];
@@ -33,6 +34,20 @@ interface DocumentRailProps {
   /** What this person or company owes, oldest first; people and companies
    * only. */
   waitingOn?: Task[];
+  /** Decisions about this entity, newest first; empty for non-entities. */
+  decisions?: Decision[];
+}
+
+/** A margin column, not the log: the rest is one click away. */
+const MAX_RAIL_DECISIONS = 8;
+
+/** A decision as rail text: [[Target|shown]] reads as "shown". */
+function plainDecisionText(text: string): string {
+  return splitWikilinks(text)
+    .map((segment) =>
+      segment.kind === "link" ? segment.display : segment.text,
+    )
+    .join("");
 }
 
 /** Left padding per heading level — H1 flush, deeper levels stepped in. */
@@ -47,6 +62,7 @@ export function DocumentRail({
   related = [],
   openTasks = [],
   waitingOn = [],
+  decisions = [],
 }: DocumentRailProps) {
   // Defensive: a payload from before this field existed has no key at all.
   const owed = waitingOn ?? [];
@@ -61,7 +77,8 @@ export function DocumentRail({
     backlinks.length === 0 &&
     related.length === 0 &&
     tasks.length === 0 &&
-    owed.length === 0
+    owed.length === 0 &&
+    decisions.length === 0
   ) {
     return null;
   }
@@ -171,6 +188,44 @@ export function DocumentRail({
               </li>
             ))}
           </ul>
+        </nav>
+      ) : null}
+
+      {/* What has been settled about it, newest first — before the
+          backlinks because it is the part of those meetings worth keeping. */}
+      {decisions.length > 0 ? (
+        <nav aria-label="Decisions">
+          <RailHeading>Decisions</RailHeading>
+          <ul className="border-l border-border">
+            {decisions.slice(0, MAX_RAIL_DECISIONS).map((decision) => (
+              <li key={`${decision.path}:${decision.line}`}>
+                <RouterLink
+                  to={docHref(decision.path)}
+                  title={`${decision.text} — ${decision.date}, in ${decision.title}`}
+                  className="-ml-px flex items-start gap-1.5 border-l border-transparent py-0.5 pr-1 pl-2 text-xs leading-snug text-muted hover:border-border hover:text-body"
+                >
+                  <Gavel
+                    className="mt-0.5 size-3 shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span className="line-clamp-2">
+                    {plainDecisionText(decision.text)}
+                    <span className="ml-1 whitespace-nowrap font-mono text-[10px]">
+                      {decision.date}
+                    </span>
+                  </span>
+                </RouterLink>
+              </li>
+            ))}
+          </ul>
+          {decisions.length > MAX_RAIL_DECISIONS ? (
+            <RouterLink
+              to="/decisions"
+              className="mt-1 block pl-2 text-[11px] text-muted hover:text-accent"
+            >
+              All decisions ({decisions.length})
+            </RouterLink>
+          ) : null}
         </nav>
       ) : null}
 

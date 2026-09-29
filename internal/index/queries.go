@@ -694,7 +694,8 @@ func (ix *Index) UnwrittenLinks(limit int) ([]Unwritten, error) {
 
 // Search runs the shared query grammar: bare words go to FTS (last word as a
 // prefix); `type:x` and `tag:x` filter; `is:task` switches to task search
-// with optional `due:today|overdue|week|YYYY-MM-DD`. today anchors the date
+// with optional `due:today|overdue|week|YYYY-MM-DD`; `is:decision` searches
+// the decision log instead. today anchors the date
 // filters. Returns snippeted hits.
 func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, error) {
 	if limit <= 0 || limit > 100 {
@@ -702,7 +703,7 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 	}
 	var terms []string
 	var docType, tag, due, area, after, before string
-	isTask, isDone := false, false
+	isTask, isDone, isDecision := false, false, false
 	for _, tok := range strings.Fields(query) {
 		switch {
 		case strings.HasPrefix(tok, "area:"):
@@ -711,6 +712,8 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 			isTask = true
 		case tok == "is:done":
 			isTask, isDone = true, true
+		case tok == "is:decision":
+			isDecision = true
 		case strings.HasPrefix(tok, "after:"):
 			after, _ = resolveSearchDate(strings.TrimPrefix(tok, "after:"), today)
 		case strings.HasPrefix(tok, "before:"):
@@ -725,6 +728,9 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 		default:
 			terms = append(terms, tok)
 		}
+	}
+	if isDecision {
+		return ix.searchDecisions(terms, area, after, before, limit)
 	}
 	if isTask {
 		return ix.searchTasks(terms, tag, due, area, today, after, before, isDone, limit)
