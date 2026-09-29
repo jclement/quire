@@ -2,7 +2,7 @@
 // file so the Settings page stays a list of sections.
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, errorMessage } from "../../api/client.ts";
+import { api } from "../../api/client.ts";
 import { queryKeys, useWorkItems } from "../../api/queries.ts";
 import { useUi } from "../../keys/UiContext.tsx";
 import { noAutofill } from "../../lib/noAutofill.ts";
@@ -28,7 +28,6 @@ export function WorkItemSettings() {
           : "Work item links turned off",
       );
     },
-    onError: (error) => toast(errorMessage(error)),
   });
   return (
     <section className="flex flex-col gap-2">

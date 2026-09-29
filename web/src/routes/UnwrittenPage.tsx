@@ -85,6 +85,9 @@ function UnwrittenRow({ entry }: { entry: Unwritten }) {
       void queryClient.invalidateQueries({ queryKey: ["document"] });
       toast(`${doc.title} now answers to “${entry.name}”`);
     },
+    // Its own message, not the global toast's: a conflict here should name
+    // the page, not tell a row with no editor to "reapply your edit".
+    meta: { inlineError: true },
     onError: (error, match) => {
       toast(addAliasErrorMessage(error, entry.name, match.title));
       // A conflict means the page moved on; show the row as it now is.

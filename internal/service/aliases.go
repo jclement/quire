@@ -29,28 +29,30 @@ func likelyMatches(name string, candidates []index.MatchCandidate) []LikelyMatch
 // AddAlias appends alias to the document's `aliases:` list, keeping every
 // alias already there, so links written as that name resolve to it. Adding
 // one the document already answers to (case-insensitively) succeeds without
-// touching the file.
+// touching the file. The read-merge-write is one re-derivable edit: two
+// aliases added at once both land, and one that loses to an outside write
+// is worked out again on top of it rather than failing.
 func (s *Service) AddAlias(path, alias string) (Document, error) {
 	alias = strings.TrimSpace(alias)
 	if err := validAlias(alias); err != nil {
 		return Document{}, err
 	}
-	f, err := s.Vault.Read(path)
-	if err != nil {
-		return Document{}, err
-	}
-	existing := stringsFromFrontmatter(vault.ParseFrontmatter(f.Raw), aliasesKey)
-	list := make([]any, 0, len(existing)+1)
-	for _, a := range existing {
-		if strings.EqualFold(strings.TrimSpace(a), alias) {
-			return s.GetDocument(path)
+	return reapplying(s, path, func() (Document, error) {
+		f, err := s.Vault.Read(path)
+		if err != nil {
+			return Document{}, err
 		}
-		list = append(list, a)
-	}
-	list = append(list, alias)
-	// CAS against the file just read: a concurrent edit between the read
-	// and the write fails rather than dropping an alias someone else added.
-	return s.SetFrontmatter(path, map[string]any{aliasesKey: list}, f.SHA256)
+		existing := stringsFromFrontmatter(vault.ParseFrontmatter(f.Raw), aliasesKey)
+		list := make([]any, 0, len(existing)+1)
+		for _, a := range existing {
+			if strings.EqualFold(strings.TrimSpace(a), alias) {
+				return s.GetDocument(path)
+			}
+			list = append(list, a)
+		}
+		list = append(list, alias)
+		return s.setFrontmatter(path, map[string]any{aliasesKey: list}, f.SHA256)
+	})
 }
 
 // validAlias rejects what could never match a link target: a wikilink's

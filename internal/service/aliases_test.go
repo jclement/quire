@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jclement/quire/internal/vault"
@@ -83,5 +84,50 @@ func TestAddAliasRejectsUnlinkableText(t *testing.T) {
 	}
 	if _, err := s.AddAlias("people/nobody.md", "Nobody"); !errors.Is(err, vault.ErrNotFound) {
 		t.Errorf("missing document: %v", err)
+	}
+}
+
+// Two aliases added at once both land, and one that loses its write to an
+// outside edit (an alias typed in vim) is worked out again on top of it —
+// an alias is re-derivable from the file, so a race is never a 409.
+func TestAddAliasSurvivesRaces(t *testing.T) {
+	s := newTestService(t)
+	person, err := s.CreateDocument(vault.TypePerson, "Frances Bagley", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for _, alias := range []string{"Frances", "Fran", "F.B.", "Franny"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if _, err := s.AddAlias(person.Path, alias); err != nil {
+				t.Errorf("AddAlias(%q): %v", alias, err)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	for _, alias := range []string{"Frances", "Fran", "F.B.", "Franny"} {
+		if got := s.Index.ResolveLink(alias); got != person.Path {
+			t.Errorf("concurrent alias %q lost", alias)
+		}
+	}
+
+	attempts := outsideWriteOnce(t, s, person.Path, func(raw string) string {
+		return strings.Replace(raw, "aliases: [", "aliases: [Bagley, ", 1)
+	})
+	if _, err := s.AddAlias(person.Path, "FB2"); err != nil {
+		t.Fatalf("an alias that lost a race should be re-applied: %v", err)
+	}
+	if *attempts != 2 {
+		t.Errorf("write attempts = %d, want 2", *attempts)
+	}
+	for _, alias := range []string{"Bagley", "FB2", "Frances"} {
+		if got := s.Index.ResolveLink(alias); got != person.Path {
+			t.Errorf("alias %q lost after the race", alias)
+		}
 	}
 }
