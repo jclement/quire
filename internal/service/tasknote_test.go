@@ -2,6 +2,8 @@
 package service
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -99,5 +101,30 @@ func TestTaskToNoteDuplicateTitle(t *testing.T) {
 	}
 	if auto.Title != "Remember the wiki migration plan" {
 		t.Errorf("auto title = %q", auto.Title)
+	}
+}
+
+// The file changed under the index — the task reworded in another editor —
+// so its line cannot be found. That must fail before anything is written:
+// no note, no edit to the source.
+func TestTaskToNoteAfterTheFileChanged(t *testing.T) {
+	svc := newTestService(t)
+	writeVault(t, svc, map[string]string{"daily/2026-09-01.md": "- [ ] Pricing thoughts from the call\n"})
+	doc, _ := svc.GetDocument("daily/2026-09-01.md")
+	id := doc.Tasks[0].ID
+
+	changed := "- [ ] Pricing thoughts, reworded elsewhere\n"
+	if err := os.WriteFile(filepath.Join(svc.Vault.Dir, "daily", "2026-09-01.md"), []byte(changed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.TaskToNote(id, "Pricing", ""); err == nil {
+		t.Fatal("expected an error for a task whose line is gone")
+	}
+	if svc.Vault.Exists("notes/pricing.md") {
+		t.Error("a note was created for a task that could not be replaced")
+	}
+	f, _ := svc.Vault.Read("daily/2026-09-01.md")
+	if string(f.Raw) != changed {
+		t.Errorf("source was touched: %q", f.Raw)
 	}
 }
