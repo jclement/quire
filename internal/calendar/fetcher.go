@@ -34,6 +34,11 @@ const (
 	minBackoff      = time.Minute
 	maxBackoff      = time.Hour
 	fetchTimeout    = 30 * time.Second
+	// DefaultAddWait is how long adding a feed waits for its first fetch
+	// before answering "still fetching". Short, because the request may be
+	// behind a tunnel (Cloudflare gives up at ~100s) and the feed is saved
+	// whether or not the first fetch has finished.
+	DefaultAddWait = 5 * time.Second
 	// maxFeedBytes bounds one download; years of history in a busy
 	// calendar is a few megabytes.
 	maxFeedBytes = 20 << 20
@@ -51,6 +56,8 @@ type FeedStatus struct {
 	Error    string
 	Failures int
 	Events   int
+	// Fetching is true while a newly added feed's first fetch is running.
+	Fetching bool
 }
 
 // feedState is the in-memory cache and bookkeeping for one feed.
@@ -62,6 +69,7 @@ type feedState struct {
 	err         string
 	failures    int
 	components  int
+	fetching    bool
 }
 
 // Fetcher keeps the subscribed feeds fresh. The zero value is not usable;
@@ -71,6 +79,8 @@ type Fetcher struct {
 	Client *http.Client
 	// Interval between successful fetches of a feed.
 	Interval time.Duration
+	// AddWait bounds how long Add waits for a new feed's first fetch.
+	AddWait time.Duration
 	// Now is the clock, pinned by tests.
 	Now func() time.Time
 
@@ -88,6 +98,7 @@ func NewFetcher(store *Store) *Fetcher {
 		Store:    store,
 		Client:   &http.Client{Timeout: fetchTimeout},
 		Interval: DefaultInterval,
+		AddWait:  DefaultAddWait,
 		Now:      time.Now,
 		states:   map[string]*feedState{},
 		wake:     make(chan struct{}, 1),
@@ -130,6 +141,38 @@ func (f *Fetcher) Refresh(ctx context.Context) {
 		return
 	}
 	f.fetchAll(ctx, feeds)
+}
+
+// Add subscribes to a feed and starts its first fetch — that feed only, not
+// a pass over every feed, which could take 30s per slow feed. It waits up
+// to AddWait for the fetch so the common case answers with a result, then
+// returns regardless; Status reports Fetching until the fetch lands.
+func (f *Fetcher) Add(ctx context.Context, rawURL string) (Feed, error) {
+	feed, err := f.Store.Add(rawURL)
+	if err != nil {
+		return Feed{}, err
+	}
+	f.mu.Lock()
+	// Marked due only after the fetch timeout, so the background loop does
+	// not start a second download of it meanwhile.
+	f.states[feed.ID] = &feedState{fetching: true, nextAttempt: f.Now().Add(fetchTimeout)}
+	f.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Detached from the request, which ends before a slow fetch does;
+		// download still bounds it with fetchTimeout.
+		f.fetchOne(context.WithoutCancel(ctx), feed)
+	}()
+	timer := time.NewTimer(f.AddWait)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	return feed, nil
 }
 
 func (f *Fetcher) fetchDue(ctx context.Context) {
@@ -176,6 +219,7 @@ func (f *Fetcher) fetchOne(ctx context.Context, feed Feed) {
 		f.states[feed.ID] = state
 	}
 	state.lastAttempt = now
+	state.fetching = false
 	if err != nil {
 		if ctx.Err() != nil {
 			return // shutting down; not the feed's fault
@@ -294,6 +338,7 @@ func (f *Fetcher) Status() ([]FeedStatus, error) {
 			status.Error = state.err
 			status.Failures = state.failures
 			status.Events = state.components
+			status.Fetching = state.fetching
 		}
 		out = append(out, status)
 	}

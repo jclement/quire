@@ -669,6 +669,10 @@ export interface CalendarFeed {
    * Events is how many VEVENTs the feed held at its last success.
    */
   events: number /* int */;
+  /**
+   * Fetching is true while a just-added feed's first fetch is running.
+   */
+  fetching: boolean;
 }
 /**
  * MeetingPrep is what to know walking into a meeting: for each attendee

@@ -186,10 +186,10 @@ paths:
         URLs are masked (scheme, host, last four characters): a feed URL is a
         bearer secret and is never returned once saved. error is the last
         failure, already free of the URL.
-      responses: { "200": { description: "data: CalendarFeed[] — id, url (masked), last_attempt, last_success, error, failures, events" } }
+      responses: { "200": { description: "data: CalendarFeed[] — id, url (masked), last_attempt, last_success, error, failures, events, fetching" } }
     post:
-      summary: Subscribe to an ICS feed and fetch it at once
-      description: "Body {url}. https:// or webcal:// (rewritten to https). Stored 0600 in the state dir, apart from settings.json."
+      summary: Subscribe to an ICS feed and start fetching it
+      description: "Body {url}. https:// or webcal:// (rewritten to https). Stored 0600 in the state dir, apart from settings.json. Only the new feed is fetched; the response waits up to 5s for it, then answers with fetching: true and the fetch completes in the background."
       responses:
         "201": { description: "data: CalendarFeed[] — the list, already showing whether the new feed fetched" }
         "400": { description: "VALIDATION_ERROR — not an http(s) URL, or already subscribed" }

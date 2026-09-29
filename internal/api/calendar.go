@@ -33,8 +33,9 @@ func (s *Server) handleListCalendarFeeds(w http.ResponseWriter, _ *http.Request)
 	writeData(w, http.StatusOK, feeds)
 }
 
-// handleAddCalendarFeed subscribes and fetches at once, so the list it
-// answers with already shows whether the URL worked.
+// handleAddCalendarFeed subscribes and fetches the new feed, waiting a few
+// seconds so the list it answers with usually shows whether the URL worked;
+// a slower feed answers "fetching" rather than holding the request open.
 func (s *Server) handleAddCalendarFeed(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		URL string `json:"url"`

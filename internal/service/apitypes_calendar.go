@@ -50,6 +50,8 @@ type CalendarFeed struct {
 	Failures int    `json:"failures"`
 	// Events is how many VEVENTs the feed held at its last success.
 	Events int `json:"events"`
+	// Fetching is true while a just-added feed's first fetch is running.
+	Fetching bool `json:"fetching"`
 }
 
 // MeetingPrep is what to know walking into a meeting: for each attendee

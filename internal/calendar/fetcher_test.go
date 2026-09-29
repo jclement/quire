@@ -260,3 +260,54 @@ func TestFetchSurvivesPanics(t *testing.T) {
 		t.Errorf("a panicking fetch is recorded as a failure: %+v", status[0])
 	}
 }
+
+// Adding a feed fetches only that feed, and answers within AddWait even
+// when it is slow: behind a tunnel a long request becomes a 524 although
+// the feed saved. The slow fetch finishes in the background.
+func TestAddFetchesOnlyTheNewFeedWithoutBlocking(t *testing.T) {
+	fixture, _ := os.ReadFile("testdata/allday.ics")
+	var oldHits atomic.Int32
+	old := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		oldHits.Add(1)
+		_, _ = w.Write(fixture)
+	}))
+	t.Cleanup(old.Close)
+	release := make(chan struct{})
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		<-release
+		_, _ = w.Write(fixture)
+	}))
+	t.Cleanup(slow.Close)
+	t.Cleanup(func() { close(release) })
+
+	fetcher, _ := newTestFetcher(t, old.URL+"/a.ics")
+	fetcher.Refresh(context.Background())
+	fetcher.AddWait = 50 * time.Millisecond
+
+	began := time.Now()
+	feed, err := fetcher.Add(context.Background(), slow.URL+"/b.ics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(began); elapsed > time.Second {
+		t.Errorf("add blocked for %v on a slow feed", elapsed)
+	}
+	if oldHits.Load() != 1 {
+		t.Errorf("adding a feed re-downloaded the others: %d hits", oldHits.Load())
+	}
+	status, _ := fetcher.Status()
+	var added FeedStatus
+	for _, st := range status {
+		if st.ID == feed.ID {
+			added = st
+		}
+	}
+	if !added.Fetching {
+		t.Errorf("the new feed reports it is still fetching: %+v", added)
+	}
+	// The background loop does not start a second download of it meanwhile.
+	fetcher.fetchDue(context.Background())
+	if oldHits.Load() != 1 {
+		t.Errorf("fresh feeds were refetched: %d", oldHits.Load())
+	}
+}

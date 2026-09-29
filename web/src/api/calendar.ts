@@ -61,8 +61,26 @@ export const calendarApi = {
     ),
 };
 
+/** Polls while a just-added feed's first fetch is still running (adding
+ * answers after a few seconds rather than waiting out a slow feed). */
 export function useCalendarFeeds() {
-  return useQuery({ queryKey: calendarKeys.feeds, queryFn: calendarApi.feeds });
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: calendarKeys.feeds,
+    queryFn: async () => {
+      const previous = queryClient.getQueryData<CalendarFeed[]>(
+        calendarKeys.feeds,
+      );
+      const feeds = await calendarApi.feeds();
+      // A first fetch just landed: Today and the month have new events.
+      if (previous?.some((f) => f.fetching) && !feeds.some((f) => f.fetching)) {
+        invalidateCalendar(queryClient);
+      }
+      return feeds;
+    },
+    refetchInterval: (query) =>
+      query.state.data?.some((feed) => feed.fetching) ? 1_000 : false,
+  });
 }
 
 /** Feed list changes re-render Today and the month dots too. */

@@ -159,6 +159,7 @@ function FeedStatus({ feed }: { feed: CalendarFeed }) {
       </>
     );
   }
+  if (feed.fetching) return <>fetching…</>;
   if (!feed.last_success) return <>not fetched yet</>;
   return (
     <>

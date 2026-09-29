@@ -46,23 +46,23 @@ func (s *Service) CalendarFeeds() ([]CalendarFeed, error) {
 	out := make([]CalendarFeed, 0, len(statuses))
 	for _, st := range statuses {
 		out = append(out, CalendarFeed{
-			ID: st.ID, URL: st.Masked, Error: st.Error, Failures: st.Failures, Events: st.Events,
+			ID: st.ID, URL: st.Masked, Error: st.Error, Failures: st.Failures, Events: st.Events, Fetching: st.Fetching,
 			LastAttempt: optTime(st.LastAttempt), LastSuccess: optTime(st.LastSuccess),
 		})
 	}
 	return out, nil
 }
 
-// AddCalendarFeed subscribes to an ICS URL and fetches it at once, so the
-// response already says whether the URL works.
+// AddCalendarFeed subscribes to an ICS URL and fetches that feed, waiting
+// a few seconds so the response usually already says whether the URL works;
+// a slower first fetch is reported as fetching and finishes on its own.
 func (s *Service) AddCalendarFeed(ctx context.Context, rawURL string) ([]CalendarFeed, error) {
 	if s.Feeds == nil {
 		return nil, errNoCalendar
 	}
-	if _, err := s.Feeds.Store.Add(rawURL); err != nil {
+	if _, err := s.Feeds.Add(ctx, rawURL); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrValidation, err)
 	}
-	s.Feeds.Refresh(ctx)
 	return s.CalendarFeeds()
 }
 
