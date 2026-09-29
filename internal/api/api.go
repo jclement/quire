@@ -39,8 +39,15 @@ type Server struct {
 	UpdateCheck func() bool
 }
 
+// Router is what Routes registers onto: *http.ServeMux in production, and a
+// recorder in the route-inventory test, which needs the full list of
+// patterns to prove every one is classified (owneronly_test.go).
+type Router interface {
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+}
+
 // Routes registers all /api/v1 handlers onto mux.
-func (s *Server) Routes(mux *http.ServeMux) {
+func (s *Server) Routes(mux Router) {
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 	mux.HandleFunc("GET /api/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/yaml")

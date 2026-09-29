@@ -258,6 +258,23 @@ OAuth apps and live share links, each revocable. Disconnecting an app deletes th
 client record *and* revokes its outstanding tokens and codes, so a reconnect must
 pass consent again. Revoked tokens stay listed — an audit trail, like shares.
 
+**Administration is owner-only, and scopes do not reach it.** Credentials (tokens,
+connected apps, passkeys), share links, the audit log and settings writes (timezone,
+areas, agent guidance, email) refuse every API token and OAuth access token with a
+403, whatever its scope; only the owner in person — a passkey session, or the
+loopback auth-none listener — gets through. Scopes say how much of the *vault* a
+caller may touch, and `write` is exactly what an agent needs, so while these routes
+were "just writes" a write-scoped connector could mint itself a fresh token, revoke
+the owner's others, publish any document to the internet through a share, or
+rewrite the guidance every future agent is handed. Sharing is included because MCP
+has no sharing tool — the web UI is its only caller — and a public link is
+exfiltration with a URL. The audit log is included because agents are its subject,
+not its readers. `ownerOnlyRoutes` in internal/auth is the one declarative list
+(checked in the middleware, before scopes); internal/api's route inventory test
+fails on any registered route it has not classified, and refused attempts are
+themselves audited. The consequence for `token-only` mode is that credentials are
+managed with `quire token` on the host.
+
 ## MCP
 
 Official `modelcontextprotocol/go-sdk`, Streamable HTTP at `/mcp`, authenticated by

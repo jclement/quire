@@ -41,6 +41,13 @@ func (p Principal) Allows(scope string) bool {
 	return scope == ScopeTasks && p.Scopes[ScopeWrite]
 }
 
+// IsOwner reports whether the principal is the owner in person — a passkey
+// session, or the loopback-only auth-none listener — rather than a
+// credential the owner delegated (an API token or an OAuth client). The
+// name is the marker: only OwnerPrincipal carries it, and delegated
+// principals are always prefixed ("token:", "oauth:"), so none can collide.
+func (p Principal) IsOwner() bool { return p.Name == ownerName }
+
 // principalKey carries the authenticated principal down to handlers. It is
 // unexported so nothing outside this package can forge one into a context.
 type principalKey struct{}
@@ -175,10 +182,13 @@ func Open(path string) (*Store, error) {
 	return &Store{DB: db}, nil
 }
 
+// ownerName is the principal name of the owner in person; see IsOwner.
+const ownerName = "owner"
+
 // OwnerPrincipal is the vault owner with every scope — auth mode "none" and
 // passkey sessions act as this.
 func OwnerPrincipal() Principal {
-	return Principal{Name: "owner", Scopes: map[string]bool{ScopeRead: true, ScopeWrite: true, ScopeTasks: true}}
+	return Principal{Name: ownerName, Scopes: map[string]bool{ScopeRead: true, ScopeWrite: true, ScopeTasks: true}}
 }
 
 // Protected reports whether a path is subject to authentication at all.
@@ -249,6 +259,13 @@ func (s *Store) Middleware(mode config.AuthMode, mcpChallenge string, next http.
 			return
 		}
 
+		// Checked before scopes: no scope is enough, so a read token asking
+		// to list credentials hears the same answer as a write token.
+		if OwnerOnly(r.Method, r.URL.Path) && !principal.IsOwner() {
+			s.auditOwnerOnlyRefusal(principal, r)
+			http.Error(w, `{"error":{"code":"FORBIDDEN","message":"`+ownerOnlyMessage+`"}}`, http.StatusForbidden)
+			return
+		}
 		if scope := requiredScope(r); scope != "" && !principal.Allows(scope) {
 			http.Error(w, `{"error":{"code":"FORBIDDEN","message":"token lacks the `+scope+` scope"}}`, http.StatusForbidden)
 			return
@@ -291,6 +308,89 @@ func (w *statusWriter) WriteHeader(code int) {
 func (w *statusWriter) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
+	}
+}
+
+// ---- Owner-only routes ----
+
+// ownerOnlyMessage tells a refused agent (and whoever reads its transcript)
+// why, and where the thing it wanted is actually done.
+const ownerOnlyMessage = "this endpoint manages credentials, sharing or settings and only the owner " +
+	"signed in with a passkey may use it — API tokens and connected apps are refused whatever their scope. " +
+	"Do this in the quire web UI under Settings."
+
+// ownerOnlyRoute is one entry in ownerOnlyRoutes. An empty method means
+// every method; path matches itself and anything beneath it.
+type ownerOnlyRoute struct {
+	method string
+	path   string
+}
+
+// ownerOnlyRoutes are the administration surface: credentials, sharing,
+// settings and the audit trail. Scopes answer "may this caller touch the
+// vault", and the write scope is exactly what an agent needs — so before
+// this list, a write-scoped token or OAuth client could mint itself a
+// broader token, revoke the owner's others, disconnect apps, publish any
+// document to the internet, or rewrite its own guidance. None of that is
+// vault work; all of it is the owner's.
+//
+// The passkey routes (/api/v1/auth/passkeys, register) are not listed: they
+// sit under /api/v1/auth/, which this middleware never sees, and gate
+// themselves on the session cookie alone (HTTPConfig.hasSession) — which
+// is owner-only by construction, since no bearer carries one.
+//
+// internal/api's route inventory test classifies every registered route
+// against this list, so a new route cannot land unclassified.
+var ownerOnlyRoutes = []ownerOnlyRoute{
+	{"", "/api/v1/tokens"},         // minting/listing/revoking credentials
+	{"", "/api/v1/connected-apps"}, // OAuth grants
+	// Agents write the audit log; reading it back would let one check what
+	// the owner can see of it, and gives it nothing it needs to do vault work.
+	{"", "/api/v1/audit"},
+	// A public link is exfiltration with a URL. MCP exposes no sharing tool,
+	// so the web UI is the only legitimate caller of any of these.
+	{"", "/api/v1/shares"},
+	// Status reveals the SMTP setup; the test endpoint sends mail.
+	{"", "/api/v1/email"},
+	{http.MethodPut, "/api/v1/timezone"},
+	{http.MethodPut, "/api/v1/areas"},
+	// The guidance is appended to every agent's MCP instructions; an agent
+	// that could write it could persist instructions to all future agents.
+	{http.MethodPut, "/api/v1/agent-guidance"},
+	// Calendar feed subscriptions (arriving on the calendar-feeds branch) are
+	// configuration that fetches arbitrary URLs server-side; listed ahead of
+	// the route so it cannot land agent-reachable.
+	{"", "/api/v1/calendar/feeds"},
+}
+
+// OwnerOnly reports whether method+path is administration only the owner
+// in person may perform (see ownerOnlyRoutes).
+func OwnerOnly(method, path string) bool {
+	for _, route := range ownerOnlyRoutes {
+		if route.method != "" && route.method != method {
+			continue
+		}
+		if path == route.path || strings.HasPrefix(path, route.path+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// auditOwnerOnlyRefusal records an agent reaching for the admin surface.
+// Refusals are otherwise unaudited, but this one is exactly what the owner
+// would want to see: something tried to grant itself access.
+func (s *Store) auditOwnerOnlyRefusal(principal Principal, r *http.Request) {
+	if !Audited(principal) {
+		return
+	}
+	if err := s.RecordAudit(AuditRecord{
+		Principal: principal.Name,
+		Action:    r.Method + " " + r.URL.Path,
+		Detail:    "refused: owner-only",
+		OK:        false,
+	}); err != nil {
+		slog.Warn("audit", "err", err)
 	}
 }
 

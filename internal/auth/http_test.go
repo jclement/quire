@@ -197,6 +197,31 @@ func TestPasskeyManagementNeedsASession(t *testing.T) {
 		}
 	}
 
+	// Nor does a delegated credential of any scope: passkeys are owner-only
+	// (see ownerOnlyRoutes), and hasSession reads the cookie alone.
+	token, _, err := store.CreateToken("agent", []string{ScopeRead, ScopeWrite, ScopeTasks}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oauth, err := store.MintOAuthTokens("claude", "read write tasks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bearer := range []string{token, oauth.AccessToken} {
+		for _, tc := range []struct{ method, path string }{
+			{"GET", "/api/v1/auth/passkeys"},
+			{"DELETE", "/api/v1/auth/passkeys/1"},
+		} {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.Header.Set("Authorization", "Bearer "+bearer)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			if rec.Code != http.StatusUnauthorized {
+				t.Errorf("%s %s with a bearer = %d, want 401", tc.method, tc.path, rec.Code)
+			}
+		}
+	}
+
 	// With a session, listing works and is empty rather than null — the
 	// client types it as an array.
 	session, err := store.CreateSession()

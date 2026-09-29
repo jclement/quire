@@ -30,7 +30,7 @@ type AuditRecord struct {
 
 // Audited reports whether actions by this principal are recorded: every
 // non-owner principal is. "owner" is the browser session and auth-none.
-func Audited(p Principal) bool { return p.Name != "owner" }
+func Audited(p Principal) bool { return !p.IsOwner() }
 
 // RecordAudit appends one entry. Failures are logged by callers, never
 // surfaced to the caller of the audited action — an audit write must not
