@@ -12,7 +12,7 @@ import (
 )
 
 // schemaVersion is stored in PRAGMA user_version. Bump on any schema change.
-const schemaVersion = 5 // v5: tasks.waiting_since, task_links.ord / target_raw
+const schemaVersion = 5 // v5: tasks.waiting_since / waiting_on_raw, task_links.ord / target_raw
 
 const schema = `
 CREATE TABLE documents (
@@ -76,10 +76,13 @@ CREATE TABLE tasks (
 	completed_on TEXT NOT NULL DEFAULT '',
 	priority     INTEGER NOT NULL DEFAULT 0,
 	waiting      INTEGER NOT NULL DEFAULT 0,
-	-- waiting_since is the date after ⏳, '' for a bare marker. Who is owed
-	-- is not stored: it is resolved from task_links at read time, so a
-	-- person page written after the task still claims it.
-	waiting_since TEXT NOT NULL DEFAULT '',
+	-- waiting_since is the date after ⏳, '' for a bare marker.
+	-- waiting_on_raw is the explicit who written right after it
+	-- ("⏳ 2026-09-20 [[Dan Roe]]"), as written. Either way the who is
+	-- resolved at read time (through docnames, or task_links for the
+	-- heuristic), so a person page written after the task still claims it.
+	waiting_since  TEXT NOT NULL DEFAULT '',
+	waiting_on_raw TEXT NOT NULL DEFAULT '',
 	recur        TEXT NOT NULL DEFAULT '',
 	project_norm TEXT NOT NULL DEFAULT '', -- joins docnames for the project
 	tags_json    TEXT NOT NULL DEFAULT '[]'
@@ -127,16 +130,21 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 		return db, false, nil
 	}
 	// v3 → v4 → v5 add columns; everything else in the file (embeddings
-	// above all, which cost money to rebuild) stays.
+	// above all, which cost money to rebuild) stays. Each step is one
+	// transaction, so a failure leaves the file exactly as it was — and is
+	// reported, never answered with a rebuild that would discard the
+	// embeddings the migration exists to keep.
 	if version == 3 {
-		if err := migrateV3ToV4(db); err == nil {
-			version = 4
+		if err := migrateV3ToV4(db); err != nil {
+			return nil, false, err
 		}
+		version = 4
 	}
 	if version == 4 {
-		if err := migrateV4ToV5(db); err == nil {
-			return db, false, nil
+		if err := migrateV4ToV5(db); err != nil {
+			return nil, false, err
 		}
+		return db, false, nil
 	}
 
 	// Wrong or zero version: drop everything and rebuild. index.db is
@@ -148,15 +156,29 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 }
 
 func migrateV3ToV4(db *sql.DB) error {
-	for _, stmt := range []string{
+	return migrate(db, 4,
 		"ALTER TABLE documents ADD COLUMN area_explicit TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE documents ADD COLUMN area_from TEXT NOT NULL DEFAULT ''",
 		"UPDATE documents SET area_explicit = area",
-		"PRAGMA user_version = 4",
-	} {
-		if _, err := db.Exec(stmt); err != nil {
-			return fmt.Errorf("migrating index to v4: %w", err)
+	)
+}
+
+// migrate runs stmts and sets user_version to version in one transaction.
+// SQLite's ALTER TABLE and user_version are both transactional, so a
+// failure part-way rolls every statement back.
+func migrate(db *sql.DB, version int, stmts ...string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("migrating index to v%d: %w", version, err)
+	}
+	defer tx.Rollback()
+	for _, stmt := range append(stmts, fmt.Sprintf("PRAGMA user_version = %d", version)) {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("migrating index to v%d (delete index.db to rebuild it from the vault; embeddings will be recomputed): %w", version, err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("migrating index to v%d: %w", version, err)
 	}
 	return nil
 }
@@ -166,18 +188,13 @@ func migrateV3ToV4(db *sql.DB) error {
 // by parsing the files again, and a (mtime, size) that cannot match is the
 // scan's own signal for "read this one".
 func migrateV4ToV5(db *sql.DB) error {
-	for _, stmt := range []string{
+	return migrate(db, 5,
 		"ALTER TABLE tasks ADD COLUMN waiting_since TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE tasks ADD COLUMN waiting_on_raw TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE task_links ADD COLUMN target_raw TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE task_links ADD COLUMN ord INTEGER NOT NULL DEFAULT -1",
 		"UPDATE documents SET size = -1, sha256 = ''",
-		"PRAGMA user_version = 5",
-	} {
-		if _, err := db.Exec(stmt); err != nil {
-			return fmt.Errorf("migrating index to v5: %w", err)
-		}
-	}
-	return nil
+	)
 }
 
 func recreate(db *sql.DB) error {

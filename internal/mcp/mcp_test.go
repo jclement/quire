@@ -333,7 +333,7 @@ func TestWaitingOnAndPersonContext(t *testing.T) {
 	call(t, s, "create_document", map[string]any{"type": "person", "title": "Frances Bagley"})
 
 	task := call(t, s, "create_task", map[string]any{"text": "Get SOC evidence", "waiting_on": "Frances Bagley"})
-	if task["text"] != "Get SOC evidence [[Frances Bagley]]" || task["waiting"] != true {
+	if task["text"] != "Get SOC evidence" || task["waiting"] != true {
 		t.Errorf("created = %v", task)
 	}
 	waitingFor, _ := task["waiting_for"].(map[string]any)
@@ -351,10 +351,12 @@ func TestWaitingOnAndPersonContext(t *testing.T) {
 		t.Errorf("age = %v", age)
 	}
 
-	// edit_task can name the who later, and unmarking clears it all.
-	plain := call(t, s, "create_task", map[string]any{"text": "Contract back"})
+	// edit_task can name the who later — over a person the line already
+	// links — without changing the task's words or id.
+	plain := call(t, s, "create_task", map[string]any{"text": "Contract back via [[Dan Roe]]"})
 	edited := call(t, s, "edit_task", map[string]any{"id": plain["id"], "waiting_on": "Frances Bagley"})
-	if edited["text"] != "Contract back [[Frances Bagley]]" || edited["waiting"] != true {
+	who, _ := edited["waiting_for"].(map[string]any)
+	if edited["id"] != plain["id"] || edited["waiting"] != true || who["on"] != "Frances Bagley" {
 		t.Errorf("edited = %v", edited)
 	}
 }

@@ -15,6 +15,9 @@ export interface TaskLine {
   waiting: boolean;
   /** The date after ⏳ — when the wait began — or "" for a bare marker. */
   waitingSince: string;
+  /** The explicit who: the wikilink right after ⏳ and its date, verbatim
+   * ("[[Dan Roe]]"), or "". It outranks any other link on the line. */
+  waitingOn: string;
   /** 0 none, 1 high, 2 medium, 3 low — the scanner's numbering. */
   priority: 0 | 1 | 2 | 3;
   /** "every week", "every 3 months when done", or "". */
@@ -25,6 +28,8 @@ const CHECKBOX = /^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\]\s?(.*)$/;
 const RECUR =
   /🔁\s*(every(?:\s+\d+)?\s+(?:day|week|month|year)s?(?:\s+when\s+done)?)/;
 const DATE = /^\s*(\d{4}-\d{2}-\d{2})/;
+/** The explicit who: a wikilink immediately after ⏳ and its date. */
+const WHO = /^\s*(\[\[[^[\]]+\]\])/;
 
 export const PRIORITY_MARK = { 1: "⏫", 2: "🔼", 3: "🔽" } as const;
 
@@ -42,6 +47,7 @@ export function parseTaskLine(line: string): TaskLine | null {
     completedOn: "",
     waiting: false,
     waitingSince: "",
+    waitingOn: "",
     priority: 0,
     recur: "",
   };
@@ -66,9 +72,23 @@ export function parseTaskLine(line: string): TaskLine | null {
   out.due = dated("📅");
   out.defer = dated("🛫");
   out.completedOn = dated("✅");
-  if (text.includes("⏳")) {
+  const waitAt = text.indexOf("⏳");
+  if (waitAt >= 0) {
+    // The ⏳ slot is marker, optional date, optional explicit who — the
+    // same shape as the server's scanner (extractWaiting).
     out.waiting = true;
-    out.waitingSince = dated("⏳");
+    let after = text.slice(waitAt + "⏳".length);
+    const date = DATE.exec(after);
+    if (date) {
+      out.waitingSince = date[1]!;
+      after = after.slice(date[0].length);
+    }
+    const who = WHO.exec(after);
+    if (who) {
+      out.waitingOn = who[1]!;
+      after = after.slice(who[0].length);
+    }
+    text = text.slice(0, waitAt) + after;
   }
   for (const level of [1, 2, 3] as const) {
     const mark = PRIORITY_MARK[level];
@@ -89,7 +109,9 @@ export function serializeTaskLine(task: TaskLine): string {
   if (task.due) parts.push(`📅 ${task.due}`);
   if (task.defer) parts.push(`🛫 ${task.defer}`);
   if (task.waiting)
-    parts.push(task.waitingSince ? `⏳ ${task.waitingSince}` : "⏳");
+    parts.push(
+      ["⏳", task.waitingSince, task.waitingOn].filter(Boolean).join(" "),
+    );
   if (task.recur) parts.push(`🔁 ${task.recur}`);
   if (task.completedOn) parts.push(`✅ ${task.completedOn}`);
   return `${task.prefix}[${task.done ? "x" : " "}] ${parts.filter(Boolean).join(" ")}`;

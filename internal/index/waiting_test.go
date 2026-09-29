@@ -175,7 +175,82 @@ func TestMigrateV4ToV5(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM embeddings").Scan(&embeddings); err != nil || embeddings != 1 {
 		t.Errorf("embeddings lost: %d %v", embeddings, err)
 	}
-	if _, err := db.Exec("SELECT waiting_since FROM tasks; SELECT ord, target_raw FROM task_links"); err != nil {
+	if _, err := db.Exec("SELECT waiting_since, waiting_on_raw FROM tasks; SELECT ord, target_raw FROM task_links"); err != nil {
 		t.Errorf("new columns missing: %v", err)
+	}
+}
+
+// An explicit who — a link right after ⏳ — beats the heuristic, even when
+// a person is linked earlier on the line; and it may name someone with no
+// page yet.
+func TestExplicitWaitingOnWins(t *testing.T) {
+	ix := waitingIndex(t, map[string]string{
+		"people/frances-bagley.md": "---\ntype: person\n---\n# Frances Bagley\n",
+		"people/dan-roe.md":        "---\ntype: person\naliases: [Dan]\n---\n# Dan Roe\n",
+		"notes/w.md": "# W\n\n" +
+			"- [ ] Ask [[Frances Bagley]] for the CFO intro ⏳ 2026-09-20 [[Dan]]\n" +
+			"- [ ] Ask [[Frances Bagley]] about pricing ⏳ [[Nobody Yet]]\n",
+	})
+	rows, err := ix.Tasks(ViewWaiting, "2026-09-29", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]WaitingOn{}
+	for _, r := range rows {
+		got[r.Text] = r.WaitingOn
+	}
+	if w := got["Ask [[Frances Bagley]] for the CFO intro"]; w != (WaitingOn{"Dan Roe", "people/dan-roe.md", "person"}) {
+		t.Errorf("explicit who = %+v", w)
+	}
+	if w := got["Ask [[Frances Bagley]] about pricing"]; w != (WaitingOn{Name: "Nobody Yet"}) {
+		t.Errorf("dangling explicit who = %+v", w)
+	}
+	frances, _ := ix.WaitingOnDoc("people/frances-bagley.md")
+	dan, _ := ix.WaitingOnDoc("people/dan-roe.md")
+	if len(frances) != 0 || len(dan) != 1 {
+		t.Errorf("rollups: frances %d, dan %d", len(frances), len(dan))
+	}
+}
+
+// A migration that fails partway rolls back whole: the file stays a
+// readable v4 with its embeddings, and Open says so rather than falling
+// through to a rebuild that would throw the embeddings away.
+func TestMigrateV4ToV5FailureRollsBack(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "index.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		"CREATE TABLE documents (path TEXT PRIMARY KEY, size INTEGER, sha256 TEXT)",
+		"CREATE TABLE tasks (id TEXT PRIMARY KEY)",
+		// Already has ord: the third ALTER fails after two have run.
+		"CREATE TABLE task_links (task_id TEXT, target_norm TEXT, ord INTEGER)",
+		"CREATE TABLE embeddings (path TEXT)",
+		"INSERT INTO embeddings VALUES ('a.md')",
+		"PRAGMA user_version = 4",
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	if _, _, err := Open(path); err == nil {
+		t.Fatal("a failed migration should be reported")
+	}
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var version, embeddings int
+	_ = db.QueryRow("PRAGMA user_version").Scan(&version)
+	_ = db.QueryRow("SELECT COUNT(*) FROM embeddings").Scan(&embeddings)
+	if version != 4 || embeddings != 1 {
+		t.Errorf("after rollback: version %d, embeddings %d", version, embeddings)
+	}
+	if _, err := db.Exec("SELECT waiting_since FROM tasks"); err == nil {
+		t.Error("the first ALTER should have been rolled back")
 	}
 }

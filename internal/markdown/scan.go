@@ -36,12 +36,17 @@ type Task struct {
 	Priority    int // 0 none, 1 high, 2 medium, 3 low
 	Waiting     bool
 	// WaitingSince is the date after ⏳ ("" for a bare marker): how long
-	// the thing has been owed. Who owes it is not grammar — it is the
-	// first person or company the line already links (see the index).
+	// the thing has been owed.
 	WaitingSince string
-	Recur        string // recurrence spec, e.g. "every year" / "every 3 months when done"
-	Tags         []string
-	Links        []Link // wikilinks inside the task text
+	// WaitingOn is the explicit who: the target of a wikilink immediately
+	// after ⏳ and its date ("⏳ 2026-09-20 [[Dan Roe]]"). "" when there is
+	// none, and the index falls back to the first person or company the
+	// line links. Like the date it is kept out of Text (so re-assigning who
+	// keeps the id) but stays in Links.
+	WaitingOn string
+	Recur     string // recurrence spec, e.g. "every year" / "every 3 months when done"
+	Tags      []string
+	Links     []Link // wikilinks inside the task text
 }
 
 // Doc is everything the scanner extracts from one document.
@@ -63,8 +68,10 @@ var (
 	// vocabulary is deliberately tiny — see DESIGN.md "Tasks".
 	recurRe = regexp.MustCompile(`🔁\s*(every(?:\s+\d+)?\s+(?:day|week|month|year)s?(?:\s+when\s+done)?)`)
 	h1Re    = regexp.MustCompile(`^# (.+)$`)
-	dateRe  = regexp.MustCompile(`^\s*(\d{4}-\d{2}-\d{2})`)
-	fence   = regexp.MustCompile("^\\s*(```|~~~)")
+	// whoRe is the explicit-who slot: a wikilink right after ⏳ [date].
+	whoRe  = regexp.MustCompile(`^\s*\[\[([^\[\]|]+)(?:\|([^\[\]]+))?\]\]`)
+	dateRe = regexp.MustCompile(`^\s*(\d{4}-\d{2}-\d{2})`)
+	fence  = regexp.MustCompile("^\\s*(```|~~~)")
 )
 
 // Scan parses a document's raw bytes. docPath seeds task IDs; bodyOffset
@@ -153,9 +160,10 @@ func parseTask(docPath string, line int, done bool, rawText string) Task {
 	text = extractDated(text, markDue, &t.Due)
 	text = extractDated(text, markDefer, &t.Defer)
 	text = extractDated(text, markDone, &t.CompletedOn)
+	var who *Link
 	if strings.Contains(text, markWaiting) {
 		t.Waiting = true
-		text = extractDated(text, markWaiting, &t.WaitingSince)
+		text, who = extractWaiting(text, &t.WaitingSince)
 	}
 	switch {
 	case strings.Contains(text, markPrioHigh):
@@ -171,6 +179,11 @@ func parseTask(docPath string, line int, done bool, rawText string) Task {
 	}
 	for _, lm := range wikilinkRe.FindAllStringSubmatch(text, -1) {
 		t.Links = append(t.Links, Link{Raw: strings.TrimSpace(lm[1]), Display: strings.TrimSpace(lm[2]), Line: line})
+	}
+	if who != nil {
+		who.Line = line
+		t.WaitingOn = who.Raw
+		t.Links = append(t.Links, *who)
 	}
 
 	t.Text = strings.Join(strings.Fields(text), " ")
@@ -193,6 +206,26 @@ func extractDated(text, marker string, dst *string) string {
 		return text[:idx] + after[cut:]
 	}
 	return text[:idx] + after
+}
+
+// extractWaiting removes `⏳ [date] [[[who]]]` from text, storing the date
+// into since and returning the explicit who link when the slot holds one.
+func extractWaiting(text string, since *string) (string, *Link) {
+	idx := strings.Index(text, markWaiting)
+	if idx < 0 {
+		return text, nil
+	}
+	after := text[idx+len(markWaiting):]
+	if m := dateRe.FindStringSubmatchIndex(after); m != nil {
+		*since = after[m[2]:m[3]]
+		after = after[m[1]:]
+	}
+	var who *Link
+	if m := whoRe.FindStringSubmatch(after); m != nil {
+		who = &Link{Raw: strings.TrimSpace(m[1]), Display: strings.TrimSpace(m[2])}
+		after = after[len(m[0]):]
+	}
+	return text[:idx] + after, who
 }
 
 // TaskID derives the stable content hash for a task: the normalized display

@@ -15,6 +15,7 @@ describe("task line grammar", () => {
       completedOn: "2026-09-02",
       waiting: true,
       waitingSince: "",
+      waitingOn: "",
       priority: 1,
       recur: "every week",
     });
@@ -46,6 +47,21 @@ describe("task line grammar", () => {
     expect(t.text).toBe("SOC evidence [[Frances Bagley]]");
     expect(serializeTaskLine(t)).toBe(
       "- [ ] SOC evidence [[Frances Bagley]] 📅 2026-10-01 ⏳ 2026-09-20",
+    );
+  });
+
+  test("the explicit who after ⏳ stays in its slot", () => {
+    const t = parseTaskLine(
+      "- [ ] Ask [[Frances Bagley]] for the intro ⏳ 2026-09-20 [[Dan Roe]] 📅 2026-10-01",
+    )!;
+    expect(t.text).toBe("Ask [[Frances Bagley]] for the intro");
+    expect(t.waitingOn).toBe("[[Dan Roe]]");
+    expect(serializeTaskLine(t)).toBe(
+      "- [ ] Ask [[Frances Bagley]] for the intro 📅 2026-10-01 ⏳ 2026-09-20 [[Dan Roe]]",
+    );
+    // Clearing waiting drops the who with it.
+    expect(serializeTaskLine({ ...t, waiting: false })).toBe(
+      "- [ ] Ask [[Frances Bagley]] for the intro 📅 2026-10-01",
     );
   });
 });

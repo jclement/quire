@@ -120,8 +120,11 @@ type TaskRow struct {
 	Waiting     bool
 	// WaitingSince is the date after ⏳ ("" when bare or not waiting).
 	WaitingSince string
-	// WaitingOn is who a waiting task is owed by: the first link on the
-	// line that names a person or company, else the first link at all.
+	// WaitingOnRaw is the explicit who written after ⏳, "" when none.
+	WaitingOnRaw string
+	// WaitingOn is who a waiting task is owed by: the explicit who after
+	// ⏳ when there is one, else the first link on the line that names a
+	// person or company, else the first link at all.
 	// Empty when the task is not waiting or links nothing.
 	WaitingOn   WaitingOn
 	Recur       string
@@ -317,7 +320,7 @@ func (ix *Index) TasksCompletedBetween(fromDay, toDay string) (map[string]int, e
 
 const taskSelect = `
 	SELECT t.id, t.doc_path, COALESCE(d.title, t.doc_path), COALESCE(d.type, ''), t.line, t.text, t.done,
-	       t.due, t.defer_date, t.completed_on, t.priority, t.waiting, t.waiting_since, t.recur, t.raw_text, t.tags_json,
+	       t.due, t.defer_date, t.completed_on, t.priority, t.waiting, t.waiting_since, t.waiting_on_raw, t.recur, t.raw_text, t.tags_json,
 	       COALESCE((
 	           SELECT MIN(n.path) FROM docnames n
 	           WHERE n.name IN (SELECT tl.target_norm FROM task_links tl WHERE tl.task_id = t.id UNION SELECT t.project_norm)
@@ -950,7 +953,7 @@ func (ix *Index) collectTasks(rows *sql.Rows) ([]TaskRow, error) {
 		var t TaskRow
 		var tagsJSON string
 		if err := rows.Scan(&t.ID, &t.DocPath, &t.DocTitle, &t.DocType, &t.Line, &t.Text, &t.Done,
-			&t.Due, &t.Defer, &t.CompletedOn, &t.Priority, &t.Waiting, &t.WaitingSince, &t.Recur, &t.RawText, &tagsJSON, &t.ProjectPath); err != nil {
+			&t.Due, &t.Defer, &t.CompletedOn, &t.Priority, &t.Waiting, &t.WaitingSince, &t.WaitingOnRaw, &t.Recur, &t.RawText, &tagsJSON, &t.ProjectPath); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(tagsJSON), &t.Tags); err != nil {
@@ -1023,6 +1026,13 @@ func (ix *Index) resolveWaitingOn(tasks []TaskRow) error {
 			tasks[i].WaitingOn = who
 		}
 	}
+	// An explicit who overrides the heuristic outright. One lookup each:
+	// they are written on purpose, so there are few of them.
+	for i, t := range tasks {
+		if t.Waiting && t.WaitingOnRaw != "" {
+			tasks[i].WaitingOn = ix.resolveWho(t.WaitingOnRaw)
+		}
+	}
 	// A line that names nobody, sitting on a person's or company's own
 	// page, is owed by that page: "⏳ intro to their CFO" on Frances's
 	// page needs no [[Frances]].
@@ -1032,6 +1042,20 @@ func (ix *Index) resolveWaitingOn(tasks []TaskRow) error {
 		}
 	}
 	return nil
+}
+
+// resolveWho names the document a raw link target reaches, or just the
+// name as written when it reaches none.
+func (ix *Index) resolveWho(raw string) WaitingOn {
+	who := WaitingOn{Name: strings.TrimSpace(stripHeading(raw))}
+	path := ix.ResolveLink(linkTarget(raw))
+	if path == "" {
+		return who
+	}
+	if row, err := ix.GetDocMeta(path); err == nil {
+		who = WaitingOn{Name: row.Title, Path: row.Path, Type: row.Type}
+	}
+	return who
 }
 
 // isWho reports whether a document type can owe you something.

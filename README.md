@@ -279,10 +279,14 @@ rollup in one call through the `person_context` tool.
 ### Tasks: waiting, someday, triage
 
 `⏳ 2026-09-20` means waiting since the 20th; a bare `⏳` still works, with no
-age. Who you are waiting on is the first person or company the line already
-links — `Get SOC evidence from [[Frances Bagley]] ⏳ 2026-09-20` is Frances's —
-so there is nothing new to type. Marking a task waiting from the app or an
-agent stamps today; unmarking removes the date too. **Waiting** groups by who,
+age. Who you are waiting on is usually the first person or company the line
+already links — `Get SOC evidence from [[Frances Bagley]] ⏳ 2026-09-20` is
+Frances's — so there is nothing new to type. When the line mentions someone
+else, name the who explicitly right after the marker:
+`Ask [[Frances Bagley]] for the CFO intro ⏳ 2026-09-20 [[Dan Roe]]` is Dan's.
+Marking a task waiting from the app or an agent stamps today; unmarking
+removes the date and the explicit who too. A repeating wait (`🔁`) starts its
+next occurrence's clock on the day the last one was done. **Waiting** groups by who,
 oldest first, with each wait's age; anything past a week is red. The weekly
 review and the morning digest lead with those stale waits.
 

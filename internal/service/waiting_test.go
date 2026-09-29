@@ -58,13 +58,15 @@ func TestCreateTaskWaitingOnAName(t *testing.T) {
 		"people/frances-bagley.md": "---\ntype: person\naliases: [Frances]\n---\n# Frances Bagley\n",
 	})
 
-	// An alias resolves, and the link is written with the document's title.
+	// An alias resolves, and the who is written into the slot after ⏳,
+	// under the document's title; the task's words are left alone.
 	task, err := svc.CreateTaskWith(TaskSpec{Text: "Get SOC evidence", WaitingOn: "frances"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if task.Text != "Get SOC evidence [[Frances Bagley]]" {
-		t.Errorf("text = %q", task.Text)
+	f, _ := svc.Vault.Read(task.DocPath)
+	if task.Text != "Get SOC evidence" || !strings.Contains(string(f.Raw), "- [ ] Get SOC evidence ⏳ 2026-09-01 [[Frances Bagley]]") {
+		t.Errorf("text = %q, file:\n%s", task.Text, f.Raw)
 	}
 	w := task.WaitingFor
 	if !task.Waiting || w == nil || w.Since == nil || *w.Since != "2026-09-01" ||
@@ -72,39 +74,72 @@ func TestCreateTaskWaitingOnAName(t *testing.T) {
 		t.Errorf("waiting_for = %+v", w)
 	}
 
-	// Already linked on the line: no second link.
-	again, err := svc.CreateTaskWith(TaskSpec{Text: "Ask [[Frances]] for the pen test", WaitingOn: "Frances Bagley"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if again.Text != "Ask [[Frances]] for the pen test" {
-		t.Errorf("duplicated the link: %q", again.Text)
-	}
-
 	// A name with no page yet is still a who — it lands on the Unwritten list.
 	unwritten, err := svc.CreateTaskWith(TaskSpec{Text: "Quote", WaitingOn: "Dan Roe"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if unwritten.Text != "Quote [[Dan Roe]]" || unwritten.WaitingFor.On == nil || *unwritten.WaitingFor.On != "Dan Roe" {
-		t.Errorf("unwritten who = %q %+v", unwritten.Text, unwritten.WaitingFor)
+	if unwritten.WaitingFor.On == nil || *unwritten.WaitingFor.On != "Dan Roe" || unwritten.WaitingFor.OnPath != nil {
+		t.Errorf("unwritten who = %+v", unwritten.WaitingFor)
 	}
 }
 
-func TestEditTaskWaitingOn(t *testing.T) {
+// The review's case: the line already links someone, and waiting_on names
+// someone else. The named who must win, and re-assigning must move it —
+// keeping the id and the date the wait began.
+func TestEditTaskWaitingOnOverridesTheLine(t *testing.T) {
 	svc := newTestService(t)
 	writeVault(t, svc, map[string]string{
-		"companies/acme.md": "# Acme\n",
-		"notes/w.md":        "# W\n\n- [ ] Signed MSA\n",
+		"people/frances-bagley.md": "---\ntype: person\n---\n# Frances Bagley\n",
+		"companies/acme.md":        "# Acme\n",
+		"notes/w.md":               "# W\n\n- [ ] Ask [[Frances Bagley]] for the CFO intro\n",
 	})
 	doc, _ := svc.GetDocument("notes/w.md")
-	who := "Acme"
-	task, err := svc.EditTask(doc.Tasks[0].ID, TaskEdit{WaitingOn: &who})
+	dan := "Dan Roe"
+	task, err := svc.EditTask(doc.Tasks[0].ID, TaskEdit{WaitingOn: &dan})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if task.Text != "Signed MSA [[Acme]]" || !task.Waiting || task.WaitingFor.OnPath == nil {
-		t.Errorf("task = %+v / %+v", task, task.WaitingFor)
+	if task.WaitingFor == nil || task.WaitingFor.On == nil || *task.WaitingFor.On != "Dan Roe" {
+		t.Fatalf("waiting on = %+v", task.WaitingFor)
+	}
+	if task.ID != doc.Tasks[0].ID || task.Text != "Ask [[Frances Bagley]] for the CFO intro" {
+		t.Errorf("naming who changed the task: %q %s", task.Text, task.ID)
+	}
+
+	// Re-assign a few days later: the slot moves, the date stays.
+	svc.Now = func() time.Time { return fixedNow.AddDate(0, 0, 3) }
+	acme := "Acme"
+	moved, err := svc.EditTask(task.ID, TaskEdit{WaitingOn: &acme})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, _ := svc.Vault.Read("notes/w.md")
+	if !strings.Contains(string(f.Raw), "- [ ] Ask [[Frances Bagley]] for the CFO intro ⏳ 2026-09-01 [[Acme]]\n") {
+		t.Errorf("re-assign should replace the who in place:\n%s", f.Raw)
+	}
+	if moved.ID != task.ID || *moved.WaitingFor.OnPath != "companies/acme.md" {
+		t.Errorf("moved = %s %+v", moved.ID, moved.WaitingFor)
+	}
+
+	// Unmarking takes marker, date and who together.
+	no := false
+	if _, err := svc.EditTask(moved.ID, TaskEdit{Waiting: &no}); err != nil {
+		t.Fatal(err)
+	}
+	f, _ = svc.Vault.Read("notes/w.md")
+	if !strings.Contains(string(f.Raw), "- [ ] Ask [[Frances Bagley]] for the CFO intro\n") {
+		t.Errorf("unmarking left something:\n%s", f.Raw)
+	}
+}
+
+// A ⏳ date in the future (typed ahead, or a clock skew) is a wait that has
+// not started, not a negative one.
+func TestFutureWaitingDateIsZeroDays(t *testing.T) {
+	since := "2026-09-05"
+	tasks := ageTasks([]Task{{Waiting: true, WaitingFor: &WaitingFor{Since: &since}}}, "2026-09-01")
+	if d := tasks[0].WaitingFor.Days; d == nil || *d != 0 {
+		t.Errorf("days = %v", d)
 	}
 }
 

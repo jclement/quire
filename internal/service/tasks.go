@@ -28,8 +28,9 @@ type TaskEdit struct {
 	// date, clearing removes marker and date.
 	Waiting *bool `json:"waiting"`
 	// WaitingOn names who the task is waiting on — a person or company by
-	// name or alias — linking them on the line if they are not already,
-	// and marking the task waiting.
+	// name or alias — written as the explicit who right after ⏳
+	// ("⏳ 2026-09-20 [[Dan Roe]]"), replacing any previous one, and marks
+	// the task waiting.
 	WaitingOn *string `json:"waiting_on"`
 	// Recur sets the 🔁 spec ("every month", "every 3 weeks when done");
 	// an empty string stops it repeating.
@@ -154,8 +155,9 @@ func (s *Service) taskLine(spec TaskSpec, attachment string) (string, error) {
 	if scanned := markdown.Scan("", []byte("- [ ] "+text)); len(scanned.Tasks) != 1 || strings.TrimSpace(scanned.Tasks[0].Text) == "" {
 		return "", fmt.Errorf("%w: task text needs words, not only markers", ErrValidation)
 	}
+	waitingWho := ""
 	if strings.TrimSpace(spec.WaitingOn) != "" {
-		spec.Text, spec.Waiting = s.withWhoLink(spec.Text, spec.WaitingOn), true
+		waitingWho, spec.Waiting = " "+s.whoLink(spec.WaitingOn), true
 	}
 
 	line := "- [ ] " + text
@@ -172,7 +174,7 @@ func (s *Service) taskLine(spec TaskSpec, attachment string) (string, error) {
 		line += " 🛫 " + deferDate
 	}
 	if spec.Waiting {
-		line += " ⏳ " + s.today()
+		line += " ⏳ " + s.today() + waitingWho
 	}
 	if spec.Recur != "" {
 		line += " 🔁 " + spec.Recur
@@ -378,11 +380,7 @@ func (s *Service) editTask(id string, edit TaskEdit) (Task, error) {
 		line = setTaskText(line, row.Text, strings.TrimSpace(*edit.Text))
 	}
 	if edit.WaitingOn != nil && strings.TrimSpace(*edit.WaitingOn) != "" {
-		current := row.Text
-		if edit.Text != nil {
-			current = strings.TrimSpace(*edit.Text)
-		}
-		line = s.waitOn(line, current, *edit.WaitingOn)
+		line = s.waitOn(line, *edit.WaitingOn)
 	}
 	lines[lineIdx] = line
 

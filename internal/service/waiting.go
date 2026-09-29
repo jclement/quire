@@ -1,10 +1,10 @@
 // Waiting-for: what am I waiting on, from whom, and for how long.
 //
-// The grammar is one marker and a date — `⏳ 2026-09-20` — and nothing
-// more. Who is owed is not new syntax: it is the [[wikilink]] people already
-// write on the line, resolved by the index (see index.resolveWaitingOn). Age
-// is reckoned here because only the service knows what "today" is in the
-// owner's zone.
+// The grammar is one marker, a date and an optional who —
+// `⏳ 2026-09-20 [[Dan Roe]]`. Without that explicit who, it is the
+// [[wikilink]] people already write on the line, resolved by the index (see
+// index.resolveWaitingOn). Age is reckoned here because only the service
+// knows what "today" is in the owner's zone.
 package service
 
 import (
@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/jclement/quire/internal/index"
-	"github.com/jclement/quire/internal/markdown"
 )
 
 // StaleWaitingDays is how long a wait may run before it is flagged for
@@ -57,7 +56,9 @@ func ageTasks(tasks []Task, today string) []Task {
 		}
 		// Both dates are UTC midnights, so the division is exact — no DST
 		// hour to round away.
-		days := int(now.Sub(since).Hours() / 24)
+		// A date ahead of today is a wait that has not started, not a
+		// negative one.
+		days := max(0, int(now.Sub(since).Hours()/24))
 		w.Days = &days
 		w.Stale = days > StaleWaitingDays
 	}
@@ -123,13 +124,14 @@ func groupWaiting(rows []index.TaskRow, tasks []Task) []WaitingGroup {
 	return groups
 }
 
-// waitingMarkRe is the ⏳ marker with its date, and the space before it.
-var waitingMarkRe = regexp.MustCompile(`\s*⏳(?:\s*\d{4}-\d{2}-\d{2})?`)
+// waitingMarkRe is the whole ⏳ slot — marker, optional date (group 1),
+// optional explicit who link — with the space before it.
+var waitingMarkRe = regexp.MustCompile(`\s*⏳(?:\s*(\d{4}-\d{2}-\d{2}))?(?:\s*\[\[[^\[\]]+\]\])?`)
 
 // setWaiting adds or removes the ⏳ marker. Adding stamps today, so the
 // wait has an age from the moment it starts; a task already waiting keeps
 // its date, because re-marking it did not restart the wait. Removing takes
-// the date with it.
+// the date and any explicit who with it.
 func setWaiting(line string, waiting bool, today string) string {
 	has := strings.Contains(line, "⏳")
 	switch {
@@ -141,39 +143,34 @@ func setWaiting(line string, waiting bool, today string) string {
 	return line
 }
 
-// withWhoLink makes sure the task text names who it is waiting on, adding
-// [[Name]] when no link on the line already resolves to them. A name with
-// a page is written as that page's title (so an alias typed by an agent
-// becomes the canonical link); a name without one is written as given,
-// and joins the Unwritten list like any other dangling link.
-func (s *Service) withWhoLink(text, name string) string {
+// whoLink is the wikilink for a who named by an agent or the UI: the
+// document's title when the name (or an alias) reaches one, the name as
+// given when it does not — a dangling link joins the Unwritten list like
+// any other.
+func (s *Service) whoLink(name string) string {
 	name = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(name), "[["), "]]"))
-	if name == "" {
-		return text
-	}
-	path := s.Index.ResolveLink(name)
-	title := name
-	if path != "" {
+	if path := s.Index.ResolveLink(name); path != "" {
 		if row, err := s.Index.GetDocMeta(path); err == nil && row.Title != "" {
-			title = row.Title
+			name = row.Title
 		}
 	}
-	scanned := markdown.Scan("", []byte("- [ ] "+text+"\n"))
-	if len(scanned.Tasks) == 1 {
-		for _, link := range scanned.Tasks[0].Links {
-			if strings.EqualFold(link.Raw, name) || strings.EqualFold(link.Raw, title) ||
-				(path != "" && s.Index.ResolveLink(link.Raw) == path) {
-				return text
-			}
-		}
-	}
-	return text + " [[" + title + "]]"
+	return "[[" + name + "]]"
 }
 
-// waitOn is EditTask's waiting_on: name the who on the line and mark it
-// waiting. currentText is the task's words as they stand after any rename
-// in the same edit.
-func (s *Service) waitOn(line, currentText, name string) string {
-	line = setTaskText(line, currentText, s.withWhoLink(currentText, name))
-	return setWaiting(line, true, s.today())
+// waitOn is EditTask's waiting_on: write who into the explicit slot right
+// after ⏳ and its date, which outranks any link elsewhere on the line.
+// An existing slot is replaced in place and its date kept — re-assigning
+// who does not restart the wait; a task not yet waiting is stamped today.
+// The task's words are untouched, so its id is too.
+func (s *Service) waitOn(line, name string) string {
+	link := s.whoLink(name)
+	m := waitingMarkRe.FindStringSubmatchIndex(line)
+	if m == nil {
+		return line + " ⏳ " + s.today() + " " + link
+	}
+	since := s.today()
+	if m[2] >= 0 {
+		since = line[m[2]:m[3]]
+	}
+	return line[:m[0]] + " ⏳ " + since + " " + link + line[m[1]:]
 }

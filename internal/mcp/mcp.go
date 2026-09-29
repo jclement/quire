@@ -61,8 +61,9 @@ Working rules:
 - Relationships are wikilinks: [[Sarah Chen]] in prose, or frontmatter keys
   (company, people, project). Both are indexed, so either creates a backlink.
 - Tasks are markdown checkboxes with an emoji grammar: 📅 due, 🛫 defer,
-  ⏫/🔼/🔽 priority, ⏳ waiting (⏳ 2026-09-20 = waiting since then; who is the
-  first [[person]] or [[company]] linked on the line), 🔁 recurrence, ✅
+  ⏫/🔼/🔽 priority, ⏳ waiting (⏳ 2026-09-20 [[Dan Roe]] = waiting on Dan
+  since then; without a link right after it, who is the first [[person]] or
+  [[company]] linked on the line), 🔁 recurrence, ✅
   completion, and #someday to park one. Toggle them with complete_task rather
   than rewriting the line.
 - Start with today for "what should I work on", and person_context before a
@@ -187,7 +188,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 	// Task management — the "agent runs my todos" token stops here.
 	if allows(auth.ScopeTasks) {
 		sdk.AddTool(s, &sdk.Tool{Name: "create_task", Annotations: additive,
-			Description: "Create a task. With no path it lands in today's daily note (under its Captured section); pass a path to file it on a project, person or meeting page instead, optionally under a named section. due = deadline, defer = hide until then; both take YYYY-MM-DD or a natural form (today, tomorrow, fri, +3d) and are resolved server-side — an unparseable date is an error, never a guess. priority is 0 none / 1 high / 2 medium / 3 low, waiting marks it as delegated (stamped with today's date, so it ages), waiting_on names who it is owed by (a person or company by name — linked on the line if it is not already, and implies waiting), and recur repeats it (\"every month\", \"every 3 weeks when done\"). The text may carry #tags and [[wikilinks]]; a task also inherits whatever its document is about, so an action item on a meeting page belongs to that meeting's people without naming them again."},
+			Description: "Create a task. With no path it lands in today's daily note (under its Captured section); pass a path to file it on a project, person or meeting page instead, optionally under a named section. due = deadline, defer = hide until then; both take YYYY-MM-DD or a natural form (today, tomorrow, fri, +3d) and are resolved server-side — an unparseable date is an error, never a guess. priority is 0 none / 1 high / 2 medium / 3 low, waiting marks it as delegated (stamped with today's date, so it ages), waiting_on names who it is owed by (a person or company by name, written right after ⏳ as the explicit who, which outranks any other link on the line; implies waiting), and recur repeats it (\"every month\", \"every 3 weeks when done\"). The text may carry #tags and [[wikilinks]]; a task also inherits whatever its document is about, so an action item on a meeting page belongs to that meeting's people without naming them again."},
 			t.createTask)
 		sdk.AddTool(s, &sdk.Tool{Name: "complete_task", Annotations: idempotent,
 			Description: "Mark a task complete by id (from list_tasks, today, or get_document). Edits the source checkbox surgically; a recurring task mints its next occurrence. Completing an already-complete task succeeds and changes nothing — safe to retry."},
@@ -196,7 +197,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 			Description: "Write the missing next occurrence of a repeating task that was completed outside quire — in an editor, or by hand in the file — keeping the gap between its defer and due dates. week_review lists the ones needing it. Refuses anything that is not a completed repeating task, so it cannot duplicate live work."},
 			t.restoreRecurrence)
 		sdk.AddTool(s, &sdk.Tool{Name: "edit_task", Annotations: idempotent,
-			Description: "Change a task by id, leaving every field you do not pass alone. due and defer take natural dates and an empty string clears them; priority is 0 none / 1 high / 2 medium / 3 low; waiting toggles the delegated marker (marking stamps today's date, clearing removes it); waiting_on names who it is waiting on and links them; recur sets or clears the repeat (\"every month\"); text rewrites the task's words while keeping its markers — note that changing the text changes the task's id, which the response carries. This is how to snooze, delegate, or fix a typo."},
+			Description: "Change a task by id, leaving every field you do not pass alone. due and defer take natural dates and an empty string clears them; priority is 0 none / 1 high / 2 medium / 3 low; waiting toggles the delegated marker (marking stamps today's date, clearing removes it); waiting_on names who it is waiting on — written right after ⏳, replacing any previous who, outranking other links on the line, and keeping the task's id and the wait's date; recur sets or clears the repeat (\"every month\"); text rewrites the task's words while keeping its markers — note that changing the text changes the task's id, which the response carries. This is how to snooze, delegate, or fix a typo."},
 			t.editTask)
 	}
 
@@ -284,7 +285,7 @@ type createTaskIn struct {
 	Section   string `json:"section,omitempty" jsonschema:"heading to append under within that document"`
 	Priority  int    `json:"priority,omitempty" jsonschema:"0 none, 1 high, 2 medium, 3 low"`
 	Waiting   bool   `json:"waiting,omitempty" jsonschema:"mark as delegated / waiting on someone else"`
-	WaitingOn string `json:"waiting_on,omitempty" jsonschema:"who it is waiting on: a person or company name, e.g. 'Frances Bagley'; linked on the line; implies waiting"`
+	WaitingOn string `json:"waiting_on,omitempty" jsonschema:"who it is waiting on: a person or company name, e.g. 'Frances Bagley'; written after ⏳ as the explicit who; implies waiting"`
 	Recur     string `json:"recur,omitempty" jsonschema:"repeat spec: every day|week|month|year, optionally 'every 3 months' or '... when done'"`
 }
 
@@ -294,7 +295,7 @@ type editTaskIn struct {
 	Defer     *string `json:"defer,omitempty" jsonschema:"new defer date; empty string clears; omit to leave unchanged"`
 	Priority  *int    `json:"priority,omitempty" jsonschema:"0 none, 1 high, 2 medium, 3 low; omit to leave unchanged"`
 	Waiting   *bool   `json:"waiting,omitempty" jsonschema:"true marks it delegated, false clears; omit to leave unchanged"`
-	WaitingOn *string `json:"waiting_on,omitempty" jsonschema:"who it is waiting on, by name; links them on the line and marks it waiting"`
+	WaitingOn *string `json:"waiting_on,omitempty" jsonschema:"who it is waiting on, by name; replaces the explicit who after ⏳ and marks it waiting"`
 	Recur     *string `json:"recur,omitempty" jsonschema:"repeat spec, e.g. 'every month'; empty string stops it repeating; omit to leave unchanged"`
 	Text      *string `json:"text,omitempty" jsonschema:"new task text, keeping its markers; changes the task's id"`
 }

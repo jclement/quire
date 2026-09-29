@@ -139,3 +139,33 @@ func TestScanWaitingSince(t *testing.T) {
 		t.Errorf("stamping the waiting date changed the id: %s vs %s", bare.ID, dated.ID)
 	}
 }
+
+// A wikilink immediately after ⏳ (and its optional date) is the explicit
+// who. Like the date it is marker metadata: out of the display text and the
+// id, so re-assigning who never orphans the task — but still a link.
+func TestScanExplicitWaitingOn(t *testing.T) {
+	cases := []struct {
+		name, line, since, who, text string
+	}{
+		{"dated", "- [ ] Ask [[Frances Bagley]] for the CFO intro ⏳ 2026-09-20 [[Dan Roe]]", "2026-09-20", "Dan Roe", "Ask [[Frances Bagley]] for the CFO intro"},
+		{"bare, aliased", "- [ ] Chase legal ⏳ [[Dan Roe|Dan]] 📅 2026-10-01", "", "Dan Roe", "Chase legal"},
+		{"words between are not the slot", "- [ ] Quote ⏳ 2026-09-20 from [[Acme]]", "2026-09-20", "", "Quote from [[Acme]]"},
+		{"no marker, no slot", "- [ ] Talk to [[Dan Roe]]", "", "", "Talk to [[Dan Roe]]"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			task := Scan("daily/x.md", []byte(c.line+"\n")).Tasks[0]
+			if task.WaitingSince != c.since || task.WaitingOn != c.who || task.Text != c.text {
+				t.Errorf("since=%q who=%q text=%q, want %q %q %q", task.WaitingSince, task.WaitingOn, task.Text, c.since, c.who, c.text)
+			}
+			if c.who != "" && !slices.ContainsFunc(task.Links, func(l Link) bool { return l.Raw == c.who }) {
+				t.Errorf("the explicit who should still be a link: %+v", task.Links)
+			}
+		})
+	}
+	dan := Scan("d.md", []byte("- [ ] Contract ⏳ 2026-09-20 [[Dan Roe]]\n")).Tasks[0]
+	acme := Scan("d.md", []byte("- [ ] Contract ⏳ 2026-09-21 [[Acme]]\n")).Tasks[0]
+	if dan.ID != acme.ID {
+		t.Errorf("re-assigning who changed the id")
+	}
+}

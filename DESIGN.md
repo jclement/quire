@@ -123,9 +123,10 @@ lies is behavior #1. Inline grammar (Obsidian Tasks-compatible):
 ```
 
 `📅` due, `🛫` start/defer, `⏫`/`🔼`/`🔽` priority, `⏳` waiting, `✅` completion date.
-`⏳` optionally carries the date the wait began (`⏳ 2026-09-20`); like every marker
-it is outside the task's text and so outside its ID, which is why stamping it never
-orphans a task.
+`⏳` optionally carries the date the wait began and then an explicit who
+(`⏳ 2026-09-20 [[Dan Roe]]`); like every marker's value they are outside the task's
+text and so outside its ID, which is why stamping the date or re-assigning who never
+orphans a task. The who link still counts as a link (backlinks, task rollups).
 Task ID = `sha256(doc_path + normalized_text)[:16]` — content-derived, line numbers are
 hints. Rewording a task recreates it; accepted trade-off (revisit if recurrence needs
 stable IDs). Provenance is free: every task knows its source document.
@@ -134,9 +135,11 @@ Defer dates actually hide things: Today shows only *available* tasks. Views: Inb
 (no date, no project, not `#someday`), Today (due/overdue/available), Upcoming (with
 Someday folded in last), Waiting, Logbook.
 
-**Waiting-for has a who and an age, and no new syntax for either.** Who is the first
-`[[link]]` on the line that resolves to a person or company, else the line's first
-link, else the person/company page the task sits on; frontmatter people do not count
+**Waiting-for has a who and an age.** Who is the explicit link right after `⏳` and its
+date when there is one — it wins outright, and is what `waiting_on` writes (replacing
+a previous one, keeping the date). Otherwise it is the first `[[link]]` on the line
+that resolves to a person or company, else the line's first link, else the
+person/company page the task sits on; frontmatter people do not count
 ("waiting on" means a name on the line, not everyone in the meeting). The rule runs at
 read time over `task_links`, which records each link's position and written name —
 never a stored resolved path, for the same reason wikilinks resolve through
@@ -145,7 +148,10 @@ waiting (UI, REST, MCP) stamps today in the configured zone; clearing removes ma
 and date; re-marking keeps the original date. The service ages each wait against its
 own "today" and flags it stale past `StaleWaitingDays` (7, one constant). The Waiting
 view groups by who — people and companies, then other names, then unassigned —
-oldest first throughout; person pages, `person_context`, the weekly review's
+oldest first throughout. A future date ages as 0 days, never negative. Completing a
+repeating wait re-stamps the next occurrence's `⏳` date to the completion day, keeping
+its who, so a monthly invoice is not born stale. Person pages, `person_context`, the
+weekly review's
 `stale_waiting` and the digest's "Waiting too long" all read the same ages.
 
 **Someday is a tag, `#someday`,** so it stays plain markdown any editor can write. It
@@ -409,8 +415,11 @@ area, `area_explicit` the file's own, `area_from` the path it came through.
 `PropagateAreas` (index/areas.go) recomputes all three from every file's
 frontmatter links after each index change — a few thousand rows of JSON and
 a map lookup per link, milliseconds — so there is no dependency tracking to
-get wrong. The v3→v4 schema change is an in-place `ALTER`, since dropping
-index.db would also drop the embeddings.
+get wrong. The v3→v4 and v4→v5 schema changes are in-place `ALTER`s, since
+dropping index.db would also drop the embeddings. Each migration step runs in
+one transaction with `user_version` set inside it; a failure rolls back to the
+old version intact and is reported at startup rather than answered with a
+rebuild (delete index.db to force one).
 
 The filter value is a comma-separated list ("work,personal", "none,work"):
 `areaClause` ORs the members, so the switcher can show several areas at
