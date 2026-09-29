@@ -94,7 +94,26 @@ func nextOccurrenceLine(line string, row index.TaskRow, today string) (string, e
 		}
 		out = replaceMarkerDate(out, "🛫", row.Defer, newDefer)
 	}
+	if row.Waiting {
+		out = restampWaiting(out, today)
+	}
 	return out, nil
+}
+
+// restampWaiting starts a repeating wait over on the completion day: the
+// monthly invoice's next occurrence is not already a month overdue. The
+// marker and its explicit who stay; only the date changes (or is added,
+// for a bare ⏳ — the next wait has started too).
+func restampWaiting(line, today string) string {
+	m := waitingMarkRe.FindStringSubmatchIndex(line)
+	if m == nil {
+		return line
+	}
+	if m[2] >= 0 {
+		return line[:m[2]] + today + line[m[3]:]
+	}
+	at := strings.Index(line, "⏳") + len("⏳")
+	return line[:at] + " " + today + line[at:]
 }
 
 // replaceMarkerDate swaps the date following an emoji marker, tolerating

@@ -256,3 +256,36 @@ func TestRecurrenceProblems(t *testing.T) {
 		t.Error("an open task is not a stopped recurrence")
 	}
 }
+
+// A repeating wait — the monthly invoice from Acme — must not spawn an
+// occurrence that is stale the moment it exists: the next one keeps ⏳ and
+// its who, but the wait starts again on the day the last one was done.
+func TestRecurringWaitRestampsTheDate(t *testing.T) {
+	s := newTestService(t) // 2026-09-01
+	writeVault(t, s, map[string]string{
+		"notes/billing.md": "# Billing\n\n" +
+			"- [ ] Invoice ⏳ 2026-08-01 [[Acme]] 📅 2026-09-01 🔁 every month\n" +
+			"- [ ] Timesheet from the contractor ⏳ 🔁 every week\n",
+	})
+	doc, _ := s.GetDocument("notes/billing.md")
+	for _, task := range doc.Tasks {
+		if _, err := s.ToggleTask(task.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f, _ := s.Vault.Read("notes/billing.md")
+	body := string(f.Raw)
+	for _, want := range []string{
+		"- [ ] Invoice ⏳ 2026-09-01 [[Acme]] 📅 2026-10-01 🔁 every month\n",
+		// A bare wait gets a date too: it has started.
+		"- [ ] Timesheet from the contractor ⏳ 2026-09-01 🔁 every week 📅 2026-09-08",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q in:\n%s", want, body)
+		}
+	}
+	// The completed occurrence keeps its own history.
+	if !strings.Contains(body, "- [x] Invoice ⏳ 2026-08-01 [[Acme]]") {
+		t.Errorf("the completed line should be untouched:\n%s", body)
+	}
+}
