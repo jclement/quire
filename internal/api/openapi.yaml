@@ -261,6 +261,20 @@ paths:
       responses:
         "200": { description: "data: Decision[] — kind, text, date, path, title, type, line, area, entities" }
         "400": { description: "VALIDATION_ERROR — entity names no document" }
+  /api/v1/work-items:
+    get:
+      summary: Where work-item references link (Settings → Work items)
+      description: >
+        Returns {url_template}. When set, the app renders `AB#2433` and a purely
+        numeric `#2433` as links to it with `{id}` replaced; "" leaves them as
+        text. Numeric `#2433` is never a tag. Links only — nothing is fetched.
+      responses: { "200": { description: "data: WorkItemSettings" } }
+    put:
+      summary: Set the work-item URL template ("" turns the links off)
+      description: "Body {url_template} — an http(s) URL containing {id}."
+      responses:
+        "200": { description: "data: WorkItemSettings" }
+        "400": { description: "VALIDATION_ERROR — no {id}, or not an http(s) URL" }
   /api/v1/shares:
     get:
       summary: List share links (revoked included — audit trail)

@@ -38,6 +38,7 @@ import type {
   TimezoneInfo,
   Unwritten,
   WeekPayload,
+  WorkItemSettings,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -219,6 +220,14 @@ export const api = {
   timezone: () => request<TimezoneInfo>("/api/v1/timezone"),
   setTimezone: (timezone: string) =>
     request<TimezoneInfo>("/api/v1/timezone", jsonInit("PUT", { timezone })),
+
+  /** Where AB#2433 / #2433 link; "" url_template = links off. */
+  workItems: () => request<WorkItemSettings>("/api/v1/work-items"),
+  setWorkItems: (urlTemplate: string) =>
+    request<WorkItemSettings>(
+      "/api/v1/work-items",
+      jsonInit("PUT", { url_template: urlTemplate }),
+    ),
 
   emailStatus: () => request<EmailStatus>("/api/v1/email"),
   sendTestEmail: () =>

@@ -29,9 +29,11 @@ import { docHref } from "../lib/docs.ts";
 import { TRIAGE_ACTIONS, triageStep, type TriageKey } from "../lib/triage.ts";
 import { splitWikilinks } from "../lib/wikilinks.ts";
 import { useUi } from "../keys/UiContext.tsx";
+import { splitWorkItems } from "../lib/workItems.ts";
 import { useListNav } from "../keys/useListNav.ts";
 import { SnoozePopover } from "./SnoozePopover.tsx";
 import { TaskToNoteDialog } from "./TaskToNoteDialog.tsx";
+import { WorkItemLink } from "./WorkItemLink.tsx";
 
 export interface TaskGroup {
   key: string;
@@ -442,8 +444,8 @@ function WaitingBadge({
   );
 }
 
-/** Task text with wikilinks, `code`, and **bold** rendered lightly — no block
- * markdown, this is a one-line row. */
+/** Task text with wikilinks, work items, `code`, and **bold** rendered
+ * lightly — no block markdown, this is a one-line row. */
 export function InlineTaskText({ text }: { text: string }) {
   return (
     <>
@@ -453,10 +455,22 @@ export function InlineTaskText({ text }: { text: string }) {
             {segment.display}
           </span>
         ) : (
-          <Fragment key={at}>{renderEmphasis(segment.text)}</Fragment>
+          <Fragment key={at}>{renderWorkItems(segment.text)}</Fragment>
         ),
       )}
     </>
+  );
+}
+
+function renderWorkItems(text: string) {
+  return splitWorkItems(text).map((segment, at) =>
+    segment.kind === "workitem" ? (
+      <WorkItemLink key={at} id={segment.id}>
+        {segment.label}
+      </WorkItemLink>
+    ) : (
+      <Fragment key={at}>{renderEmphasis(segment.text)}</Fragment>
+    ),
   );
 }
 

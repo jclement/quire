@@ -325,7 +325,16 @@ list is editable as chips under the title: each links to its search and
 removes with ×, and "+" offers the vault's existing tags or takes a new one.
 `/tags` lists
 every tag sized by use; tags in prose, in Browse rows and on the tags page all
-link to the `tag:x` search. Purely numeric `#123` is not a tag.
+link to the `tag:x` search. Purely numeric `#123` is not a tag — it is a work item.
+
+### Work items
+
+Set **Settings → Work items** to your tracker's URL with `{id}` where the number goes
+(`https://dev.azure.com/org/project/_workitems/edit/{id}`) and `AB#2433` and `#2433`
+become links in rendered notes and in task rows on Today and the task views, e.g.
+`- [ ] #2433 Auto-update of environments`. Empty turns it off. The editor colours them
+either way, and agents are told the convention. quire only links; it does not fetch
+an item's status.
 
 ### Decisions
 

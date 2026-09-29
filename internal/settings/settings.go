@@ -36,6 +36,9 @@ type Settings struct {
 	// own zone. Everything dated — today's note, due:today, ✅ stamps, the
 	// digest hour — is reckoned in it.
 	Timezone string `json:"timezone"`
+	// WorkItemURL links "AB#2433" and "#2433" to a tracker, with {id} for
+	// the number; "" leaves them as plain text. See workitems.go.
+	WorkItemURL string `json:"work_item_url"`
 }
 
 // DefaultAreas is empty on purpose: areas are opt-in. Nothing area-shaped
@@ -109,6 +112,9 @@ func (s *Store) Save(cfg Settings) error {
 		return err
 	}
 	if err := ValidateTimezone(cfg.Timezone); err != nil {
+		return err
+	}
+	if err := ValidateWorkItemURL(cfg.WorkItemURL); err != nil {
 		return err
 	}
 	s.mu.Lock()

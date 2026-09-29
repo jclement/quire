@@ -1,11 +1,13 @@
-// remark plugin adding quire's markdown flavor on top of GFM: wikilinks and
-// Obsidian callouts. Operating at the mdast level (rather than preprocessing
+// remark plugin adding quire's markdown flavor on top of GFM: wikilinks,
+// #tags, work-item references (AB#2433, #2433), ==highlights== and Obsidian
+// callouts. Operating at the mdast level (rather than preprocessing
 // the source string) means code spans and fenced blocks are naturally exempt,
 // and source line numbers stay intact for task-checkbox mapping.
 import type { Blockquote, Emphasis, Paragraph, Root, Text } from "mdast";
 import { visit } from "unist-util-visit";
 import { parseCalloutMarker } from "./callouts.ts";
 import { splitWikilinks } from "./wikilinks.ts";
+import { splitWorkItems, WORK_ITEM_HREF_PREFIX } from "./workItems.ts";
 
 /** URL prefix carrying the wikilink inner text to the <a> renderer. A fragment
  * survives react-markdown's default URL sanitizer where a custom scheme would
@@ -32,6 +34,7 @@ export function remarkQuire() {
     transformHighlights(tree);
     transformWikilinks(tree);
     transformHashtags(tree);
+    transformWorkItems(tree);
     transformCallouts(tree);
   };
 }
@@ -119,6 +122,32 @@ function transformHashtags(tree: Root): void {
       pieces.push({ type: "text", value: value.slice(last) } as Text);
     parent.children.splice(index, 1, ...(pieces as never[]));
     return index + pieces.length;
+  });
+}
+
+/**
+ * Turns `AB#2433` and `#2433` into links the renderer resolves against the
+ * work-item URL in Settings — always emitted, so turning the setting on or
+ * off needs no re-parse; with none set the renderer shows plain text.
+ */
+function transformWorkItems(tree: Root): void {
+  visit(tree, "text", (node: Text, index, parent) => {
+    if (!parent || index === undefined) return;
+    if (parent.type === "link") return;
+    if (!node.value.includes("#")) return;
+    const segments = splitWorkItems(node.value);
+    if (segments.length === 1 && segments[0]?.kind === "text") return;
+    const replacements = segments.map((segment) =>
+      segment.kind === "text"
+        ? ({ type: "text", value: segment.text } as Text)
+        : {
+            type: "link" as const,
+            url: WORK_ITEM_HREF_PREFIX + segment.id,
+            children: [{ type: "text", value: segment.label } as Text],
+          },
+    );
+    parent.children.splice(index, 1, ...(replacements as never[]));
+    return index + replacements.length;
   });
 }
 

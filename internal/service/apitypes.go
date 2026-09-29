@@ -299,6 +299,13 @@ type TimezoneInfo struct {
 	Now       string `json:"now"`
 }
 
+// WorkItemSettings is where work-item references link: "AB#2433" and a
+// purely numeric "#2433" become links to URLTemplate with {id} replaced.
+// "" means the feature is off and they stay plain text.
+type WorkItemSettings struct {
+	URLTemplate string `json:"url_template"`
+}
+
 // EmailStatus is what Settings shows about email: whether SMTP and a digest
 // recipient are configured, and when the digest goes out.
 type EmailStatus struct {

@@ -58,6 +58,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/link", s.handleLink)
 	mux.HandleFunc("POST /api/v1/aliases", s.handleAddAlias)
 	mux.HandleFunc("GET /api/v1/decisions", s.handleListDecisions)
+	mux.HandleFunc("GET /api/v1/work-items", s.handleGetWorkItems)
+	mux.HandleFunc("PUT /api/v1/work-items", s.handleSetWorkItems)
 
 	mux.HandleFunc("GET /api/v1/search", s.handleSearch)
 	mux.HandleFunc("GET /api/v1/related", s.handleRelated)

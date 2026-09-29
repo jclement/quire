@@ -529,6 +529,26 @@ Tags are one concept with two spellings — `#tag` in prose, `tags:` in frontmat
 merged at index time. `#tag` in prose renders as a link to the tag search; a purely
 numeric `#123` is not a tag, matching Obsidian.
 
+## Work items
+
+`AB#2433` (Azure Boards' spelling) and a purely numeric `#2433` are work-item
+references; the numeric form is exactly the one that is never a tag (a tag needs a
+letter, in the index's `tagRe` and the renderer's `TAG_RE` alike, as in Obsidian), so
+the two never compete. A reference starts at a line start, space or `(`/`[` and ends
+before any word character — `page#12`, `#12abc` and `#1-2` stay text. The rule lives
+in `web/src/lib/workItems.ts`, mirrored by the editor's `workItemMark.ts`.
+
+Where they link is one setting, `work_item_url` in settings.json (`GET/PUT
+/api/v1/work-items`), an http(s) URL with `{id}`. remarkQuire always emits work-item
+link nodes and the renderer decides — a link when the template is set, the text as
+written when not — so toggling the setting needs no re-parse. Task rows run task text
+through the same split. When set, MCP instructions tell agents the convention.
+Share pages deliberately do not link them: they are public and the tracker is not.
+
+**Follow-up, not built:** showing an item's state (title, status, assignee) inline.
+That means calling the Azure DevOps REST API with a PAT — a stored secret with its own
+lifecycle, caching and rate limits — and is a feature of its own.
+
 ## Semantic search
 
 Opt-in, keyed on `QUIRE_OPENAI_API_KEY`, because it sends note text off the

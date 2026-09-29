@@ -39,6 +39,7 @@ export const queryKeys = {
   areas: ["areas"] as const,
   calendar: (month: string) => ["calendar", month] as const,
   shares: ["shares"] as const,
+  workItems: ["work-items"] as const,
 };
 
 /** Fetched once for the footer version — never polled (per the API contract). */
@@ -154,6 +155,20 @@ export function useTimezoneSync(): void {
         console.warn("could not adopt the browser's time zone", browser, error),
       );
   }, [tz.data, queryClient]);
+}
+
+/** The work-item link template (Settings); rarely changes, so cached. */
+export function useWorkItems() {
+  return useQuery({
+    queryKey: queryKeys.workItems,
+    queryFn: api.workItems,
+    staleTime: 60_000,
+  });
+}
+
+/** The template alone: "" while loading, on error, or when links are off. */
+export function useWorkItemTemplate(): string {
+  return useWorkItems().data?.url_template ?? "";
 }
 
 /** Every tag in the vault with its count; feeds the tag chip typeahead. */

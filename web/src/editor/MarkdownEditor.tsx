@@ -17,6 +17,7 @@ import {
 } from "react";
 import { makeTagSource, makeWikilinkSource } from "./completions.ts";
 import { highlightMark } from "./highlightMark.ts";
+import { workItemMark } from "./workItemMark.ts";
 import {
   cursorBreathingRoom,
   editorHighlighting,
@@ -219,7 +220,7 @@ function buildExtensions(callbacks: CallbacksRef) {
     markdown({
       base: markdownLanguage,
       codeLanguages: languages,
-      extensions: [highlightMark],
+      extensions: [highlightMark, workItemMark],
     }),
     editorTheme,
     editorHighlighting,

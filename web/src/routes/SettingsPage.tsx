@@ -41,6 +41,7 @@ import {
   TokenSettings,
 } from "../components/settings/Credentials.tsx";
 import { SkeletonRows } from "../components/Skeleton.tsx";
+import { WorkItemSettings } from "../components/settings/WorkItemSettings.tsx";
 
 const PASSKEYS_KEY = ["auth", "passkeys"] as const;
 const GUIDANCE_KEY = ["agent-guidance"] as const;
@@ -82,6 +83,7 @@ export function SettingsPage() {
       <TemplateSettings />
       <AgentGuidanceSection />
       <TimezoneSettings />
+      <WorkItemSettings />
       <SemanticSettings />
       <VisionSettings />
       <EmailSettings />

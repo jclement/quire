@@ -55,7 +55,9 @@ import {
   TAG_HREF_PREFIX,
   WIKILINK_HREF_PREFIX,
 } from "../lib/remarkQuire.ts";
+import { WORK_ITEM_HREF_PREFIX } from "../lib/workItems.ts";
 import { Lightbox } from "./Lightbox.tsx";
+import { WorkItemLink } from "./WorkItemLink.tsx";
 
 // Both are heavy and rare per-page; each stays in its own chunk and loads only
 // when a matching fence is actually rendered.
@@ -197,6 +199,13 @@ function Anchor(props: ComponentProps<"a"> & ExtraProps) {
       >
         {props.children}
       </RouterLink>
+    );
+  }
+  if (href.startsWith(WORK_ITEM_HREF_PREFIX)) {
+    return (
+      <WorkItemLink id={href.slice(WORK_ITEM_HREF_PREFIX.length)}>
+        {props.children}
+      </WorkItemLink>
     );
   }
   if (!href.startsWith(WIKILINK_HREF_PREFIX)) {

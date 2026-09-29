@@ -414,6 +414,14 @@ export interface TimezoneInfo {
   now: string;
 }
 /**
+ * WorkItemSettings is where work-item references link: "AB#2433" and a
+ * purely numeric "#2433" become links to URLTemplate with {id} replaced.
+ * "" means the feature is off and they stay plain text.
+ */
+export interface WorkItemSettings {
+  url_template: string;
+}
+/**
  * EmailStatus is what Settings shows about email: whether SMTP and a digest
  * recipient are configured, and when the digest goes out.
  */

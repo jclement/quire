@@ -77,7 +77,7 @@ Working rules:
 - Never invent a document path; find it with search first.`
 
 func newServer(svc *service.Service, version string, allows func(string) bool, principal string, audit Auditor) *sdk.Server {
-	instructions := baseInstructions
+	instructions := baseInstructions + workItemInstructions(svc)
 	if guidance := svc.AgentGuidance(); guidance != "" {
 		instructions += "\n\n---\n\nThe vault owner's own guidance (authoritative where it conflicts\nwith the above):\n\n" + guidance
 	}

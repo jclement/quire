@@ -169,3 +169,16 @@ func TestScanExplicitWaitingOn(t *testing.T) {
 		t.Errorf("re-assigning who changed the id")
 	}
 }
+
+// Work-item references are links, not tags: a tag needs a letter, as in
+// Obsidian, so "#2433" and "AB#2433" never reach the tag index (and the
+// tag page never fills up with ticket numbers).
+func TestWorkItemNumbersAreNotTags(t *testing.T) {
+	doc := Scan("daily/2026-09-01.md", []byte("- [ ] #2433 Auto-update of environments #ops\n\nSee AB#2440 and (#2441).\n"))
+	if !slices.Equal(doc.Tags, []string{"ops"}) {
+		t.Errorf("tags = %v, want only [ops]", doc.Tags)
+	}
+	if len(doc.Tasks) != 1 || !slices.Equal(doc.Tasks[0].Tags, []string{"ops"}) {
+		t.Errorf("task tags = %+v", doc.Tasks)
+	}
+}

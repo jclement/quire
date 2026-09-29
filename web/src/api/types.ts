@@ -21,6 +21,7 @@ export type {
   LikelyMatch,
   Decision,
   EntityRef,
+  WorkItemSettings,
   WeekPayload,
   AuditEntry,
   DocType,
