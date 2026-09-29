@@ -14,7 +14,7 @@ import (
 	"github.com/jclement/quire/internal/service"
 )
 
-func (s *Server) calendarRoutes(mux *http.ServeMux) {
+func (s *Server) calendarRoutes(mux Router) {
 	mux.HandleFunc("GET /api/v1/calendar/feeds", s.handleListCalendarFeeds)
 	mux.HandleFunc("POST /api/v1/calendar/feeds", s.handleAddCalendarFeed)
 	mux.HandleFunc("DELETE /api/v1/calendar/feeds/{id}", s.handleRemoveCalendarFeed)

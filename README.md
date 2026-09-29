@@ -491,9 +491,9 @@ Two credential paths, per the house pattern:
 
 **No token or connected app can manage access, whatever its scope.** Minting,
 listing or revoking tokens, disconnecting apps, share links, passkeys, the agent
-activity log, and settings writes (timezone, areas, agent guidance, email) answer
-only to you signed in with a passkey (or the loopback `none` mode); an agent gets a
-403 saying so, and the attempt is logged. In `token-only` mode, manage tokens with
+activity log, and settings writes (timezone, areas, agent guidance, email,
+work-item links, calendar feeds) answer only to you signed in with a passkey (or
+the loopback `none` mode); an agent gets a 403 saying so, and the attempt is logged. In `token-only` mode, manage tokens with
 `quire token` on the host.
 
 ## Tasks

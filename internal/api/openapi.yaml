@@ -15,9 +15,10 @@ info:
     (create tokens with `quire token create`). Scopes: read, write, tasks.
 
     Owner-only: tokens, connected-apps, shares, audit, email, and writes to
-    timezone, areas and agent-guidance refuse every bearer token (API or
-    OAuth) with 403 whatever its scope — they answer only to the owner's
-    passkey session or auth mode "none".
+    timezone, areas, agent-guidance and work-items, plus calendar/feeds and
+    calendar/refresh, refuse every bearer token (API or OAuth) with 403
+    whatever its scope — they answer only to the owner's passkey session or
+    auth mode "none".
 paths:
   /api/v1/health:
     get:

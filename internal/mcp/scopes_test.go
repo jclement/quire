@@ -113,7 +113,7 @@ func TestToolsAreScoped(t *testing.T) {
 		{"no principal", func(string) bool { return false }, nil, append(append(slices.Clone(readTools), writeTools...), taskTools...)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := toolNames(t, newServer(newScopeTestService(t), "test", tc.allows, "test-token", nil))
+			got := toolNames(t, newServer(newScopeTestService(t), "test", tc.allows, auth.Principal{Name: "test-token"}, nil))
 			for _, name := range tc.want {
 				if !slices.Contains(got, name) {
 					t.Errorf("%s should expose %s, got %v", tc.name, name, got)
@@ -140,7 +140,7 @@ func (r *recordingAuditor) RecordAudit(rec auth.AuditRecord) error {
 func TestMutatingToolsAreAudited(t *testing.T) {
 	svc := newScopeTestService(t)
 	rec := &recordingAuditor{}
-	server := newServer(svc, "test", allowAll, "token:claude", rec)
+	server := newServer(svc, "test", allowAll, auth.Principal{Name: "token:claude"}, rec)
 
 	clientTransport, serverTransport := sdk.NewInMemoryTransports()
 	ctx := context.Background()
@@ -177,7 +177,7 @@ func TestMutatingToolsAreAudited(t *testing.T) {
 
 	// The owner's own session is not an agent.
 	ownerRec := &recordingAuditor{}
-	ownerServer := newServer(newScopeTestService(t), "test", allowAll, "owner", ownerRec)
+	ownerServer := newServer(newScopeTestService(t), "test", allowAll, auth.OwnerPrincipal(), ownerRec)
 	ct2, st2 := sdk.NewInMemoryTransports()
 	if _, err := ownerServer.Connect(ctx, st2, nil); err != nil {
 		t.Fatal(err)
@@ -201,7 +201,7 @@ func TestMutatingToolsAreAudited(t *testing.T) {
 // tool list is the agent's entire documentation — a tool added without one
 // is a tool that will be used wrongly or not at all.
 func TestSurfaceIsCompleteAndDocumented(t *testing.T) {
-	server := newServer(newScopeTestService(t), "test", allowAll, "owner", nil)
+	server := newServer(newScopeTestService(t), "test", allowAll, auth.OwnerPrincipal(), nil)
 	clientTransport, serverTransport := sdk.NewInMemoryTransports()
 	ctx := context.Background()
 	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
@@ -255,7 +255,7 @@ func TestSurfaceIsCompleteAndDocumented(t *testing.T) {
 // agent is the one failure a notes vault cannot come back from, and REST
 // plus git are the deliberate way out.
 func TestDeleteStaysAbsent(t *testing.T) {
-	for _, name := range toolNames(t, newServer(newScopeTestService(t), "test", allowAll, "owner", nil)) {
+	for _, name := range toolNames(t, newServer(newScopeTestService(t), "test", allowAll, auth.OwnerPrincipal(), nil)) {
 		if strings.Contains(strings.ToLower(name), "delete") ||
 			strings.Contains(strings.ToLower(name), "remove_document") {
 			t.Errorf("a destructive tool appeared on the agent surface: %q", name)

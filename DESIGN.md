@@ -260,8 +260,8 @@ pass consent again. Revoked tokens stay listed — an audit trail, like shares.
 
 **Administration is owner-only, and scopes do not reach it.** Credentials (tokens,
 connected apps, passkeys), share links, the audit log and settings writes (timezone,
-areas, agent guidance, email) refuse every API token and OAuth access token with a
-403, whatever its scope; only the owner in person — a passkey session, or the
+areas, agent guidance, email, work-item links, calendar feeds and their refresh)
+refuse every API token and OAuth access token with a 403, whatever its scope; only the owner in person — a passkey session, or the
 loopback auth-none listener — gets through. Scopes say how much of the *vault* a
 caller may touch, and `write` is exactly what an agent needs, so while these routes
 were "just writes" a write-scoped connector could mint itself a fresh token, revoke

@@ -84,6 +84,19 @@ var routeAccess = map[string]string{
 	"GET /api/v1/audit":                          ownerOnly,
 	"GET /api/v1/connected-apps":                 ownerOnly,
 	"DELETE /api/v1/connected-apps/{id}":         ownerOnly,
+	"POST /api/v1/aliases":                       agent,
+	"GET /api/v1/decisions":                      agent,
+	"GET /api/v1/work-items":                     agent,
+	"PUT /api/v1/work-items":                     ownerOnly, // a setting: where work-item ids link to
+	"GET /api/v1/waiting":                        agent,
+	"POST /api/v1/notes/from-task":               agent, // vault work, same as the task_to_note tool
+	"GET /api/v1/calendar/feeds":                 ownerOnly,
+	"POST /api/v1/calendar/feeds":                ownerOnly,
+	"DELETE /api/v1/calendar/feeds/{id}":         ownerOnly,
+	"POST /api/v1/calendar/refresh":              ownerOnly, // Settings button; drives outbound fetches
+	"GET /api/v1/calendar/events":                agent,
+	"POST /api/v1/calendar/events/note":          agent, // same as create_meeting_from_event
+	"GET /api/v1/meeting-prep":                   agent,
 }
 
 // routeRecorder collects the patterns Routes registers.

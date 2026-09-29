@@ -10,6 +10,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jclement/quire/internal/auth"
 	"github.com/jclement/quire/internal/index"
 	"github.com/jclement/quire/internal/service"
 	"github.com/jclement/quire/internal/vault"
@@ -38,7 +39,7 @@ func connectWithService(t *testing.T) (*sdk.ClientSession, *service.Service) {
 	svc := service.New(v, &index.Index{DB: db, Vault: v})
 	svc.Now = func() time.Time { return time.Date(2026, 9, 1, 10, 0, 0, 0, time.Local) }
 
-	server := newServer(svc, "test", allowAll, "owner", nil)
+	server := newServer(svc, "test", allowAll, auth.OwnerPrincipal(), nil)
 	clientTransport, serverTransport := sdk.NewInMemoryTransports()
 	ctx := context.Background()
 	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
@@ -163,7 +164,7 @@ func TestOwnerGuidanceReachesInstructions(t *testing.T) {
 
 	connect := func() *sdk.InitializeResult {
 		t.Helper()
-		server := newServer(svc, "test", allowAll, "owner", nil)
+		server := newServer(svc, "test", allowAll, auth.OwnerPrincipal(), nil)
 		clientTransport, serverTransport := sdk.NewInMemoryTransports()
 		ctx := context.Background()
 		if _, err := server.Connect(ctx, serverTransport, nil); err != nil {

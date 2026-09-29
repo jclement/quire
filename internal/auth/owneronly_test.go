@@ -34,7 +34,10 @@ func TestOwnerOnlyMatching(t *testing.T) {
 		{"GET", "/api/v1/timezone", false},
 		{"PUT", "/api/v1/agent-guidance", true},
 		{"GET", "/api/v1/agent-guidance", false},
-		// Listed before the route exists (calendar-feeds branch).
+		{"PUT", "/api/v1/work-items", true},
+		{"GET", "/api/v1/work-items", false},
+		{"POST", "/api/v1/calendar/refresh", true},
+		{"GET", "/api/v1/calendar/events", false},
 		{"POST", "/api/v1/calendar/feeds", true},
 		{"DELETE", "/api/v1/calendar/feeds/1", true},
 		{"GET", "/api/v1/calendar", false},

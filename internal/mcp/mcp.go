@@ -33,7 +33,7 @@ func Handler(svc *service.Service, version string, audit Auditor) http.Handler {
 	return sdk.NewStreamableHTTPHandler(
 		func(r *http.Request) *sdk.Server {
 			principal, _ := auth.PrincipalFrom(r)
-			return newServer(svc, version, scopesFor(r), principal.Name, audit)
+			return newServer(svc, version, scopesFor(r), principal, audit)
 		}, nil)
 }
 
@@ -78,7 +78,7 @@ Working rules:
   them all. Check it before re-opening a settled question.
 - Never invent a document path; find it with search first.`
 
-func newServer(svc *service.Service, version string, allows func(string) bool, principal string, audit Auditor) *sdk.Server {
+func newServer(svc *service.Service, version string, allows func(string) bool, principal auth.Principal, audit Auditor) *sdk.Server {
 	instructions := baseInstructions + workItemInstructions(svc)
 	if guidance := svc.AgentGuidance(); guidance != "" {
 		instructions += "\n\n---\n\nThe vault owner's own guidance (authoritative where it conflicts\nwith the above):\n\n" + guidance
@@ -227,20 +227,20 @@ func boolPtr(b bool) *bool { return &b }
 
 type tools struct {
 	svc       *service.Service
-	principal string
+	principal auth.Principal
 	audit     Auditor
 }
 
 // record writes an audit row for a mutating tool. Never fails the call.
 func (t *tools) record(tool, path, detail string, err error) {
-	if t.audit == nil || t.principal == "" || t.principal == "owner" {
+	if t.audit == nil || t.principal.Name == "" || t.principal.IsOwner() {
 		return
 	}
 	if len(detail) > 120 {
 		detail = detail[:120] + "…"
 	}
 	if aerr := t.audit.RecordAudit(auth.AuditRecord{
-		Principal: t.principal, Action: "mcp:" + tool, Path: path, Detail: detail, OK: err == nil,
+		Principal: t.principal.Name, Action: "mcp:" + tool, Path: path, Detail: detail, OK: err == nil,
 	}); aerr != nil {
 		slog.Warn("audit", "tool", tool, "err", aerr)
 	}

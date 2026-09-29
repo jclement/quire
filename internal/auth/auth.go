@@ -357,10 +357,15 @@ var ownerOnlyRoutes = []ownerOnlyRoute{
 	// The guidance is appended to every agent's MCP instructions; an agent
 	// that could write it could persist instructions to all future agents.
 	{http.MethodPut, "/api/v1/agent-guidance"},
-	// Calendar feed subscriptions (arriving on the calendar-feeds branch) are
-	// configuration that fetches arbitrary URLs server-side; listed ahead of
-	// the route so it cannot land agent-reachable.
+	// The work-item URL template turns ids in every document into links; an
+	// agent that could set it could point them anywhere.
+	{http.MethodPut, "/api/v1/work-items"},
+	// Calendar feed subscriptions are configuration that makes the server
+	// fetch arbitrary URLs, and the feed URLs themselves are secrets.
 	{"", "/api/v1/calendar/feeds"},
+	// Refetching the feeds is a Settings button; no MCP tool needs it, and
+	// an agent has no business driving outbound fetches.
+	{http.MethodPost, "/api/v1/calendar/refresh"},
 }
 
 // OwnerOnly reports whether method+path is administration only the owner
