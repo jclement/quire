@@ -5,6 +5,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -68,13 +69,34 @@ func (s *Service) RenameDocument(oldPath, newPath string, rewriteLinks bool) (Re
 		}
 	}
 
+	// Move first, then repair inbound links, then drop the old file — so a
+	// crash mid-rename leaves both files rather than neither, and the new
+	// file is written from the content as it is now, its links to itself
+	// already re-pointed.
 	var rewritten []string
+	content := old.Raw
 	if rewriteLinks {
-		backlinks, err := s.Index.Backlinks(oldPath)
-		if err != nil {
-			return RenameResult{}, err
+		if moved, changed := retargetLinks(oldPath, old.Raw, dying, newStem); changed {
+			content = []byte(moved)
+			rewritten = append(rewritten, newPath)
 		}
+	}
+	backlinks, err := s.Index.Backlinks(oldPath)
+	if err != nil {
+		return RenameResult{}, err
+	}
+	if _, err := s.Vault.Write(newPath, content, ""); err != nil {
+		return RenameResult{}, err
+	}
+	if _, err := s.Index.IndexFile(newPath); err != nil {
+		return RenameResult{}, err
+	}
+
+	if rewriteLinks {
 		for _, src := range backlinks {
+			if src.Path == oldPath {
+				continue // moved above, with the file
+			}
 			changed, err := s.rewriteLinksIn(src.Path, dying, newStem)
 			if err != nil {
 				return RenameResult{}, fmt.Errorf("rewriting links in %s: %w", src.Path, err)
@@ -85,15 +107,13 @@ func (s *Service) RenameDocument(oldPath, newPath string, rewriteLinks bool) (Re
 		}
 	}
 
-	// Move: write the new file, index it, then drop the old one. Ordered so
-	// a crash mid-rename leaves both files rather than neither.
-	if _, err := s.Vault.Write(newPath, old.Raw, ""); err != nil {
-		return RenameResult{}, err
-	}
-	if _, err := s.Index.IndexFile(newPath); err != nil {
-		return RenameResult{}, err
-	}
-	if err := s.Vault.Delete(oldPath); err != nil {
+	// Only the content the move copied may be deleted: an edit saved into
+	// the old path since then exists nowhere else.
+	if err := s.Vault.DeleteIfUnchanged(oldPath, old.SHA256); err != nil {
+		if errors.Is(err, vault.ErrConflict) {
+			return RenameResult{}, fmt.Errorf("%s was edited during the move, so it was kept alongside %s — copy the edit across and delete it: %w",
+				oldPath, newPath, err)
+		}
 		return RenameResult{}, err
 	}
 	if err := s.Index.Remove(oldPath); err != nil {
@@ -111,15 +131,31 @@ func (s *Service) RenameDocument(oldPath, newPath string, rewriteLinks bool) (Re
 }
 
 // rewriteLinksIn re-targets matching wikilinks in one document, preserving
-// aliases and every other byte. Returns whether anything changed.
+// aliases and every other byte. Returns whether anything changed. The edit
+// is re-derived from the file, so it is re-applied if another write lands
+// first.
 func (s *Service) rewriteLinksIn(docPath string, dying map[string]bool, newTarget string) (bool, error) {
-	f, err := s.Vault.Read(docPath)
-	if err != nil {
-		return false, err
-	}
-	scanned := markdown.Scan(docPath, f.Raw)
+	return reapplying(s, docPath, func() (bool, error) {
+		f, err := s.Vault.Read(docPath)
+		if err != nil {
+			return false, err
+		}
+		content, changed := retargetLinks(docPath, f.Raw, dying, newTarget)
+		if !changed {
+			return false, nil
+		}
+		if _, err := s.UpdateDocument(docPath, content, f.SHA256); err != nil {
+			return false, err
+		}
+		return true, nil
+	})
+}
 
-	content := string(f.Raw)
+// retargetLinks rewrites raw's wikilinks to any dying name so they point at
+// newTarget, returning the new content and whether anything changed.
+func retargetLinks(docPath string, raw []byte, dying map[string]bool, newTarget string) (string, bool) {
+	scanned := markdown.Scan(docPath, raw)
+	content := string(raw)
 	changed := false
 	for _, link := range scanned.Links {
 		if !dying[strings.ToLower(strings.TrimSpace(link.Raw))] {
@@ -142,11 +178,5 @@ func (s *Service) rewriteLinksIn(docPath string, dying map[string]bool, newTarge
 			changed = true
 		}
 	}
-	if !changed {
-		return false, nil
-	}
-	if _, err := s.UpdateDocument(docPath, content, f.SHA256); err != nil {
-		return false, err
-	}
-	return true, nil
+	return content, changed
 }
