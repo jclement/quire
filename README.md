@@ -352,7 +352,32 @@ Person, company and project pages list their decisions in the rail.
 ### Calendar
 
 `/calendar` shows the month at a glance: which days have a daily note, what
-documents you touched, meetings held, tasks completed.
+documents you touched, meetings held, tasks completed — and, with a calendar
+feed, a dot counting each day's events.
+
+**Your real calendar** comes in read-only from its secret ICS link: add one or
+more in **Settings → Calendar** (Fastmail: Settings → Calendars → Share →
+secret link; `webcal://` works too). The link is a password to the whole
+calendar, so quire keeps it in `.quire/calendar-feeds.json` (mode 0600, apart
+from `settings.json`), never logs it, and shows it back only masked. Feeds are
+fetched every ten minutes (a failing feed backs off to hourly and keeps its
+last good copy; Settings shows the last fetch and any error) and **Refresh**
+fetches now. Recurring events, exceptions, moved occurrences and time zones
+are expanded properly, and every time is shown in your Settings time zone.
+
+Today gets an **Agenda**: the day's events with time, location, join link and
+attendees — all-day events on a line of their own. Attendees are matched to
+person pages by `email:` (one address or a list), then by name.
+**Create meeting note** makes the meeting from your meeting template, dated at
+the event's start, with matched attendees in `people:` and everyone else on
+the Attendees line; `event_uid:` in its frontmatter ties it to that
+occurrence, so the button becomes **Open note** and pressing it twice never
+makes two. **Prep** opens meeting prep for the event.
+
+**Meeting prep** — also in the rail of every meeting note — is, for each
+attendee with a page: the last meeting you had together, open tasks that
+mention them, what you are waiting on them for (⏳), their company, and
+recent notes about them.
 
 ### Search
 
@@ -406,6 +431,7 @@ quire today
 | `QUIRE_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
 | `QUIRE_VISION_MODEL` | _(none)_ | Turns on screenshot descriptions — **sends pasted images to this endpoint**. Needs `QUIRE_OPENAI_API_KEY`; separate because many OpenAI-compatible servers do embeddings but not vision |
 | `QUIRE_VISION_BACKFILL` | `true` | With vision on: after startup, describe images already in notes whose alt text is still a filename. Rewrites only that alt text and keeps modified times; one call per image, once — later starts find nothing to do |
+| _(Settings → Calendar)_ | none | Secret ICS feed URLs for Today's agenda — stored 0600 in `.quire/calendar-feeds.json`, fetched every 10 minutes, included in `quire backup` |
 | _(Settings → Time zone)_ | first browser's zone | Every date — today's note, due:today, ✅ stamps, the digest hour — is reckoned in it; set it in Settings, not the environment |
 | _(see `quire doctor`)_ | | Reports dangling links, ambiguous names, stopped recurrences and unreferenced attachments |
 | `QUIRE_EMBEDDING_COOLDOWN` | `30s` | How long a note sits unchanged before its changed sections are re-embedded |
@@ -421,14 +447,14 @@ Settings and stored as an ordinary vault document (`AGENTS.md`). Edit it in the
 app or in vim; the next agent session gets it, no restart.
 
 quire is agent-operable by design: a Streamable-HTTP MCP server at `/mcp` exposes the
-same service layer as the UI. Thirty-three tools (thirty-five with an embeddings
+same service layer as the UI. Thirty-six tools (thirty-eight with an embeddings
 key), each annotated read-only / additive / destructive so clients know what
 deserves a confirmation. Anything the app can do, an agent can do:
 
 | Scope | Tools |
 |---|---|
-| read | **Find** `search` (full-text + `type:` `tag:` `area:` `is:task` `is:done` `is:decision` `due:` `after:` `before:`), `semantic_search` and `related_documents` (with an embeddings key), `list_documents`, `list_unwritten`, `list_decisions`, `list_tags`, `list_areas`, `list_templates` · **Read** `get_document`, `get_daily`, `get_weekly`, `list_daily`, `read_attachment` (see a pasted screenshot) · **Compose** `today`, `week_review`, `calendar`, `person_context`, `list_tasks` |
-| write | **Documents** `create_document`, `append_to_document`, `update_document` (hash-guarded), `rename_document` (rewrites links) · **Metadata** `set_frontmatter`, `link_entity`, `unlink_entity`, `add_alias` · **Journal** `capture_note` (prose into today's note), `ensure_daily`, `ensure_weekly` · **Triage** `task_to_note` (a task that is really a note becomes one) |
+| read | **Find** `search` (full-text + `type:` `tag:` `area:` `is:task` `is:done` `is:decision` `due:` `after:` `before:`), `semantic_search` and `related_documents` (with an embeddings key), `list_documents`, `list_unwritten`, `list_decisions`, `list_tags`, `list_areas`, `list_templates` · **Read** `get_document`, `get_daily`, `get_weekly`, `list_daily`, `read_attachment` (see a pasted screenshot) · **Compose** `today`, `week_review`, `calendar`, `person_context`, `list_tasks` · **Calendar** `calendar_events` (your feeds' events, attendees matched), `meeting_prep` (per-attendee context for a meeting note or an event) |
+| write | **Documents** `create_document`, `append_to_document`, `update_document` (hash-guarded), `rename_document` (rewrites links) · **Metadata** `set_frontmatter`, `link_entity`, `unlink_entity`, `add_alias` · **Journal** `capture_note` (prose into today's note), `ensure_daily`, `ensure_weekly` · **Triage** `task_to_note` (a task that is really a note becomes one) · **Calendar** `create_meeting_from_event` (idempotent per occurrence) |
 | tasks | `create_task` (any document, any marker: due, defer, priority, waiting — with `waiting_on` a name — repeat), `complete_task`, `edit_task` (reschedule, delegate to someone, repeat, rename), `restore_recurrence` |
 
 The tool list is the agent's documentation, so each description says when to

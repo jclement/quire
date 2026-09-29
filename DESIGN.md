@@ -63,6 +63,7 @@ data/
                # must never lose anything.
     auth.db    # NOT rebuildable: passkeys, sessions, tokens, recovery codes
     config.yaml
+    calendar-feeds.json  # secret ICS URLs, 0600 — see "Calendar feeds"
 ```
 
 **Identity is the vault-relative path** (`people/sarah-chen.md`). No UUIDs in
@@ -267,8 +268,10 @@ wrappers over the same service layer as REST, so permissions cannot drift:
 precondition), `append_to_document` (targeted section append — agents must not rewrite
 whole files), `create_person/project/meeting`, `list_tasks`, `create_task` (natural
 dates parsed server-side, resolved ISO echoed back; ambiguous name resolution returns
-candidates, never guesses), `complete_task`, `today` (the flagship composed call), and
-`person_context` (the rollup a person page shows, as JSON — meeting prep in one call).
+candidates, never guesses), `complete_task`, `today` (the flagship composed call), `person_context`
+(the rollup a person page shows, as JSON), and `meeting_prep` (that rollup for
+every attendee of a meeting at once), plus `calendar_events` and
+`create_meeting_from_event` over the owner's real calendar.
 
 The surface is deliberately complete: an agent can do anything the app can,
 because a gap is a thing the owner has to do by hand at exactly the moment
@@ -693,6 +696,59 @@ can slot in later. One consumer today: the morning digest (meetings, birthdays,
 overdue, due, waits gone stale, waiting) at QUIRE_DIGEST_TIME — quiet days send
 nothing.
 
+## Calendar feeds
+
+The owner's calendar comes in read-only from secret ICS URLs (Fastmail,
+Google and iCloud all publish one), because that needs no OAuth app, no
+CalDAV client and no provider-specific code — and quire never writes to a
+calendar, so read-only loses nothing. `internal/calendar` owns it.
+
+**Library.** `emersion/go-ical` parses (line folding, escaping, parameters)
+and `teambition/rrule-go` expands recurrence. rrule-go is a port of
+python-dateutil's rrule, the implementation most calendar software is
+checked against. `apognu/gocal`, the usual one-package alternative, expands
+recurrence itself from FREQ, INTERVAL, COUNT, UNTIL, BYDAY and BYMONTH only
+(v0.9.1), ignoring BYMONTHDAY, BYSETPOS and the rest — and recurrence is
+exactly where calendar code goes wrong. go-ical's own `RecurrenceSet` helper
+is not used: it fails a whole event on a TZID Go does not know (Outlook
+writes "Pacific Standard Time") and on comma-separated EXDATE lists, both
+common in real feeds. quire resolves TZIDs itself — IANA, then a table of
+common Windows names, then the owner's zone — and applies RECURRENCE-ID
+overrides: a moved occurrence appears at its new time (even when its
+original slot is outside the window) and a cancelled one disappears. Rules are anchored in the
+event's own zone, so a weekly 10:00 stays 10:00 across daylight saving.
+
+**Cache, not store.** The fetcher keeps each feed's *parsed* calendars in
+memory and expands on every query, for exactly the window and zone asked
+for. Changing the time zone therefore needs no re-fetch, any range can be
+asked for (`calendar_events` caps it at 92 days), and nothing about events
+touches index.db or the vault. A restart costs one fetch. Feeds poll every
+ten minutes; a failing feed backs off from a minute to an hour and keeps
+serving its last good copy, since an hour-old agenda beats an empty one.
+
+**The URL is a password.** It lives in `.quire/calendar-feeds.json`, 0600,
+rather than in `settings.json` (0644 and meant to be read by hand). The API
+takes it once and only ever returns a masked form; there is no MCP tool for
+managing feeds, since that would invite pasting a credential into a chat.
+Go's HTTP errors quote the URL they failed on, so every fetch error is
+stripped of it before it is logged or shown in Settings — the tests assert
+the secret appears in neither.
+
+**Event → note is frontmatter.** "Create meeting note" writes an ordinary
+meeting from the meeting template, dated at the event's start, and records
+`event_uid:`. The occurrence key is (event_uid, the note's own date), so a
+recurring 1:1 gets one note per occurrence, the button is idempotent, and a
+note survives its feed being removed. Attendees are matched to people by
+`email:` (a string or a list), then by name through ordinary link
+resolution; matched ones become `people:` wikilinks, the rest are named on
+the template's Attendees line.
+
+**Meeting prep** composes, per attendee with a page, the most recent other
+meeting linking them that started before this one, open and ⏳ waiting tasks
+that mention them, their company and recent non-meeting notes — from
+`Backlinks` and `TasksMentioning`, the queries `person_context` and the
+person page already use, so the three cannot disagree.
+
 ## Printing / PDF
 
 PDF export is the browser's, not the server's. Anything that renders Mermaid
@@ -790,8 +846,8 @@ dialog ever), `Cmd+L` checkbox toggle, live-preview decorations that reveal raw 
 when the cursor enters, frontmatter folded to a strip, no smart quotes, no autosave
 churn (idle-debounced single write per burst).
 
-**Views:** Today (home, not customizable: daily note + meetings + overdue/due/available
-tasks + waiting + recent), Inbox, task views, per-type lists, document page
+**Views:** Today (home, not customizable: daily note + calendar agenda + meetings +
+overdue/due/available tasks + waiting + recent), Inbox, task views, per-type lists, document page
 (read/edit; split view desktop-later), person/project/company/meeting pages with
 SQL-driven rollups (backlinks, open tasks, recent meetings, last-interaction).
 
