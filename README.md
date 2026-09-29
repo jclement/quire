@@ -269,11 +269,32 @@ grid**, and Tab moving between cells. Tables inside fenced code are left alone.
 
 ### Entity pages
 
-A person, company or project page assembles itself: the rail carries **Open
-tasks** (every open task anywhere in the vault that names it — "what am I
-still owed about Acme"), **Linked from** (backlinks), and **Similar** when
-semantic search is on. Agents get the same rollup in one call through the
-`person_context` tool.
+A person, company or project page assembles itself: the rail carries
+**Waiting on them** (people and companies: what they owe you, with how many
+days each has waited), **Open tasks** (every open task anywhere in the vault
+that names it — "what am I still owed about Acme"), **Linked from**
+(backlinks), and **Similar** when semantic search is on. Agents get the same
+rollup in one call through the `person_context` tool.
+
+### Tasks: waiting, someday, triage
+
+`⏳ 2026-09-20` means waiting since the 20th; a bare `⏳` still works, with no
+age. Who you are waiting on is the first person or company the line already
+links — `Get SOC evidence from [[Frances Bagley]] ⏳ 2026-09-20` is Frances's —
+so there is nothing new to type. Marking a task waiting from the app or an
+agent stamps today; unmarking removes the date too. **Waiting** groups by who,
+oldest first, with each wait's age; anything past a week is red. The weekly
+review and the morning digest lead with those stale waits.
+
+Tag a task `#someday` to park it: it leaves the Inbox and Today and waits in a
+folded **Someday** section at the bottom of Upcoming.
+
+The **Inbox** is processed from the keyboard. Select a task with `j`/`k`, then
+`t` due today, `m` tomorrow, `w` next Monday, `d` pick a date, `f` defer, `p`
+waiting, `s` someday, `n` make it a note, `x` done — or use the row's buttons.
+"Make it a note" is for the checkbox that was really a thought: it becomes a
+note (title proposed from its first words, editable), and a link to it
+replaces the task line. The sidebar's Inbox link shows how many are left.
 
 ### Drawings
 
@@ -367,15 +388,15 @@ Settings and stored as an ordinary vault document (`AGENTS.md`). Edit it in the
 app or in vim; the next agent session gets it, no restart.
 
 quire is agent-operable by design: a Streamable-HTTP MCP server at `/mcp` exposes the
-same service layer as the UI. Twenty-nine tools (thirty-one with an embeddings
+same service layer as the UI. Thirty-one tools (thirty-three with an embeddings
 key), each annotated read-only / additive / destructive so clients know what
 deserves a confirmation. Anything the app can do, an agent can do:
 
 | Scope | Tools |
 |---|---|
 | read | **Find** `search` (full-text + `type:` `tag:` `area:` `is:task` `is:done` `due:` `after:` `before:`), `semantic_search` and `related_documents` (with an embeddings key), `list_documents`, `list_unwritten`, `list_tags`, `list_areas`, `list_templates` · **Read** `get_document`, `get_daily`, `get_weekly`, `list_daily`, `read_attachment` (see a pasted screenshot) · **Compose** `today`, `week_review`, `calendar`, `person_context`, `list_tasks` |
-| write | **Documents** `create_document`, `append_to_document`, `update_document` (hash-guarded), `rename_document` (rewrites links) · **Metadata** `set_frontmatter`, `link_entity`, `unlink_entity` · **Journal** `capture_note` (prose into today's note), `ensure_daily`, `ensure_weekly` |
-| tasks | `create_task` (any document, any marker: due, defer, priority, waiting, repeat), `complete_task`, `edit_task` (reschedule, delegate, repeat, rename), `restore_recurrence` |
+| write | **Documents** `create_document`, `append_to_document`, `update_document` (hash-guarded), `rename_document` (rewrites links) · **Metadata** `set_frontmatter`, `link_entity`, `unlink_entity` · **Journal** `capture_note` (prose into today's note), `ensure_daily`, `ensure_weekly` · **Triage** `task_to_note` (a task that is really a note becomes one) |
+| tasks | `create_task` (any document, any marker: due, defer, priority, waiting — with `waiting_on` a name — repeat), `complete_task`, `edit_task` (reschedule, delegate to someone, repeat, rename), `restore_recurrence` |
 
 The tool list is the agent's documentation, so each description says when to
 reach for it rather than restating its name — and a test pins the whole
@@ -435,7 +456,7 @@ relay is found there rather than by a morning that goes quiet.
 Mail goes out over SMTP — every provider (Mailgun, SES, Postmark, Resend) exposes an
 SMTP endpoint, so switching providers is four env vars. With `QUIRE_DIGEST_TO` and
 `QUIRE_DIGEST_TIME=06:30` set, the server emails a morning digest (meetings,
-birthdays, overdue, due today, waiting); quiet days send nothing. `quire digest`
+birthdays, overdue, due today, waits gone stale, waiting); quiet days send nothing. `quire digest`
 sends one on demand (cron-able).
 
 ## License

@@ -123,12 +123,47 @@ lies is behavior #1. Inline grammar (Obsidian Tasks-compatible):
 ```
 
 `📅` due, `🛫` start/defer, `⏫`/`🔼`/`🔽` priority, `⏳` waiting, `✅` completion date.
+`⏳` optionally carries the date the wait began (`⏳ 2026-09-20`); like every marker
+it is outside the task's text and so outside its ID, which is why stamping it never
+orphans a task.
 Task ID = `sha256(doc_path + normalized_text)[:16]` — content-derived, line numbers are
 hints. Rewording a task recreates it; accepted trade-off (revisit if recurrence needs
 stable IDs). Provenance is free: every task knows its source document.
 
 Defer dates actually hide things: Today shows only *available* tasks. Views: Inbox
-(no date, no project), Today (due/overdue/available), Upcoming, Waiting, Logbook.
+(no date, no project, not `#someday`), Today (due/overdue/available), Upcoming (with
+Someday folded in last), Waiting, Logbook.
+
+**Waiting-for has a who and an age, and no new syntax for either.** Who is the first
+`[[link]]` on the line that resolves to a person or company, else the line's first
+link, else the person/company page the task sits on; frontmatter people do not count
+("waiting on" means a name on the line, not everyone in the meeting). The rule runs at
+read time over `task_links`, which records each link's position and written name —
+never a stored resolved path, for the same reason wikilinks resolve through
+`docnames`: a person page written after the task must still claim it. Marking a task
+waiting (UI, REST, MCP) stamps today in the configured zone; clearing removes marker
+and date; re-marking keeps the original date. The service ages each wait against its
+own "today" and flags it stale past `StaleWaitingDays` (7, one constant). The Waiting
+view groups by who — people and companies, then other names, then unassigned —
+oldest first throughout; person pages, `person_context`, the weekly review's
+`stale_waiting` and the digest's "Waiting too long" all read the same ages.
+
+**Someday is a tag, `#someday`,** so it stays plain markdown any editor can write. It
+takes a task out of the inbox and Today and into a collapsed Someday section at the
+end of Upcoming — reviewed now and then, never worked from, so a section rather than
+a sixth tab. A due date outranks the tag; a defer date alone does not bring it back.
+
+**Inbox triage is one key per decision** on the selected row: `t` today, `m`
+tomorrow, `w` next Monday, `d` pick a due date, `f` defer, `p` waiting, `s` someday,
+`n` make it a note, `x` done — also as row buttons. One table (`web/src/lib/triage.ts`)
+drives keys, buttons and the cheat sheet. On the inbox `s` parks; everywhere else it
+still snoozes. "Make it a note" (`TaskToNote`, `task_to_note`) is the exit for a
+checkbox that was never an action: a note titled from the first eight words (editable
+first), body = the task's text, area inherited from the source, and the line replaced
+by a plain bullet linking it — keeping indentation and list marker, and linking by
+path when the title is shared. It is `POST /api/v1/notes/from-task`, deliberately not
+under `/tasks`: it creates a document, so it needs `write`, and every `/tasks` route
+is open to the narrower `tasks` scope.
 Recurrence (v0.2) must support lead time ("surface 3 weeks before due") and
 repeat-after-completion — that's the life-admin (renewals) requirement, and it's the
 reason `due` and `defer` are separate fields from day one.
@@ -577,7 +612,8 @@ at startup. Run `passkey` if you want claude.ai connectors.
 The provider abstraction is SMTP itself (every transactional provider exposes it);
 internal/mail wraps wneessen/go-mail behind a Sender interface so an API transport
 can slot in later. One consumer today: the morning digest (meetings, birthdays,
-overdue, due, waiting) at QUIRE_DIGEST_TIME — quiet days send nothing.
+overdue, due, waits gone stale, waiting) at QUIRE_DIGEST_TIME — quiet days send
+nothing.
 
 ## Printing / PDF
 
@@ -661,7 +697,8 @@ nowhere; `Escape` always goes one level out. Day-one keys: `Cmd+K` palette (`>`
 commands, `#` tags, `@` people), `j/k` list movement, `Enter` open, `x` toggle task,
 `e` edit, `Cmd+Enter` save+exit, `c` capture, `g` chords (`g t` Today, `g i` Inbox,
 `g d` daily…), `/` search, `Cmd+[`/`Cmd+]` history, `s` snooze (typed natural dates),
-`?` cheat sheet.
+`?` cheat sheet. A list may add its own per-item keys (`useListNav` `itemKeys`),
+checked before the built-ins — the inbox's triage keys, which take `s` for someday.
 
 **No write fails silently.** The QueryClient's MutationCache toasts every failed
 mutation (`web/src/api/queryClient.ts`). A component that renders the error itself —

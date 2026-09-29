@@ -67,6 +67,9 @@ Working rules:
   than rewriting the line.
 - Start with today for "what should I work on", and person_context before a
   meeting — each answers in one call what would otherwise take several.
+- Processing the inbox means every task leaves it: give it a due or defer
+  date, delegate it (edit_task waiting_on), park it (#someday), complete it,
+  or — when it was never an action — task_to_note.
 - Never invent a document path; find it with search first.`
 
 func newServer(svc *service.Service, version string, allows func(string) bool, principal string, audit Auditor) *sdk.Server {
