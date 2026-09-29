@@ -207,3 +207,20 @@ func TestWaitingGroupsAndStaleness(t *testing.T) {
 		t.Errorf("stale waiting = %q", stale)
 	}
 }
+
+// Naming who a task waits on is a line edit like any other: when it loses a
+// race to an outside write it is worked out again, and both land.
+func TestWaitingOnSurvivesALostRace(t *testing.T) {
+	svc := newTestService(t)
+	writeVault(t, svc, map[string]string{"notes/w.md": "# W\n\n- [ ] Signed MSA\n"})
+	doc, _ := svc.GetDocument("notes/w.md")
+	attempts := outsideWriteOnce(t, svc, "notes/w.md", func(raw string) string { return raw + "typed in vim\n" })
+	who := "Acme"
+	if _, err := svc.EditTask(doc.Tasks[0].ID, TaskEdit{WaitingOn: &who}); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := svc.Vault.Read("notes/w.md")
+	if *attempts != 2 || string(f.Raw) != "# W\n\n- [ ] Signed MSA ⏳ 2026-09-01 [[Acme]]\ntyped in vim\n" {
+		t.Errorf("attempts %d, file %q", *attempts, f.Raw)
+	}
+}

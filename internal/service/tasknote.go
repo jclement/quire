@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/jclement/quire/internal/index"
 	"github.com/jclement/quire/internal/vault"
 )
 
@@ -66,10 +67,8 @@ func (s *Service) TaskToNote(id, title, area string) (Document, error) {
 	if err != nil {
 		return Document{}, err
 	}
-	lines := strings.Split(string(f.Raw), "\n")
-	lineIdx := findTaskLine(lines, row)
-	if lineIdx < 0 {
-		return Document{}, fmt.Errorf("task %s: source line not found (file changed); reindex and retry", id)
+	if _, err := locateTaskLine(strings.Split(string(f.Raw), "\n"), row); err != nil {
+		return Document{}, err
 	}
 	if source, err := s.Index.GetDocMeta(row.DocPath); err == nil && source.Area != "" {
 		area = source.Area
@@ -79,21 +78,53 @@ func (s *Service) TaskToNote(id, title, area string) (Document, error) {
 	if err != nil {
 		return Document{}, err
 	}
-	// The bullet keeps the task's indentation and list marker, so a task
-	// nested under another item stays nested.
-	bullet := "- "
-	if m := checkboxRe.FindStringSubmatch(lines[lineIdx]); m != nil {
-		bullet = m[1]
-	}
-	lines[lineIdx] = bullet + s.linkTo(note)
-	if _, err := s.UpdateDocument(row.DocPath, strings.Join(lines, "\n"), f.SHA256); err != nil {
+	link := s.linkTo(note)
+	// The source edit is re-derivable — find the line, swap it for the
+	// bullet — so it goes through reapplying like every other line edit:
+	// losing a race to the editor or vim means working it out again, not
+	// failing.
+	_, err = reapplying(s, row.DocPath, func() (Document, error) {
+		f, err := s.Vault.Read(row.DocPath)
+		if err != nil {
+			return Document{}, err
+		}
+		lines := strings.Split(string(f.Raw), "\n")
+		at, err := locateTaskLine(lines, row)
+		if err != nil {
+			return Document{}, err
+		}
+		// The bullet keeps the task's indentation and list marker, so a
+		// task nested under another item stays nested.
+		bullet := "- "
+		if m := checkboxRe.FindStringSubmatch(lines[at]); m != nil {
+			bullet = m[1]
+		}
+		lines[at] = bullet + link
+		return s.UpdateDocument(row.DocPath, strings.Join(lines, "\n"), f.SHA256)
+	})
+	if err != nil {
 		// Undo the half that landed: a note nobody links to, with the task
-		// still in the inbox, is a duplicate in waiting.
-		_ = s.DeleteDocument(note.Path)
+		// still in the inbox, is a duplicate in waiting. Only while it is
+		// untouched — if someone has already written in it, it is theirs.
+		if derr := s.Vault.DeleteIfUnchanged(note.Path, note.SHA256); derr == nil {
+			_ = s.Index.Remove(note.Path)
+		}
 		return Document{}, err
 	}
 	// Re-read so the note's backlinks include the line just written.
 	return s.GetDocument(note.Path)
+}
+
+// locateTaskLine is findTaskLine with "not found" as an error too.
+func locateTaskLine(lines []string, row index.TaskRow) (int, error) {
+	at, err := findTaskLine(lines, row)
+	if err != nil {
+		return -1, err
+	}
+	if at < 0 {
+		return -1, fmt.Errorf("task %q: source line not found in %s (file changed); reindex and retry", row.Text, row.DocPath)
+	}
+	return at, nil
 }
 
 // linkTo is the wikilink that reaches doc: its title, unless the title is

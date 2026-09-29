@@ -288,6 +288,8 @@ export function useTaskToNote() {
   return useMutation({
     mutationFn: (input: { id: string; title: string; area?: string }) =>
       api.taskToNote(input.id, input.title, input.area),
+    // The dialog shows the failure beside its button.
+    meta: { inlineError: true },
     onSettled: () => {
       invalidateTaskCaches(queryClient);
       void queryClient.invalidateQueries({ queryKey: ["documents"] });

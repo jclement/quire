@@ -128,3 +128,51 @@ func TestTaskToNoteAfterTheFileChanged(t *testing.T) {
 		t.Errorf("source was touched: %q", f.Raw)
 	}
 }
+
+// Filing a task as a note while the source is being typed in elsewhere: the
+// line replacement loses its compare-and-swap once and is worked out again
+// on top of the outside edit — both land, and exactly one note exists.
+func TestTaskToNoteSurvivesALostRace(t *testing.T) {
+	svc := newTestService(t)
+	writeVault(t, svc, map[string]string{"notes/src.md": "# Src\n\n- [ ] Pricing thoughts from the call\n"})
+	doc, _ := svc.GetDocument("notes/src.md")
+	attempts := outsideWriteOnce(t, svc, "notes/src.md", func(raw string) string { return raw + "typed in vim\n" })
+
+	note, err := svc.TaskToNote(doc.Tasks[0].ID, "Pricing", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *attempts != 2 {
+		t.Errorf("source write attempts = %d, want 2", *attempts)
+	}
+	f, _ := svc.Vault.Read("notes/src.md")
+	if want := "# Src\n\n- [[Pricing]]\ntyped in vim\n"; string(f.Raw) != want {
+		t.Errorf("source = %q, want %q", f.Raw, want)
+	}
+	if note.Path != "notes/pricing.md" || svc.Vault.Exists("notes/pricing-2.md") {
+		t.Errorf("note = %s", note.Path)
+	}
+}
+
+// When the source edit cannot land at all, the note it was made for goes —
+// but not if someone has already written in it.
+func TestTaskToNoteRollsBackTheNote(t *testing.T) {
+	svc := newTestService(t)
+	writeVault(t, svc, map[string]string{"notes/src.md": "# Src\n\n- [ ] Pricing thoughts from the call\n"})
+	doc, _ := svc.GetDocument("notes/src.md")
+	// Every attempt loses: the task line is reworded under each write.
+	beforeWriteHook = func(p string) {
+		if p != "notes/src.md" {
+			return
+		}
+		f, _ := svc.Vault.Read(p)
+		_, _ = svc.Vault.Write(p, append(f.Raw, []byte("x\n")...), f.SHA256)
+	}
+	t.Cleanup(func() { beforeWriteHook = nil })
+	if _, err := svc.TaskToNote(doc.Tasks[0].ID, "Pricing", ""); err == nil {
+		t.Fatal("expected the source edit to fail")
+	}
+	if svc.Vault.Exists("notes/pricing.md") {
+		t.Error("the orphan note should have been removed")
+	}
+}
