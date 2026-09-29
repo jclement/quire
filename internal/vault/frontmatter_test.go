@@ -74,3 +74,22 @@ func TestBuildDoc(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// A key written as a YAML block list owns the indented lines under it.
+// Replacing only the key line left "  - Fran" orphaned under whatever key
+// came next — broken YAML, and the document silently lost its frontmatter.
+func TestFrontmatterKeyReplacesBlockList(t *testing.T) {
+	raw := []byte("---\ntype: person\naliases:\n  - Fran\n  - F.B.\nrole: CFO\n---\n# Frances\n")
+
+	set := SetFrontmatterKey(raw, "aliases", "[Fran, F.B., Frances]")
+	want := "---\ntype: person\naliases: [Fran, F.B., Frances]\nrole: CFO\n---\n# Frances\n"
+	if string(set) != want {
+		t.Errorf("set:\n%s\nwant:\n%s", set, want)
+	}
+
+	removed := RemoveFrontmatterKey(raw, "aliases")
+	want = "---\ntype: person\nrole: CFO\n---\n# Frances\n"
+	if string(removed) != want {
+		t.Errorf("remove:\n%s\nwant:\n%s", removed, want)
+	}
+}

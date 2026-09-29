@@ -223,6 +223,26 @@ paths:
         rewrite the file. Frontmatter wikilinks are indexed, so the link
         immediately appears as a backlink on the target.
       responses: { "200": { description: "data: Document" } }
+  /api/v1/aliases:
+    post:
+      summary: Add a name a document answers to
+      description: >
+        Body {path, alias}. Appends to the document's `aliases:` frontmatter,
+        keeping the aliases already there, so every [[alias]] link resolves to
+        it. This is how an Unwritten name like "Frances" is settled against a
+        likely match (people/frances-bagley.md) instead of becoming a
+        duplicate page. Idempotent, case-insensitively.
+      responses:
+        "200": { description: "data: Document" }
+        "400": { description: "VALIDATION_ERROR — empty, or contains [ ] | # ^" }
+  /api/v1/unwritten:
+    get:
+      summary: Names the vault links to that have no document, most-referenced first
+      description: >
+        Each entry carries up to five `likely_matches` — existing people and
+        companies the name probably means (first name, title prefix, or
+        capital initials), strongest reason only.
+      responses: { "200": { description: "data: Unwritten[] — name, refs, sources, likely_matches" } }
   /api/v1/shares:
     get:
       summary: List share links (revoked included — audit trail)

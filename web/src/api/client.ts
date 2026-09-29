@@ -269,6 +269,10 @@ export const api = {
   /** Names linked to that have no document yet. */
   unwritten: () => request<Unwritten[]>("/api/v1/unwritten"),
 
+  /** Adds a name the document answers to, keeping its existing aliases. */
+  addAlias: (path: string, alias: string) =>
+    request<Document>("/api/v1/aliases", jsonInit("POST", { path, alias })),
+
   /** Writes the missing next occurrence of a stopped repeating task. */
   restoreRecurrence: (id: string) =>
     request<Task>(

@@ -120,7 +120,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 			Description: "The areas documents are filed under (work, personal, and any the owner has added) with counts. Areas partition everything except daily notes; pass one to search, list_documents, list_tasks or today to narrow to it, and to create_document to file under it."},
 			t.listAreas)
 		sdk.AddTool(s, &sdk.Tool{Name: "list_unwritten", Annotations: readOnly,
-			Description: "Names the vault links to that have no document yet — people, companies and projects mentioned in notes but never written up, most-referenced first, with the documents doing the referring. Use it to find what is worth creating, or before inventing a new page for something already being talked about."},
+			Description: "Names the vault links to that have no document yet — people, companies and projects mentioned in notes but never written up, most-referenced first, with the documents doing the referring. Each carries likely_matches: existing people or companies the name probably means (\"Frances\" → Frances Bagley, by first name, title prefix or initials). A single clear match is settled with add_alias, not by creating a duplicate; several is an ambiguity for the owner. Use it to find what is worth creating, or before inventing a new page for something already being talked about."},
 			t.listUnwritten)
 		sdk.AddTool(s, &sdk.Tool{Name: "list_templates", Annotations: readOnly,
 			Description: "The templates available to create_document, each with the document type it shapes and what it is for. Check here before creating a meeting, decision record, 1:1 or incident note — the right template gives the document the headings and frontmatter the owner expects, instead of a blank page."},
@@ -200,6 +200,8 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 			Description: "Change a task by id, leaving every field you do not pass alone. due and defer take natural dates and an empty string clears them; priority is 0 none / 1 high / 2 medium / 3 low; waiting toggles the delegated marker (marking stamps today's date, clearing removes it); waiting_on names who it is waiting on — written right after ⏳, replacing any previous who, outranking other links on the line, and keeping the task's id and the wait's date; recur sets or clears the repeat (\"every month\"); text rewrites the task's words while keeping its markers — note that changing the text changes the task's id, which the response carries. This is how to snooze, delegate, or fix a typo."},
 			t.editTask)
 	}
+
+	registerAliasTools(s, t, allows)
 
 	return s
 }

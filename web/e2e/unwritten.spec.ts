@@ -63,3 +63,57 @@ test("a dangling link in read mode creates the note when clicked", async ({ page
   await expect(page.getByRole("link", { name: "Nobody Yet" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Nobody Yet" })).toHaveCount(0);
 });
+
+test("a first name that probably means someone becomes their alias", async ({ page }) => {
+  const person = async (title: string) =>
+    (
+      await (
+        await page.request.post("/api/v1/documents", { data: { type: "person", title } })
+      ).json()
+    ).data.path as string;
+  const rosalind = await person("Rosalind Quimby");
+  await person("Octavia Fenn");
+  const octaviaMarsh = await person("Octavia Marsh");
+  const notePath = await createDoc(
+    page,
+    "First Names Only",
+    "# First Names Only\n\nAsked [[Rosalind]] and [[Octavia]] about the budget.\n",
+  );
+
+  await page.goto("/unwritten");
+  const rosalindRow = page
+    .getByRole("listitem")
+    .filter({ has: page.getByText("Rosalind", { exact: true }) });
+  await expect(rosalindRow).toContainText("Probably");
+  await expect(rosalindRow.getByRole("link", { name: "Rosalind Quimby" })).toBeVisible();
+
+  // Two Octavias: both are offered and neither is picked for you.
+  const octaviaRow = page
+    .getByRole("listitem")
+    .filter({ has: page.getByText("Octavia", { exact: true }) });
+  await expect(octaviaRow).toContainText("Probably one of");
+  await expect(octaviaRow.getByRole("button", { name: /Add Octavia as an alias/ })).toHaveCount(2);
+
+  await rosalindRow
+    .getByRole("button", { name: "Add Rosalind as an alias of Rosalind Quimby" })
+    .click();
+  await expect(rosalindRow).toHaveCount(0);
+  const doc = (await (await page.request.get(`/api/v1/documents/${rosalind}`)).json()).data;
+  expect(doc.frontmatter.aliases).toEqual(["Rosalind"]);
+
+  await octaviaRow
+    .getByRole("button", { name: "Add Octavia as an alias of Octavia Marsh" })
+    .click();
+  await expect(octaviaRow).toHaveCount(0);
+
+  // The note's links now resolve: real links to the chosen pages.
+  await page.goto(`/doc/${notePath}`);
+  await expect(page.getByRole("link", { name: "Rosalind", exact: true })).toHaveAttribute(
+    "href",
+    `/doc/${rosalind}`,
+  );
+  await expect(page.getByRole("link", { name: "Octavia", exact: true })).toHaveAttribute(
+    "href",
+    `/doc/${octaviaMarsh}`,
+  );
+});

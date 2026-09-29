@@ -72,6 +72,18 @@ path → filename → alias, case-insensitive. Rename in the UI rewrites inbound
 (showing the affected files first); external renames leave dangling backlinks that
 `quire doctor` lists.
 
+**Unwritten names get likely matches, never silent ones.** People are written as
+`[[Frances]]` far more often than `[[Frances Bagley]]`, so the most-referenced
+"unwritten" page is usually someone who already has one. Resolution stays exact —
+guessing that Frances means Frances Bagley would be wrong the day a second Frances
+arrives — but the Unwritten list (and MCP `list_unwritten`) ranks existing people and
+companies per dangling name (`internal/index/matches.go`): the name equals the title's
+first word, else the title starts with it (≥3 characters), else it is written in
+capitals as the title's initials (`FB`, `F.B.`). Only the strongest tier is kept, people
+before companies, at most five. The fix is one click — **Add alias** appends the name
+to that document's `aliases:` (keeping the ones there) and every such link resolves;
+two Davids means two buttons, and the owner picks.
+
 **Frontmatter schemas** (all fields optional; only non-defaults written):
 
 - person: `aliases, company, email, phone, title, birthday, role, tags`
@@ -87,7 +99,9 @@ Dates are ISO 8601 local time (a personal tool; UTC in frontmatter is hostile to
 
 - Round-trip guarantee: open + save with no edits = byte-identical. CI-tested.
 - Frontmatter edited **by key**, preserving key order, comments, quoting, and unknown
-  keys. Never parse-and-dump through a re-serializing YAML writer.
+  keys. Never parse-and-dump through a re-serializing YAML writer. A key's span is its
+  line plus any indented / `- ` lines under it, so a hand-written block list
+  (`aliases:` then `  - Fran`) is replaced whole rather than left orphaned.
 - Task toggle touches exactly one line: `[ ]` → `[x]` (plus optional `✅ YYYY-MM-DD`).
 - No app-maintained `updated:` timestamps or other volatile churn. mtime and git know.
 - LF preserved, trailing-newline presence preserved, atomic writes

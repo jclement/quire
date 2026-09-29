@@ -245,6 +245,21 @@ type Unwritten struct {
 	Name    string    `json:"name"`
 	Refs    int       `json:"refs"`
 	Sources []DocMeta `json:"sources"`
+	// LikelyMatches are existing people/companies the name probably means
+	// ("Frances" → Frances Bagley), strongest reason only. More than one is
+	// an ambiguity for the owner to settle; empty when nothing is plausible.
+	LikelyMatches []LikelyMatch `json:"likely_matches"`
+}
+
+// LikelyMatch is a document a dangling name probably refers to. Adding the
+// name to its aliases resolves every link to it at once.
+type LikelyMatch struct {
+	Path  string `json:"path"`
+	Title string `json:"title"`
+	Type  string `json:"type" tstype:"DocType"`
+	// Reason is why it was suggested: first_name ("Frances"), prefix
+	// ("Fran", "James B") or initials ("FB").
+	Reason string `json:"reason" tstype:"\"first_name\" | \"prefix\" | \"initials\""`
 }
 
 // TimezoneInfo is the configured zone, what it resolves to, and the

@@ -18,6 +18,7 @@ export type {
   TimezoneInfo,
   RecurrenceProblem,
   Unwritten,
+  LikelyMatch,
   WeekPayload,
   AuditEntry,
   DocType,

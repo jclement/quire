@@ -56,6 +56,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/rename", s.handleRenameDocument)
 	mux.HandleFunc("PATCH /api/v1/documents/{path...}", s.handleSetFrontmatter)
 	mux.HandleFunc("POST /api/v1/link", s.handleLink)
+	mux.HandleFunc("POST /api/v1/aliases", s.handleAddAlias)
 
 	mux.HandleFunc("GET /api/v1/search", s.handleSearch)
 	mux.HandleFunc("GET /api/v1/related", s.handleRelated)

@@ -79,13 +79,12 @@ func RemoveFrontmatterKey(raw []byte, key string) []byte {
 	if !ok {
 		return raw
 	}
-	prefix := key + ":"
+	lines := strings.Split(string(block), "\n")
 	var kept []string
-	for _, line := range strings.Split(string(block), "\n") {
-		if strings.HasPrefix(line, prefix) {
-			continue
-		}
-		kept = append(kept, line)
+	if start, end := keySpan(lines, key); start >= 0 {
+		kept = append(append(kept, lines[:start]...), lines[end:]...)
+	} else {
+		kept = lines
 	}
 	var b bytes.Buffer
 	b.WriteString("---\n")
@@ -111,16 +110,9 @@ func SetFrontmatterKey(raw []byte, key, value string) []byte {
 	}
 
 	lines := strings.Split(string(block), "\n")
-	prefix := key + ":"
-	replaced := false
-	for i, line := range lines {
-		if strings.HasPrefix(line, prefix) {
-			lines[i] = newLine
-			replaced = true
-			break
-		}
-	}
-	if !replaced {
+	if start, end := keySpan(lines, key); start >= 0 {
+		lines = append(append(append([]string{}, lines[:start]...), newLine), lines[end:]...)
+	} else {
 		lines = append(lines, newLine)
 	}
 	newBlock := strings.Join(lines, "\n")
@@ -133,6 +125,30 @@ func SetFrontmatterKey(raw []byte, key, value string) []byte {
 	b.WriteString("\n---\n")
 	b.Write(body)
 	return b.Bytes()
+}
+
+// keySpan finds the lines a top-level key occupies: its own line plus any
+// indented or "- " continuation lines under it, which is how a YAML block
+// list ("aliases:\n  - Fran") is written by hand and by Obsidian. Returns
+// [start, end) or (-1, -1) when the key is absent. Replacing only the key's
+// own line would orphan the items beneath it and break the whole block.
+func keySpan(lines []string, key string) (int, int) {
+	prefix := key + ":"
+	for i, line := range lines {
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		end := i + 1
+		for end < len(lines) && isContinuation(lines[end]) {
+			end++
+		}
+		return i, end
+	}
+	return -1, -1
+}
+
+func isContinuation(line string) bool {
+	return strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") || strings.HasPrefix(line, "- ") || line == "-"
 }
 
 // FrontmatterPairs walks a frontmatter block as ordered (key, raw value)

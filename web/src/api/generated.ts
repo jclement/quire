@@ -344,6 +344,26 @@ export interface Unwritten {
   name: string;
   refs: number /* int */;
   sources: DocMeta[];
+  /**
+   * LikelyMatches are existing people/companies the name probably means
+   * ("Frances" → Frances Bagley), strongest reason only. More than one is
+   * an ambiguity for the owner to settle; empty when nothing is plausible.
+   */
+  likely_matches: LikelyMatch[];
+}
+/**
+ * LikelyMatch is a document a dangling name probably refers to. Adding the
+ * name to its aliases resolves every link to it at once.
+ */
+export interface LikelyMatch {
+  path: string;
+  title: string;
+  type: DocType;
+  /**
+   * Reason is why it was suggested: first_name ("Frances"), prefix
+   * ("Fran", "James B") or initials ("FB").
+   */
+  reason: "first_name" | "prefix" | "initials";
 }
 /**
  * TimezoneInfo is the configured zone, what it resolves to, and the

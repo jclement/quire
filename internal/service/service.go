@@ -538,9 +538,14 @@ func (s *Service) UnwrittenLinks(limit int) ([]Unwritten, error) {
 	if err != nil {
 		return nil, err
 	}
+	candidates, err := s.Index.MatchCandidates()
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Unwritten, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, Unwritten{Name: r.Name, Refs: r.Refs, Sources: metasFromRows(r.Sources)})
+		out = append(out, Unwritten{Name: r.Name, Refs: r.Refs, Sources: metasFromRows(r.Sources),
+			LikelyMatches: likelyMatches(r.Name, candidates)})
 	}
 	return out, nil
 }

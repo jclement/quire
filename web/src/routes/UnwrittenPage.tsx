@@ -1,13 +1,16 @@
 // Names the vault keeps referring to that have no document yet — a to-do
 // list for the graph that writes itself. Each row creates the missing
-// document as whichever type it should have been, then opens it.
+// document as whichever type it should have been, then opens it. When the
+// name is probably an existing person or company ("Frances" → Frances
+// Bagley), the row offers to add it as that document's alias instead — the
+// fix that resolves every such link at once rather than minting a duplicate.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link as RouterLink, useNavigate } from "@tanstack/react-router";
-import { Plus, SquareDashed } from "lucide-react";
+import { Plus, SquareDashed, Tag } from "lucide-react";
 import { useState } from "react";
 import { api, errorMessage } from "../api/client.ts";
 import { useDefaultArea } from "../api/queries.ts";
-import type { DocType } from "../api/types.ts";
+import type { DocType, LikelyMatch, Unwritten } from "../api/types.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { SkeletonRows } from "../components/Skeleton.tsx";
@@ -54,15 +57,7 @@ export function UnwrittenPage() {
   );
 }
 
-function UnwrittenRow({
-  entry,
-}: {
-  entry: {
-    name: string;
-    refs: number;
-    sources: { path: string; title: string }[];
-  };
-}) {
+function UnwrittenRow({ entry }: { entry: Unwritten }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useUi();
@@ -79,6 +74,19 @@ function UnwrittenRow({
       void navigate({ to: docHref(doc.path), search: { edit: true } });
     },
   });
+
+  const addAlias = useMutation({
+    mutationFn: (match: LikelyMatch) => api.addAlias(match.path, entry.name),
+    onSuccess: (doc) => {
+      // Every link written as this name now resolves, so the row goes and
+      // any open document showing it as dangling needs its links again.
+      void queryClient.invalidateQueries({ queryKey: ["unwritten"] });
+      void queryClient.invalidateQueries({ queryKey: ["document"] });
+      toast(`${doc.title} now answers to “${entry.name}”`);
+    },
+    onError: (error) => toast(errorMessage(error)),
+  });
+  const matches = entry.likely_matches ?? [];
 
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2">
@@ -147,6 +155,32 @@ function UnwrittenRow({
           </>
         ) : null}
       </div>
+      {matches.length > 0 ? (
+        <div className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+          <span>{matches.length === 1 ? "Probably" : "Probably one of"}</span>
+          {matches.map((match) => (
+            <span key={match.path} className="flex items-center gap-1.5">
+              <RouterLink
+                to={docHref(match.path)}
+                className="text-accent hover:underline"
+              >
+                {match.title}
+              </RouterLink>
+              <button
+                type="button"
+                onClick={() => addAlias.mutate(match)}
+                disabled={addAlias.isPending}
+                aria-label={`Add ${entry.name} as an alias of ${match.title}`}
+                title={`Links written [[${entry.name}]] will open ${match.title}`}
+                className="flex h-6 items-center gap-1 rounded border border-border px-1.5 text-body hover:bg-hover hover:text-heading disabled:opacity-50"
+              >
+                <Tag className="size-3" aria-hidden="true" />
+                Add alias
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
     </li>
   );
 }
