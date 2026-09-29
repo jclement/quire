@@ -255,6 +255,11 @@ export interface TodayPayload {
   waiting: Task[];
   birthdays: Birthday[];
   recent: DocMeta[];
+  /**
+   * Events is today's calendar, from the subscribed ICS feeds; empty
+   * when none are configured.
+   */
+  events: CalendarEvent[];
 }
 /**
  * Attachment is the upload response: the vault path and the markdown to
@@ -476,6 +481,10 @@ export interface CalendarDay {
   touched: CalendarDoc[]; // documents modified that day
   meetings: CalendarDoc[]; // meetings scheduled that day
   completed_tasks: number /* int */;
+  /**
+   * Events counts calendar-feed events that day.
+   */
+  events: number /* int */;
 }
 /**
  * CalendarMonth is the month payload.
@@ -581,4 +590,146 @@ export interface TemplateInfo {
    * (templates/<type>.md) rather than a named alternative.
    */
   default: boolean;
+}
+
+//////////
+// source: apitypes_calendar.go
+/*
+Wire shapes for the calendar feed and meeting prep. Kept apart from
+apitypes.go so the feature reads as one unit; tygo reads both files
+(tygo.yaml) into web/src/api/generated.ts.
+*/
+
+/**
+ * CalendarEvent is one occurrence on the owner's calendar. Times are
+ * RFC 3339 in the configured time zone.
+ */
+export interface CalendarEvent {
+  /**
+   * UID identifies the series; with Date it identifies one occurrence.
+   */
+  uid: string;
+  /**
+   * RecurrenceID is the occurrence's original start when it belongs to a
+   * recurring series, "" for a one-off.
+   */
+  recurrence_id: string;
+  title: string;
+  start: string;
+  end: string;
+  /**
+   * Date is the start's day (YYYY-MM-DD) in the configured zone.
+   */
+  date: string;
+  all_day: boolean;
+  /**
+   * Location is the free-text location; Link is where to join, if any.
+   */
+  location: string;
+  link: string;
+  attendees: EventAttendee[];
+  /**
+   * NotePath is the meeting note made for this occurrence (matched by
+   * event_uid and date), null when there is none yet.
+   */
+  note_path: string | null;
+}
+/**
+ * EventAttendee is one invitee, matched to a person document when one has
+ * their email (or, failing that, answers to their name).
+ */
+export interface EventAttendee {
+  name: string;
+  email: string;
+  organizer: boolean;
+  /**
+   * Person is the matched person document; null when unmatched.
+   */
+  person: CalendarDoc | null;
+}
+/**
+ * CalendarFeed is one subscribed feed as Settings shows it. The URL is a
+ * secret and is never returned; URL here is the masked form.
+ */
+export interface CalendarFeed {
+  id: string;
+  url: string;
+  /**
+   * LastSuccess and LastAttempt are RFC 3339, null before the first try.
+   */
+  last_attempt: string | null;
+  last_success: string | null;
+  /**
+   * Error is the last failure (never containing the URL); "" when the
+   * latest fetch worked.
+   */
+  error: string;
+  failures: number /* int */;
+  /**
+   * Events is how many VEVENTs the feed held at its last success.
+   */
+  events: number /* int */;
+}
+/**
+ * MeetingPrep is what to know walking into a meeting: for each attendee
+ * with a person page, when you last met, what is open between you, and
+ * what they are in the middle of.
+ */
+export interface MeetingPrep {
+  title: string;
+  /**
+   * Date is the meeting's start ("YYYY-MM-DDTHH:MM"), "" when unknown.
+   */
+  date: string;
+  /**
+   * Path is the meeting note, null when prepping a calendar event that
+   * has no note yet.
+   */
+  path: string | null;
+  event_uid: string;
+  people: PrepPerson[];
+  /**
+   * Unmatched are attendees with no person document, by name or email.
+   */
+  unmatched: string[];
+}
+/**
+ * PrepPerson is one attendee's context.
+ */
+export interface PrepPerson {
+  person: DocMeta;
+  /**
+   * Company is the person's company (frontmatter company:), null when
+   * unset; Path is null inside it when the company has no page.
+   */
+  company: PrepCompany | null;
+  /**
+   * LastMeeting is the most recent other meeting linking them that
+   * started before this one; null when this is the first.
+   */
+  last_meeting: PrepMeeting | null;
+  /**
+   * OpenTasks are open tasks elsewhere that mention them, minus the
+   * waiting ones, which are in Waiting.
+   */
+  open_tasks: Task[];
+  waiting: Task[];
+  /**
+   * RecentNotes are the latest non-meeting documents linking them.
+   */
+  recent_notes: DocMeta[];
+}
+/**
+ * PrepCompany names a person's company.
+ */
+export interface PrepCompany {
+  name: string;
+  path: string | null;
+}
+/**
+ * PrepMeeting is a previous meeting and when it was.
+ */
+export interface PrepMeeting {
+  DocMeta: DocMeta;
+  date: string;
 }

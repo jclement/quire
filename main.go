@@ -24,6 +24,7 @@ import (
 
 	"github.com/jclement/quire/internal/api"
 	"github.com/jclement/quire/internal/auth"
+	"github.com/jclement/quire/internal/calendar"
 	"github.com/jclement/quire/internal/cli"
 	"github.com/jclement/quire/internal/config"
 	"github.com/jclement/quire/internal/gitback"
@@ -144,6 +145,11 @@ func runServe() error {
 			slog.Error("watcher stopped", "err", err)
 		}
 	}()
+
+	// Calendar feeds are subscribed in Settings, so the fetcher always runs;
+	// with no feeds it does nothing. The URLs are secrets: 0600, own file.
+	svc.Feeds = calendar.NewFetcher(calendar.OpenStore(filepath.Join(cfg.StateDir(), "calendar-feeds.json")))
+	go svc.Feeds.Run(ctx)
 
 	// Git-backed vault: every index change pokes the debounced committer.
 	var committer *gitback.Committer

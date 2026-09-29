@@ -84,8 +84,10 @@ func (s *Service) Calendar(month string) (CalendarMonth, error) {
 		}
 	}
 
+	events := s.eventCounts(start, end)
 	for i := range payload.Days {
 		cell := byDay[start.AddDate(0, 0, i).Format("2006-01-02")]
+		cell.Events = events[cell.Date]
 		if len(cell.Touched) > maxTouchedPerDay {
 			cell.Touched = cell.Touched[:maxTouchedPerDay]
 		}

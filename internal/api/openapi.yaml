@@ -168,7 +168,7 @@ paths:
   /api/v1/today:
     get:
       summary: The composed home payload
-      description: "date, daily (nullable), meetings, overdue, due_today, available, waiting, recent."
+      description: "date, daily (nullable), meetings, overdue, due_today, available, waiting, recent, events (today's calendar-feed occurrences)."
       responses: { "200": { description: "data: TodayPayload" } }
   /api/v1/calendar:
     get:
@@ -179,6 +179,65 @@ paths:
         count. `month` is YYYY-MM and defaults to the current month.
       parameters: [{ name: month, in: query, schema: { type: string, example: "2026-09" } }]
       responses: { "200": { description: "data: CalendarMonth {month, prev, next, days[]}" } }
+  /api/v1/calendar/feeds:
+    get:
+      summary: Subscribed ICS calendar feeds with their last fetch outcome
+      description: >
+        URLs are masked (scheme, host, last four characters): a feed URL is a
+        bearer secret and is never returned once saved. error is the last
+        failure, already free of the URL.
+      responses: { "200": { description: "data: CalendarFeed[] — id, url (masked), last_attempt, last_success, error, failures, events" } }
+    post:
+      summary: Subscribe to an ICS feed and fetch it at once
+      description: "Body {url}. https:// or webcal:// (rewritten to https). Stored 0600 in the state dir, apart from settings.json."
+      responses:
+        "201": { description: "data: CalendarFeed[] — the list, already showing whether the new feed fetched" }
+        "400": { description: "VALIDATION_ERROR — not an http(s) URL, or already subscribed" }
+  /api/v1/calendar/feeds/{id}:
+    delete:
+      summary: Unsubscribe; the feed's events vanish at once
+      responses: { "204": { description: removed }, "404": { description: no such feed } }
+  /api/v1/calendar/refresh:
+    post:
+      summary: Fetch every feed now, ignoring backoff
+      responses: { "200": { description: "data: CalendarFeed[]" } }
+  /api/v1/calendar/events:
+    get:
+      summary: Calendar-feed events over a range, in the configured time zone
+      description: >
+        Recurring series are expanded (RRULE, EXDATE, RECURRENCE-ID overrides).
+        from and to are inclusive days — YYYY-MM-DD or natural forms (today,
+        fri, +3d); from defaults to today, to to a week later, at most 92 days.
+        Attendees are matched to person documents by email: (string or list)
+        then by name; note_path is the meeting note made for the occurrence.
+      parameters:
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses: { "200": { description: "data: CalendarEvent[]" } }
+  /api/v1/calendar/events/note:
+    post:
+      summary: Make the meeting note for one event occurrence
+      description: >
+        Body {uid, date}. From the meeting template, dated at the event's start,
+        matched attendees in people: as wikilinks, the rest on the Attendees
+        line, event_uid in frontmatter. Idempotent per occurrence.
+      responses:
+        "201": { description: "data: Document — created" }
+        "200": { description: "data: Document — the occurrence's existing note" }
+        "404": { description: no such occurrence in the feeds }
+  /api/v1/meeting-prep:
+    get:
+      summary: Per-attendee context for a meeting note or a calendar event
+      description: >
+        ?path= a meeting note, or ?event_uid= (with optional &date=) a calendar
+        event. For each attendee with a person page: last meeting together,
+        open tasks mentioning them, waiting (⏳) tasks mentioning them,
+        company, recent non-meeting notes linking them; plus unmatched names.
+      parameters:
+        - { name: path, in: query, schema: { type: string } }
+        - { name: event_uid, in: query, schema: { type: string } }
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses: { "200": { description: "data: MeetingPrep" }, "400": { description: neither path nor event_uid }, "404": { description: not found } }
   /api/v1/attachments:
     post:
       summary: Upload a file (multipart field `file`)

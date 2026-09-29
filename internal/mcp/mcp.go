@@ -66,8 +66,9 @@ Working rules:
   [[company]] linked on the line), 🔁 recurrence, ✅
   completion, and #someday to park one. Toggle them with complete_task rather
   than rewriting the line.
-- Start with today for "what should I work on", and person_context before a
-  meeting — each answers in one call what would otherwise take several.
+- Start with today for "what should I work on" (it includes the day's
+  calendar), and meeting_prep before a meeting (person_context for one
+  person) — each answers in one call what would otherwise take several.
 - Processing the inbox means every task leaves it: give it a due or defer
   date, delegate it (edit_task waiting_on), park it (#someday), complete it,
   or — when it was never an action — task_to_note.
@@ -142,7 +143,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 			Description: "Every tag in the vault with how many documents carry it, most-used first. Use it to pick an existing tag rather than inventing a near-duplicate."},
 			t.listTags)
 		sdk.AddTool(s, &sdk.Tool{Name: "today", Annotations: readOnly,
-			Description: "The composed 'what matters right now' payload: today's meetings, overdue and due tasks, available and waiting tasks, birthdays, recent documents, and the daily note. Start here for 'what should I work on' — it answers in one call what would take six."},
+			Description: "The composed 'what matters right now' payload: today's calendar events (from the subscribed feeds, each with note_path when a note exists), today's meeting notes, overdue and due tasks, available and waiting tasks, birthdays, recent documents, and the daily note. Start here for 'what should I work on' — it answers in one call what would take six."},
 			t.today)
 		sdk.AddTool(s, &sdk.Tool{Name: "week_review", Annotations: readOnly,
 			Description: "The weekly review for an ISO week (omit for this one): what was completed inside it, what slipped and is still open, what is still delegated (and stale_waiting: waits past a week, the chase list), which active projects have no open task at all, the meetings held and the documents touched. This is the payload for a Friday retro or a status update — it answers 'what did I actually get done' from the index rather than from memory."},
@@ -207,6 +208,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 
 	registerAliasTools(s, t, allows)
 	registerDecisionTools(s, t, allows)
+	registerCalendarTools(s, t, allows)
 
 	return s
 }

@@ -62,6 +62,13 @@ var dataRoutes = []struct{ method, path string }{
 	{"POST", "/api/v1/tasks/abc/toggle"},
 	{"GET", "/api/v1/today"},
 	{"GET", "/api/v1/calendar"},
+	{"GET", "/api/v1/calendar/feeds"}, // masked, but still which calendars
+	{"POST", "/api/v1/calendar/feeds"},
+	{"DELETE", "/api/v1/calendar/feeds/abcd1234"},
+	{"POST", "/api/v1/calendar/refresh"},
+	{"GET", "/api/v1/calendar/events"}, // the owner's whole calendar
+	{"POST", "/api/v1/calendar/events/note"},
+	{"GET", "/api/v1/meeting-prep?path=meetings/x.md"},
 	{"GET", "/api/v1/daily"}, // the journal: every daily note
 	{"GET", "/api/v1/daily/2026-09-01"},
 	{"GET", "/api/v1/tags"},

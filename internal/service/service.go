@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jclement/quire/internal/calendar"
 	"github.com/jclement/quire/internal/index"
 	"github.com/jclement/quire/internal/markdown"
 	"github.com/jclement/quire/internal/semantic"
@@ -40,6 +41,9 @@ type Service struct {
 	// named. Separate from Semantic because the same endpoint often serves
 	// embeddings without serving vision.
 	Vision *vision.Client
+	// Feeds serves the owner's calendar from subscribed ICS feeds; nil
+	// means no calendar (tests, and the CLI verbs).
+	Feeds *calendar.Fetcher
 	// Now allows tests to pin the clock.
 	Now func() time.Time
 	// edits serialises re-derivable edits per path (see edits.go).
@@ -662,6 +666,12 @@ func (s *Service) TodayIn(area string) (TodayPayload, error) {
 		return payload, err
 	}
 	payload.Recent = metasFromRows(recent)
+
+	// The calendar is shared like birthdays: a feed has no areas.
+	payload.Events, err = s.todayEvents(day)
+	if err != nil {
+		return payload, err
+	}
 
 	return payload, nil
 }

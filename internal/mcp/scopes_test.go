@@ -87,11 +87,13 @@ func TestToolsAreScoped(t *testing.T) {
 		"list_daily", "list_tasks", "list_tags", "list_areas", "list_templates",
 		"list_unwritten", "today", "week_review", "calendar", "person_context",
 		"list_decisions",
+		"calendar_events", "meeting_prep",
 	}
 	writeTools := []string{
 		"create_document", "update_document", "append_to_document",
 		"link_entity", "unlink_entity", "rename_document", "set_frontmatter",
 		"capture_note", "ensure_daily", "ensure_weekly", "task_to_note", "add_alias",
+		"create_meeting_from_event",
 	}
 	taskTools := []string{"create_task", "complete_task", "edit_task", "restore_recurrence"}
 
@@ -230,6 +232,7 @@ func TestSurfaceIsCompleteAndDocumented(t *testing.T) {
 		"ensure_daily": true, "ensure_weekly": true, "task_to_note": true, "add_alias": true,
 		"create_task": true, "complete_task": true, "edit_task": true,
 		"restore_recurrence": true,
+		"calendar_events":    true, "meeting_prep": true, "create_meeting_from_event": true,
 	}
 	for _, tool := range res.Tools {
 		if !want[tool.Name] {

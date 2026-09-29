@@ -90,6 +90,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/weekly/{week}", s.handleEnsureWeekly)
 	mux.HandleFunc("GET /api/v1/today", s.handleToday)
 	mux.HandleFunc("GET /api/v1/calendar", s.handleCalendar)
+	s.calendarRoutes(mux)
 
 	mux.HandleFunc("GET /api/v1/agent-guidance", s.handleGetGuidance)
 	mux.HandleFunc("PUT /api/v1/agent-guidance", s.handleSetGuidance)

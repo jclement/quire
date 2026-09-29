@@ -181,6 +181,9 @@ type TodayPayload struct {
 	Waiting   []Task     `json:"waiting"`
 	Birthdays []Birthday `json:"birthdays"`
 	Recent    []DocMeta  `json:"recent"`
+	// Events is today's calendar, from the subscribed ICS feeds; empty
+	// when none are configured.
+	Events []CalendarEvent `json:"events"`
 }
 
 // Attachment is the upload response: the vault path and the markdown to
@@ -347,6 +350,8 @@ type CalendarDay struct {
 	Touched   []CalendarDoc `json:"touched"`  // documents modified that day
 	Meetings  []CalendarDoc `json:"meetings"` // meetings scheduled that day
 	Completed int           `json:"completed_tasks"`
+	// Events counts calendar-feed events that day.
+	Events int `json:"events"`
 }
 
 // CalendarMonth is the month payload.

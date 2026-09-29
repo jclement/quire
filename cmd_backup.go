@@ -1,6 +1,6 @@
 // `quire backup`: one tar.gz holding everything that matters — the vault
 // plus auth.db (snapshotted via VACUUM INTO so a live server can't hand us a
-// torn copy) and config.yaml. The index is deliberately excluded: it is
+// torn copy), config.yaml and the calendar feed list. The index is deliberately excluded: it is
 // rebuildable by design.
 package main
 
@@ -108,6 +108,14 @@ func runBackup(args []string) error {
 	if cfgPath := filepath.Join(cfg.StateDir(), "config.yaml"); fileExists(cfgPath) {
 		if err := addFile(cfgPath, ".quire/config.yaml"); err != nil {
 			return fmt.Errorf("archiving config: %w", err)
+		}
+	}
+
+	// Calendar feed URLs are secrets the owner would otherwise have to dig
+	// out of each provider again after a restore.
+	if feedsPath := filepath.Join(cfg.StateDir(), "calendar-feeds.json"); fileExists(feedsPath) {
+		if err := addFile(feedsPath, ".quire/calendar-feeds.json"); err != nil {
+			return fmt.Errorf("archiving calendar feeds: %w", err)
 		}
 	}
 
