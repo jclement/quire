@@ -96,6 +96,8 @@ export function useFeedMutation<Input>(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: fn,
+    // Settings → Calendar shows the error under the form.
+    meta: { inlineError: true },
     onSuccess: (feeds) => {
       if (feeds) queryClient.setQueryData(calendarKeys.feeds, feeds);
       else void queryClient.invalidateQueries({ queryKey: calendarKeys.feeds });
@@ -119,6 +121,8 @@ export function useNoteFromEvent() {
   return useMutation({
     mutationFn: (event: CalendarEvent) =>
       calendarApi.noteFromEvent(event.uid, event.date),
+    // The agenda row shows the error under the event.
+    meta: { inlineError: true },
     onSuccess: (doc) => {
       queryClient.setQueryData(queryKeys.document(doc.path), doc);
       void queryClient.invalidateQueries({ queryKey: queryKeys.today });

@@ -214,7 +214,7 @@ func TestMeetingPrepComposesPerAttendeeContext(t *testing.T) {
 	s := newCalendarService(t, agendaICS)
 	seedPeople(t, s)
 	mustCreate(t, s, vault.TypeMeeting, "Acme kickoff",
-		"---\ndate: 2026-08-20T10:00\npeople: [\"[[Sarah Chen]]\"]\n---\n# Acme kickoff\n\n- [ ] Send [[Sarah Chen]] the deck\n- [ ] Signed contract ⏳ [[Sarah Chen]]\n")
+		"---\ndate: 2026-08-20T10:00\npeople: [\"[[Sarah Chen]]\"]\n---\n# Acme kickoff\n\n- [ ] Send [[Sarah Chen]] the deck\n- [ ] Signed contract ⏳ 2026-08-20 [[Sarah Chen]]\n- [ ] Legal review ⏳ 2026-08-30 [[Dan Roe]] (copy [[Sarah Chen]])\n")
 	mustCreate(t, s, vault.TypeMeeting, "Acme older",
 		"---\ndate: 2026-08-01T10:00\npeople: [\"[[Sarah Chen]]\"]\n---\n# Acme older\n")
 	mustCreate(t, s, vault.TypeMeeting, "Acme follow-up",
@@ -247,8 +247,19 @@ func TestMeetingPrepComposesPerAttendeeContext(t *testing.T) {
 	if len(sarah.OpenTasks) != 1 || !strings.Contains(sarah.OpenTasks[0].Text, "deck") {
 		t.Errorf("open tasks = %+v", sarah.OpenTasks)
 	}
+	// Waiting is what Sarah owes, by the same who-rule person_context uses:
+	// the wait on Dan that only copies her is Dan's, not hers.
 	if len(sarah.Waiting) != 1 || !strings.Contains(sarah.Waiting[0].Text, "contract") {
-		t.Errorf("waiting = %+v", sarah.Waiting)
+		t.Fatalf("waiting = %+v", sarah.Waiting)
+	}
+	if w := sarah.Waiting[0].WaitingFor; w == nil || w.Days == nil || *w.Days != 12 || !w.Stale ||
+		w.OnPath == nil || *w.OnPath != "people/sarah-chen.md" {
+		t.Errorf("the wait carries its age and who: %+v", w)
+	}
+	for _, task := range sarah.OpenTasks {
+		if task.Waiting {
+			t.Errorf("a wait is not listed as an open task: %s", task.Text)
+		}
 	}
 	if len(sarah.RecentNotes) != 1 || sarah.RecentNotes[0].Title != "Pricing thoughts" {
 		t.Errorf("recent notes = %+v", sarah.RecentNotes)
@@ -311,5 +322,43 @@ func TestNoCalendarMeansNoEvents(t *testing.T) {
 	}
 	if _, err := s.AddCalendarFeed(context.Background(), "https://example.com/x.ics"); err == nil {
 		t.Error("adding a feed without a calendar is refused")
+	}
+}
+
+// A double click (or two tabs) must not make two notes, nor lose one to a
+// 409: every concurrent create returns the same note, and exactly one of
+// them made it.
+func TestCreateMeetingFromEventConcurrently(t *testing.T) {
+	s := newCalendarService(t, agendaICS)
+	const clicks = 8
+	type result struct {
+		path    string
+		created bool
+		err     error
+	}
+	results := make(chan result, clicks)
+	start := make(chan struct{})
+	for range clicks {
+		go func() {
+			<-start
+			doc, created, err := s.CreateMeetingFromEvent("acme-sync@example.com", "2026-09-01")
+			results <- result{doc.Path, created, err}
+		}()
+	}
+	close(start)
+	paths := map[string]bool{}
+	made := 0
+	for range clicks {
+		r := <-results
+		if r.err != nil {
+			t.Fatalf("a concurrent create failed: %v", r.err)
+		}
+		paths[r.path] = true
+		if r.created {
+			made++
+		}
+	}
+	if len(paths) != 1 || made != 1 {
+		t.Errorf("want one note made once, got paths %v and %d creations", paths, made)
 	}
 }

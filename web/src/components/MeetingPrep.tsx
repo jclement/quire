@@ -164,6 +164,18 @@ function PrepTasks({
             />
             <span className="line-clamp-2">
               {task.text}
+              {waiting && task.waiting_for?.days != null ? (
+                <span
+                  title={
+                    task.waiting_for.since
+                      ? `waiting since ${task.waiting_for.since}`
+                      : undefined
+                  }
+                  className={`ml-1 whitespace-nowrap font-mono text-[10px] ${task.waiting_for.stale ? "text-danger" : "text-muted"}`}
+                >
+                  {task.waiting_for.days}d
+                </span>
+              ) : null}
               {task.due ? (
                 <span className="ml-1 whitespace-nowrap font-mono text-[10px] text-muted">
                   {task.due.slice(5)}

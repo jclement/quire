@@ -79,10 +79,13 @@ type PrepPerson struct {
 	// LastMeeting is the most recent other meeting linking them that
 	// started before this one; null when this is the first.
 	LastMeeting *PrepMeeting `json:"last_meeting"`
-	// OpenTasks are open tasks elsewhere that mention them, minus the
-	// waiting ones, which are in Waiting.
+	// OpenTasks are open tasks elsewhere that mention them, minus every
+	// waiting one.
 	OpenTasks []Task `json:"open_tasks"`
-	Waiting   []Task `json:"waiting"`
+	// Waiting is what they owe: waits resolved to them by the same rule as
+	// their page's waiting_on, oldest first, each with its age and stale
+	// flag (past StaleWaitingDays).
+	Waiting []Task `json:"waiting"`
 	// RecentNotes are the latest non-meeting documents linking them.
 	RecentNotes []DocMeta `json:"recent_notes"`
 }

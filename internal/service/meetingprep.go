@@ -6,8 +6,8 @@
 // It is composed from the same index queries person_context and the person
 // page use (Backlinks, TasksMentioning, link resolution), so the three can
 // never disagree about who someone is or what is owed; nothing here is new
-// SQL. Waiting ages ("since <date>") are deliberately not computed here —
-// they arrive with the waiting-on grammar and belong in the Task shape.
+// SQL. "Waiting" is what the attendee owes, resolved and aged exactly as
+// on their person page (waiting.go), not merely a waiting task naming them.
 package service
 
 import (
@@ -216,15 +216,23 @@ func (s *Service) prepPerson(path, exclude, before string) (PrepPerson, error) {
 		}
 	}
 
-	tasks, err := s.Index.TasksMentioning(path)
+	// What they owe, by the who-rule the person page and person_context use
+	// (waiting.go): a wait on Dan that merely copies them stays Dan's. Aged,
+	// with the stale flag, so prep leads with what to chase.
+	owed, err := s.Index.WaitingOnDoc(path)
 	if err != nil {
 		return PrepPerson{}, err
 	}
-	for _, t := range tasks {
-		if t.Waiting {
-			person.Waiting = append(person.Waiting, taskFromRow(t))
-		} else {
-			person.OpenTasks = append(person.OpenTasks, taskFromRow(t))
+	person.Waiting = s.tasksOut(owed)
+	mentioning, err := s.Index.TasksMentioning(path)
+	if err != nil {
+		return PrepPerson{}, err
+	}
+	// Open tasks exclude every wait: theirs are above, and someone else's
+	// is that person's to chase.
+	for _, t := range s.tasksOut(mentioning) {
+		if !t.Waiting {
+			person.OpenTasks = append(person.OpenTasks, t)
 		}
 	}
 	return person, nil

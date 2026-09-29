@@ -713,10 +713,15 @@ export interface PrepPerson {
    */
   last_meeting: PrepMeeting | null;
   /**
-   * OpenTasks are open tasks elsewhere that mention them, minus the
-   * waiting ones, which are in Waiting.
+   * OpenTasks are open tasks elsewhere that mention them, minus every
+   * waiting one.
    */
   open_tasks: Task[];
+  /**
+   * Waiting is what they owe: waits resolved to them by the same rule as
+   * their page's waiting_on, oldest first, each with its age and stale
+   * flag (past StaleWaitingDays).
+   */
   waiting: Task[];
   /**
    * RecentNotes are the latest non-meeting documents linking them.

@@ -12,6 +12,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -328,12 +329,12 @@ func (s *Service) CreateMeetingFromEvent(uid, day string) (doc Document, created
 	if strings.TrimSpace(uid) == "" {
 		return Document{}, false, fmt.Errorf("%w: uid is required", ErrValidation)
 	}
-	existing := map[string]string{}
-	if err := s.collectEventNotes(day, existing); err != nil {
-		return Document{}, false, err
-	}
-	if path := existing[eventKey(uid, day)]; path != "" {
-		doc, err := s.GetDocument(path)
+	// One create per occurrence at a time: a double click must neither make
+	// a "-2" copy nor lose to the first click with a 409. The lock covers
+	// check-then-create, and the index is updated before it is released,
+	// so the second caller finds the first one's note.
+	defer s.edits.Lock("calendar-event:" + eventKey(uid, day))()
+	if doc, ok, err := s.existingEventNote(uid, day); ok || err != nil {
 		return doc, false, err
 	}
 	event, err := s.findEvent(uid, day)
@@ -350,6 +351,16 @@ func (s *Service) CreateMeetingFromEvent(uid, day string) (doc Document, created
 		return Document{}, false, err
 	}
 	f, err := s.Vault.Write(path, content, "")
+	if errors.Is(err, vault.ErrConflict) {
+		// Something outside this process created the path in between. If it
+		// is this occurrence's note, that is the answer; if not, say so.
+		if _, err := s.Index.IndexFile(path); err == nil {
+			if doc, ok, err := s.existingEventNote(uid, day); ok || err != nil {
+				return doc, false, err
+			}
+		}
+		return Document{}, false, err
+	}
 	if err != nil {
 		return Document{}, false, err
 	}
@@ -357,6 +368,21 @@ func (s *Service) CreateMeetingFromEvent(uid, day string) (doc Document, created
 		return Document{}, false, fmt.Errorf("indexing new meeting: %w", err)
 	}
 	doc, err = s.buildDocument(f)
+	return doc, true, err
+}
+
+// existingEventNote returns the note already made for an occurrence; ok is
+// false when there is none.
+func (s *Service) existingEventNote(uid, day string) (Document, bool, error) {
+	existing := map[string]string{}
+	if err := s.collectEventNotes(day, existing); err != nil {
+		return Document{}, false, err
+	}
+	path := existing[eventKey(uid, day)]
+	if path == "" {
+		return Document{}, false, nil
+	}
+	doc, err := s.GetDocument(path)
 	return doc, true, err
 }
 
