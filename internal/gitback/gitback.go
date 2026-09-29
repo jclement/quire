@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -20,6 +21,11 @@ import (
 // of watcher events) becomes one commit once the vault has been quiet this
 // long.
 const debounceWindow = 60 * time.Second
+
+// ownFiles never belong in a commit. The vault's atomic writes pass through
+// a same-directory .quire-write-* temp file, and a commit that runs at that
+// instant would otherwise capture half a document.
+var ownFiles = []gitignore.Pattern{gitignore.ParsePattern(".quire-write-*", nil)}
 
 // Committer owns the repo and the debounce loop.
 type Committer struct {
@@ -99,6 +105,10 @@ func (c *Committer) commit(message string) error {
 	if err != nil {
 		return err
 	}
+	// Quire's own temp files are excluded in memory rather than through
+	// .gitignore: that file is the user's, and writing to it would be a
+	// change they never made.
+	wt.Excludes = append(wt.Excludes, ownFiles...)
 	if err := wt.AddWithOptions(&git.AddOptions{All: true}); err != nil {
 		return fmt.Errorf("staging: %w", err)
 	}

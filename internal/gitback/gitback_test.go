@@ -160,3 +160,66 @@ func TestWaitReturnsOnTimeout(t *testing.T) {
 		t.Errorf("Wait took %s despite its timeout", elapsed)
 	}
 }
+
+// TestTempFilesNeverCommitted: the vault's atomic writes pass through a
+// same-directory .quire-write-* file, and a commit that happens to run at
+// that instant used to stage it. A user's own .gitignore still applies
+// alongside the built-in exclusion, and is never rewritten to get it.
+func TestTempFilesNeverCommitted(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"note.md":                   "hello\n",
+		".quire-write-123456":       "half a document",
+		"daily/.quire-write-987654": "another one",
+		".gitignore":                "private.md\n",
+		"private.md":                "mine\n",
+		"daily/2026-09-01.md":       "# today\n",
+	}
+	for name, content := range files {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	c, err := Start(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cancel()
+		c.Wait(5 * time.Second)
+	})
+
+	repo, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := repo.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit, err := repo.CommitObject(head.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, wantCommitted := range map[string]bool{
+		"note.md":                   true,
+		"daily/2026-09-01.md":       true,
+		".gitignore":                true,
+		".quire-write-123456":       false,
+		"daily/.quire-write-987654": false,
+		"private.md":                false,
+	} {
+		_, err := commit.File(name)
+		if committed := err == nil; committed != wantCommitted {
+			t.Errorf("%s committed = %v, want %v", name, committed, wantCommitted)
+		}
+	}
+	if raw, _ := os.ReadFile(filepath.Join(dir, ".gitignore")); string(raw) != "private.md\n" {
+		t.Errorf(".gitignore was rewritten: %q", raw)
+	}
+}

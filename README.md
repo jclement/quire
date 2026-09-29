@@ -134,7 +134,9 @@ explicitly, which always wins over the directory.
 
 The vault is a local git repository by default: auto-initialized, with debounced
 auto-commits after edits settle and a flush on shutdown. quire never pushes or merges
-— add your own remote and push whenever you like. `QUIRE_GIT=false` opts out.
+— add your own remote and push whenever you like. Your `.gitignore` is honoured and
+never edited; quire's own `.quire-write-*` temp files are left out of commits without
+it. `QUIRE_GIT=false` opts out.
 
 ### Life admin
 
