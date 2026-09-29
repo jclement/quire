@@ -67,7 +67,7 @@ export function errorMessage(error: unknown): string {
   return "Something went wrong.";
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, init);
@@ -99,7 +99,7 @@ function enrollQuery(code?: string): string {
   return trimmed ? `?enroll_code=${encodeURIComponent(trimmed)}` : "";
 }
 
-function jsonInit(method: string, payload: unknown): RequestInit {
+export function jsonInit(method: string, payload: unknown): RequestInit {
   return {
     method,
     headers: { "Content-Type": "application/json" },

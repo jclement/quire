@@ -21,6 +21,7 @@ function daysOf(month: string, count: number): CalendarDay[] {
     touched: [],
     meetings: [],
     completed_tasks: 0,
+    events: 0,
   }));
 }
 
@@ -126,6 +127,7 @@ describe("otherTouched", () => {
       { path: "meetings/standup.md", title: "Standup", type: "meeting" },
     ],
     completed_tasks: 2,
+    events: 0,
   };
 
   test("drops the day's own note and anything already listed as a meeting", () => {

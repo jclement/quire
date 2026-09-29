@@ -729,7 +729,6 @@ export interface PrepCompany {
 /**
  * PrepMeeting is a previous meeting and when it was.
  */
-export interface PrepMeeting {
-  DocMeta: DocMeta;
+export interface PrepMeeting extends DocMeta {
   date: string;
 }

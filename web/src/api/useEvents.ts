@@ -35,6 +35,8 @@ function invalidateForDocEvent(
   void queryClient.invalidateQueries({ queryKey: ["unwritten"] });
   void queryClient.invalidateQueries({ queryKey: ["areas"] });
   void queryClient.invalidateQueries({ queryKey: ["templates"] });
+  // Any write can change someone's last meeting or open tasks.
+  void queryClient.invalidateQueries({ queryKey: ["meeting-prep"] });
 }
 
 /** Mount once (in App). Owns the EventSource for the whole app lifetime. */

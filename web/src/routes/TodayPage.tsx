@@ -1,5 +1,6 @@
-// The home screen: date header, today's meetings, task sections (overdue / due
-// / available / waiting) as one keyboard-navigable list, recent documents, and
+// The home screen: date header, the calendar agenda, today's meeting notes,
+// task sections (overdue / due / available / waiting) as one
+// keyboard-navigable list, recent documents, and
 // the daily note rendered inline (or a "start" affordance if it doesn't exist
 // yet).
 import { Link as RouterLink, useNavigate } from "@tanstack/react-router";
@@ -14,6 +15,7 @@ import {
   formatRelativeTime,
 } from "../lib/dates.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
+import { Agenda } from "../components/Agenda.tsx";
 import { EmptyState, ErrorState } from "../components/EmptyState.tsx";
 import { Markdown } from "../components/Markdown.tsx";
 import { SkeletonRows } from "../components/Skeleton.tsx";
@@ -55,6 +57,7 @@ function TodayView({ payload }: { payload: TodayPayload }) {
         </h1>
       </header>
 
+      <Agenda events={payload.events ?? []} />
       <MeetingsToday meetings={payload.meetings} />
       <Birthdays birthdays={payload.birthdays} />
 

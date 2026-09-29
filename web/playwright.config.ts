@@ -16,6 +16,9 @@ const AUTH_PORT = PORT + 1;
 // A fake OpenAI embeddings endpoint (e2e/fake-openai.ts) so semantic search
 // is exercised for real, against a server that never leaves this machine.
 const FAKE_OPENAI_PORT = PORT + 2;
+// A fake calendar provider (e2e/fake-ics.ts) serving one secret ICS feed,
+// so the agenda is fed by a real HTTP fetch and a real parse.
+const FAKE_ICS_PORT = PORT + 3;
 
 /** Every QUIRE_* a developer's mise.local.toml might set, neutralised.
  *  Playwright merges process.env, and a test suite must not be one leaked
@@ -112,6 +115,12 @@ export default defineConfig({
       url: `http://127.0.0.1:${FAKE_OPENAI_PORT}/health`,
       reuseExistingServer: false,
       env: { FAKE_OPENAI_PORT: String(FAKE_OPENAI_PORT) },
+    },
+    {
+      command: `bun e2e/fake-ics.ts`,
+      url: `http://127.0.0.1:${FAKE_ICS_PORT}/health`,
+      reuseExistingServer: false,
+      env: { FAKE_ICS_PORT: String(FAKE_ICS_PORT) },
     },
     {
       // Bound to 0.0.0.0 on purpose: the bootstrap enrollment gate is

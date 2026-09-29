@@ -501,6 +501,7 @@ function DocumentView({
           openTasks={doc.open_tasks ?? []}
           waitingOn={doc.waiting_on ?? []}
           decisions={decisions.data ?? []}
+          prepPath={doc.type === "meeting" ? doc.path : undefined}
         />
       </div>
     </article>

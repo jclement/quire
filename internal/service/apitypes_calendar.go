@@ -93,6 +93,7 @@ type PrepCompany struct {
 
 // PrepMeeting is a previous meeting and when it was.
 type PrepMeeting struct {
-	DocMeta
-	Date string `json:"date"`
+	// Embedded: DocMeta's fields marshal inline, so TS extends rather than nests.
+	DocMeta `tstype:",extends,required"`
+	Date    string `json:"date"`
 }

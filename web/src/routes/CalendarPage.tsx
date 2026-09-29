@@ -190,6 +190,9 @@ function DayCell({ day, isToday }: { day: CalendarDay; isToday: boolean }) {
     ...day.meetings.map(() => true),
     ...others.map(() => false),
   ].slice(0, MAX_DOTS);
+  // Calendar-feed events: counted, not listed — the agenda is Today's job,
+  // and a month of recurring standups would bury the notes.
+  const events = day.events ?? 0;
 
   return (
     <>
@@ -201,6 +204,12 @@ function DayCell({ day, isToday }: { day: CalendarDay; isToday: boolean }) {
       >
         <DayNumber day={day} isToday={isToday} />
         <span className="flex flex-wrap items-center justify-center gap-0.5">
+          {events > 0 ? (
+            <span
+              aria-label={`${events} calendar events`}
+              className="size-1.5 rounded-full border border-accent"
+            />
+          ) : null}
           {dots.map((isMeeting, at) => (
             <span
               key={at}
@@ -231,6 +240,19 @@ function DayCell({ day, isToday }: { day: CalendarDay; isToday: boolean }) {
           >
             <DayNumber day={day} isToday={isToday} />
           </RouterLink>
+          {events > 0 ? (
+            <span
+              title={`${events} calendar ${events === 1 ? "event" : "events"}`}
+              data-testid="calendar-events"
+              className="flex items-center gap-0.5 font-mono text-[10px] text-muted"
+            >
+              <span
+                className="size-1.5 rounded-full border border-accent"
+                aria-hidden="true"
+              />
+              {events}
+            </span>
+          ) : null}
           {day.completed_tasks > 0 ? (
             <span
               title={`${day.completed_tasks} tasks completed`}

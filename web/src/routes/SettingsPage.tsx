@@ -31,6 +31,7 @@ import { docHref } from "../lib/docs.ts";
 import { noAutofill } from "../lib/noAutofill.ts";
 import { useUi } from "../keys/UiContext.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
+import { CalendarSettings } from "../components/settings/CalendarSettings.tsx";
 import { ConfirmButton } from "../components/settings/ConfirmButton.tsx";
 import {
   AgentActivity,
@@ -84,6 +85,7 @@ export function SettingsPage() {
       <AgentGuidanceSection />
       <TimezoneSettings />
       <WorkItemSettings />
+      <CalendarSettings />
       <SemanticSettings />
       <VisionSettings />
       <EmailSettings />

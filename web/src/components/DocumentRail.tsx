@@ -1,5 +1,5 @@
-// The quiet margin column beside a document on lg+: the heading outline, then
-// the document's backlinks. Both are margin notes, not a sidebar — dense,
+// The quiet margin column beside a document on lg+: the heading outline,
+// meeting prep on a meeting, then the document's backlinks. Both are margin notes, not a sidebar — dense,
 // hairline-ruled, and a sibling column rather than an overlay, so it shortens
 // the content instead of floating over it and the page can never scroll
 // sideways. With neither section worth showing it renders nothing at all and
@@ -13,6 +13,7 @@ import { Link as RouterLink } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { Decision, DocMeta, SearchResult, Task } from "../api/types.ts";
 import { DOC_TYPE_INFO, docHref, isDocType } from "../lib/docs.ts";
+import { MeetingPrepView } from "./MeetingPrep.tsx";
 import type { Heading } from "../lib/headings.ts";
 import { MIN_OUTLINE_HEADINGS } from "../lib/headings.ts";
 import { splitWikilinks } from "../lib/wikilinks.ts";
@@ -36,6 +37,8 @@ interface DocumentRailProps {
   waitingOn?: Task[];
   /** Decisions about this entity, newest first; empty for non-entities. */
   decisions?: Decision[];
+  /** A meeting's own path, to show its attendees' prep; unset otherwise. */
+  prepPath?: string;
 }
 
 /** A margin column, not the log: the rest is one click away. */
@@ -63,6 +66,7 @@ export function DocumentRail({
   openTasks = [],
   waitingOn = [],
   decisions = [],
+  prepPath,
 }: DocumentRailProps) {
   // Defensive: a payload from before this field existed has no key at all.
   const owed = waitingOn ?? [];
@@ -74,6 +78,7 @@ export function DocumentRail({
   const showOutline = headings.length >= MIN_OUTLINE_HEADINGS;
   if (
     !showOutline &&
+    !prepPath &&
     backlinks.length === 0 &&
     related.length === 0 &&
     tasks.length === 0 &&
@@ -119,6 +124,15 @@ export function DocumentRail({
             ))}
           </ul>
         </nav>
+      ) : null}
+
+      {/* Who is in the room and what is open with each of them — the
+          thing to read in the minute before a meeting starts. */}
+      {prepPath ? (
+        <section aria-label="Meeting prep">
+          <RailHeading>Prep</RailHeading>
+          <MeetingPrepView target={{ path: prepPath }} variant="rail" />
+        </section>
       ) : null}
 
       {/* What this person or company owes you, with how long each has
