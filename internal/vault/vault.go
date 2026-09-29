@@ -19,6 +19,11 @@ import (
 // Vault provides access to the markdown tree rooted at Dir.
 type Vault struct {
 	Dir string
+	// writes serialises Write and Delete per path. Without it the hash
+	// check and the rename were separate steps, two writers holding the
+	// same base could both pass, and the second silently clobbered the
+	// first.
+	writes PathLocks
 }
 
 // File is a raw vault file plus the metadata every caller needs.
@@ -80,6 +85,12 @@ func (v *Vault) Write(rel string, content []byte, baseSHA string) (File, error) 
 	if err := ValidatePath(rel); err != nil {
 		return File{}, err
 	}
+	defer v.writes.Lock(rel)()
+	return v.writeLocked(rel, content, baseSHA)
+}
+
+// writeLocked is Write's body; the caller holds rel's lock.
+func (v *Vault) writeLocked(rel string, content []byte, baseSHA string) (File, error) {
 	current, err := v.Read(rel)
 	switch {
 	case err == nil:
@@ -104,7 +115,11 @@ func (v *Vault) Write(rel string, content []byte, baseSHA string) (File, error) 
 // modification — recent documents, the weekly review's "touched" — mistakes
 // the rewrite for real work on the note.
 func (v *Vault) WriteKeepingModTime(rel string, content []byte, baseSHA string, modTime time.Time) (File, error) {
-	if _, err := v.Write(rel, content, baseSHA); err != nil {
+	if err := ValidatePath(rel); err != nil {
+		return File{}, err
+	}
+	defer v.writes.Lock(rel)()
+	if _, err := v.writeLocked(rel, content, baseSHA); err != nil {
 		return File{}, err
 	}
 	if err := os.Chtimes(v.abs(rel), time.Now(), modTime); err != nil {
@@ -150,6 +165,30 @@ func (v *Vault) Delete(rel string) error {
 	if err := ValidatePath(rel); err != nil {
 		return err
 	}
+	defer v.writes.Lock(rel)()
+	return v.deleteLocked(rel)
+}
+
+// DeleteIfUnchanged removes the file at rel only if its content still hashes
+// to baseSHA (ErrConflict otherwise) — the delete half of a move, which must
+// not drop an edit that landed after the move read the file.
+func (v *Vault) DeleteIfUnchanged(rel, baseSHA string) error {
+	if err := ValidatePath(rel); err != nil {
+		return err
+	}
+	defer v.writes.Lock(rel)()
+	current, err := v.Read(rel)
+	if err != nil {
+		return err
+	}
+	if current.SHA256 != baseSHA {
+		return fmt.Errorf("%s: %w", rel, ErrConflict)
+	}
+	return v.deleteLocked(rel)
+}
+
+// deleteLocked is Delete's body; the caller holds rel's lock.
+func (v *Vault) deleteLocked(rel string) error {
 	if err := os.Remove(v.abs(rel)); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("%s: %w", rel, ErrNotFound)

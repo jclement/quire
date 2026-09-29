@@ -2,7 +2,10 @@ package vault
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -145,5 +148,68 @@ func TestWalkMarkdownSkipsHidden(t *testing.T) {
 	}
 	if len(seen) != 2 {
 		t.Errorf("walked %v, want 2 files", seen)
+	}
+}
+
+// TestConcurrentWritesFromOneBase: compare-and-swap only means something if
+// the compare and the swap are one step. Every writer here holds the same
+// base hash, so exactly one may win; before the per-path lock, several read
+// the old hash, all passed the check, and the last rename silently threw the
+// others' content away.
+func TestConcurrentWritesFromOneBase(t *testing.T) {
+	v := newTestVault(t)
+	base, err := v.Write("notes/a.md", []byte("base\n"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const writers = 16
+	var wins atomic.Int32
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := range writers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := v.Write("notes/a.md", []byte(fmt.Sprintf("writer %d\n", i)), base.SHA256)
+			switch {
+			case err == nil:
+				wins.Add(1)
+			case !errors.Is(err, ErrConflict):
+				t.Errorf("writer %d: %v", i, err)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if got := wins.Load(); got != 1 {
+		t.Errorf("%d writers won from the same base hash, want exactly 1", got)
+	}
+}
+
+// TestDeleteIfUnchanged: a delete guarded by a hash keeps a file someone
+// edited after the caller last looked at it.
+func TestDeleteIfUnchanged(t *testing.T) {
+	v := newTestVault(t)
+	f, err := v.Write("notes/a.md", []byte("one\n"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v.Write("notes/a.md", []byte("edited\n"), f.SHA256); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.DeleteIfUnchanged("notes/a.md", f.SHA256); !errors.Is(err, ErrConflict) {
+		t.Errorf("stale delete: got %v, want ErrConflict", err)
+	}
+	current, err := v.Read("notes/a.md")
+	if err != nil {
+		t.Fatalf("edited file was deleted: %v", err)
+	}
+	if err := v.DeleteIfUnchanged("notes/a.md", current.SHA256); err != nil {
+		t.Errorf("current delete: %v", err)
+	}
+	if v.Exists("notes/a.md") {
+		t.Errorf("file survived a delete at its current hash")
 	}
 }
