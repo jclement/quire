@@ -228,10 +228,13 @@ export const api = {
       }),
     ),
 
-  toggleTask: (id: string) =>
-    request<Task>(`/api/v1/tasks/${encodeURIComponent(id)}/toggle`, {
-      method: "POST",
-    }),
+  /** Sets done (the opposite of what the checkbox showed when clicked), so
+   * a click that lands after another is a no-op rather than an undo. */
+  toggleTask: (id: string, done: boolean) =>
+    request<Task>(
+      `/api/v1/tasks/${encodeURIComponent(id)}/toggle`,
+      jsonInit("POST", { done }),
+    ),
 
   editTask: (id: string, edit: TaskEdit) =>
     request<Task>(

@@ -254,8 +254,24 @@ func (s *Server) handleEditTask(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, task)
 }
 
+// handleToggleTask flips a checkbox. A body of {"done": bool} names the
+// state the user asked for — the opposite of what the checkbox showed when
+// it was clicked — so a click that arrives after another has landed is a
+// no-op rather than an undo. No body flips whatever the index says.
 func (s *Server) handleToggleTask(w http.ResponseWriter, r *http.Request) {
-	task, err := s.Service.ToggleTask(r.PathValue("id"))
+	var body struct {
+		Done *bool `json:"done"`
+	}
+	if r.ContentLength != 0 && !decodeBody(w, r, &body) {
+		return
+	}
+	var task service.Task
+	var err error
+	if body.Done != nil {
+		task, err = s.Service.SetTaskDone(r.PathValue("id"), *body.Done)
+	} else {
+		task, err = s.Service.ToggleTask(r.PathValue("id"))
+	}
 	if err != nil {
 		writeServiceError(w, err)
 		return

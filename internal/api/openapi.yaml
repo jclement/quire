@@ -119,6 +119,9 @@ paths:
   /api/v1/tasks/{id}/toggle:
     post:
       summary: Toggle a task's checkbox in its source markdown (surgical, one line)
+      description: >-
+        Optional body {"done": bool} sets that state instead of flipping; a task
+        already in it is returned unchanged with no write.
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses: { "200": { description: "data: Task (note: the id may change — completion stamps alter the content hash)" } }
   /api/v1/daily/{date}:

@@ -21,6 +21,11 @@ import (
 // failing is the right answer.
 const maxEditAttempts = 3
 
+// beforeWriteHook, when set, runs in UpdateDocument between an edit's read
+// and its write. Tests only: it is how a test lands an outside write in
+// exactly the window a re-derivable edit has to survive.
+var beforeWriteHook func(path string)
+
 // reapplying runs edit holding path's edit lock, running it again from a
 // fresh read when its write loses a compare-and-swap. edit must read the file
 // itself; a closure over content read outside it would re-apply stale bytes.

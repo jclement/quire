@@ -225,7 +225,7 @@ export function invalidateTaskCaches(queryClient: QueryClient): void {
 export function useToggleTask() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (task: Task) => api.toggleTask(task.id),
+    mutationFn: (task: Task) => api.toggleTask(task.id, !task.done),
     onMutate: async (task) => {
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
       const snapshots = queryClient.getQueriesData<Task[]>({

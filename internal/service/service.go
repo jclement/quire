@@ -322,6 +322,9 @@ func (s *Service) buildDocument(f vault.File) (Document, error) {
 // hash (vault.ErrConflict when stale). The index is updated synchronously so
 // the response reflects the write.
 func (s *Service) UpdateDocument(path, content, baseSHA string) (Document, error) {
+	if beforeWriteHook != nil {
+		beforeWriteHook(path)
+	}
 	f, err := s.Vault.Write(path, []byte(content), baseSHA)
 	if err != nil {
 		return Document{}, err
