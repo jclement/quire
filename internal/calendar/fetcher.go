@@ -208,7 +208,16 @@ func backoff(failures int) time.Duration {
 	return min(wait, maxBackoff)
 }
 
-func (f *Fetcher) download(ctx context.Context, feed Feed) ([]*ical.Calendar, error) {
+// download fetches and parses one feed. Parse already turns go-ical's
+// panics into errors; the recover here is the backstop for anything else
+// on this path, since this runs on the server's own goroutine and a feed
+// is refetched at every start — a panic would be a crash loop.
+func (f *Fetcher) download(ctx context.Context, feed Feed) (cals []*ical.Calendar, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			cals, err = nil, fmt.Errorf("fetching the feed failed unexpectedly: %v", r)
+		}
+	}()
 	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feed.URL, nil)

@@ -67,7 +67,18 @@ const maxOccurrences = 2000
 
 // Parse decodes an ICS document. A feed may hold several VCALENDARs
 // back to back; all of them are returned.
-func Parse(raw []byte) ([]*ical.Calendar, error) {
+//
+// go-ical's decoder panics on some malformed input (a quoted parameter
+// followed by more text, a line truncated mid-parameter) instead of
+// returning an error. A feed URL is persisted and refetched at startup, so
+// an unrecovered panic here would be a crash loop; it becomes an error the
+// feed's status shows, and the last good copy keeps serving.
+func Parse(raw []byte) (cals []*ical.Calendar, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			cals, err = nil, fmt.Errorf("not a valid iCalendar document: %v", r)
+		}
+	}()
 	dec := ical.NewDecoder(bytes.NewReader(raw))
 	var out []*ical.Calendar
 	for {
@@ -143,7 +154,7 @@ func expandMaster(master ical.Event, overrides map[string][]ical.Event, feed str
 		return nil
 	}
 
-	set, err := recurrenceSet(master, base.Start, loc)
+	set, err := recurrenceSet(master, base.Start, from.Add(-base.End.Sub(base.Start)), loc)
 	if err != nil {
 		// An unparseable rule still has its first occurrence.
 		if overlaps(base, from, to) {
@@ -181,6 +192,71 @@ func expandMaster(master ical.Event, overrides map[string][]ical.Event, feed str
 	return out
 }
 
+// localUntil reads an RRULE's UNTIL when it has no "Z". rrule-go parses
+// every UNTIL as UTC, but RFC 5545 says a floating or date-only UNTIL is in
+// DTSTART's zone — so west of UTC the last occurrence was dropped (a weekly
+// all-day series "until 2026-10-13" lost the 13th). A date-only UNTIL
+// includes that whole day. ok is false when UNTIL is absent or already UTC.
+func localUntil(rule string, zone *time.Location) (time.Time, bool) {
+	for _, part := range strings.Split(rule, ";") {
+		key, value, _ := strings.Cut(part, "=")
+		if !strings.EqualFold(key, "UNTIL") || strings.HasSuffix(value, "Z") {
+			continue
+		}
+		if len(value) == len("20060102") {
+			day, err := time.ParseInLocation("20060102", value, zone)
+			return day.AddDate(0, 0, 1).Add(-time.Second), err == nil
+		}
+		until, err := time.ParseInLocation("20060102T150405", value, zone)
+		return until, err == nil
+	}
+	return time.Time{}, false
+}
+
+// skipAhead moves a series' start forward by whole recurrence periods to
+// just before notBefore, so expanding a years-old high-frequency series
+// (hourly since 2020) iterates over the window, not over its history — the
+// runaway guard used to be spent before the window was reached, and the
+// series showed nothing. Only fixed-length periods (weekly and finer) are
+// skipped, and never for a COUNT rule, whose count runs from the real
+// start; monthly and yearly series are too sparse to need it. Days move by
+// calendar date, so wall-clock time survives DST.
+func skipAhead(option rrule.ROption, start, notBefore time.Time) time.Time {
+	if option.Count > 0 || !start.Before(notBefore) {
+		return start
+	}
+	interval := max(option.Interval, 1)
+	var days int
+	var step time.Duration
+	switch option.Freq {
+	case rrule.WEEKLY:
+		days = 7 * interval
+	case rrule.DAILY:
+		days = interval
+	case rrule.HOURLY:
+		step = time.Duration(interval) * time.Hour
+	case rrule.MINUTELY:
+		step = time.Duration(interval) * time.Minute
+	case rrule.SECONDLY:
+		step = time.Duration(interval) * time.Second
+	default:
+		return start
+	}
+	// One period of slack, so a BYDAY earlier in the landing week is kept.
+	if days > 0 {
+		periods := int(notBefore.Sub(start).Hours()/24)/days - 1
+		if periods <= 0 {
+			return start
+		}
+		return start.AddDate(0, 0, periods*days)
+	}
+	periods := int64(notBefore.Sub(start)/step) - 1
+	if periods <= 0 {
+		return start
+	}
+	return start.Add(time.Duration(periods) * step)
+}
+
 // endAfter keeps an all-day event's length in calendar days rather than
 // hours, so a one-day event across a DST change still ends at midnight.
 func endAfter(start time.Time, duration time.Duration, allDay bool) time.Time {
@@ -193,13 +269,17 @@ func endAfter(start time.Time, duration time.Duration, allDay bool) time.Time {
 
 // recurrenceSet builds the RRULE + RDATE − EXDATE set for a master event.
 // The rule is anchored to the event's start in its own zone, so a weekly
-// 10:00 meeting stays at 10:00 across daylight-saving changes.
-func recurrenceSet(master ical.Event, start time.Time, loc *time.Location) (*rrule.Set, error) {
+// 10:00 meeting stays at 10:00 across daylight-saving changes. notBefore is
+// the earliest start the caller could want; see skipAhead.
+func recurrenceSet(master ical.Event, start, notBefore time.Time, loc *time.Location) (*rrule.Set, error) {
 	option, err := master.Props.RecurrenceRule()
 	if err != nil || option == nil {
 		return nil, fmt.Errorf("recurrence rule: %v", err)
 	}
-	option.Dtstart = start
+	if until, ok := localUntil(master.Props.Get(ical.PropRecurrenceRule).Value, start.Location()); ok {
+		option.Until = until
+	}
+	option.Dtstart = skipAhead(*option, start, notBefore)
 	rule, err := rrule.NewRRule(*option)
 	if err != nil {
 		return nil, err

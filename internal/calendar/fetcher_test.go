@@ -215,3 +215,48 @@ func TestStoreIsPrivateAndMasks(t *testing.T) {
 		t.Errorf("feeds after remove = %+v", feeds)
 	}
 }
+
+// panickingTransport stands in for anything below Parse that might panic.
+type panickingTransport struct{}
+
+func (panickingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	panic("transport exploded")
+}
+
+// A feed that makes the decoder panic, or a fetch that panics outright,
+// must leave the server running, the feed marked failing, and the last good
+// copy serving — the URL is refetched at every start, so a panic here was a
+// crash loop.
+func TestFetchSurvivesPanics(t *testing.T) {
+	good, _ := os.ReadFile("testdata/allday.ics")
+	var broken atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if broken.Load() {
+			_, _ = w.Write([]byte("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nATTENDEE;CN=Bo"))
+			return
+		}
+		_, _ = w.Write(good)
+	}))
+	t.Cleanup(server.Close)
+	fetcher, _ := newTestFetcher(t, server.URL+secretPath)
+	ctx := context.Background()
+	fetcher.Refresh(ctx)
+
+	broken.Store(true)
+	fetcher.Refresh(ctx)
+	status, _ := fetcher.Status()
+	if status[0].Error == "" || status[0].Failures != 1 {
+		t.Fatalf("a malformed feed is a failure: %+v", status[0])
+	}
+	day := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	if got := fetcher.Events(day, day.AddDate(0, 0, 1), time.UTC); len(got) != 2 {
+		t.Errorf("last good copy keeps serving, got %+v", got)
+	}
+
+	fetcher.Client = &http.Client{Transport: panickingTransport{}}
+	fetcher.Refresh(ctx)
+	status, _ = fetcher.Status()
+	if status[0].Failures != 2 || !strings.Contains(status[0].Error, "exploded") {
+		t.Errorf("a panicking fetch is recorded as a failure: %+v", status[0])
+	}
+}

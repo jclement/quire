@@ -175,3 +175,88 @@ func TestParseRejectsGarbage(t *testing.T) {
 		t.Error("an HTML login page is not a calendar")
 	}
 }
+
+// go-ical's decoder panics on some malformed lines rather than erroring;
+// a feed like that must become an error, not a crashed server.
+func TestParseSurvivesDecoderPanics(t *testing.T) {
+	for name, line := range map[string]string{
+		"quoted param with trailing text": `X;P="a"b:v`,
+		"truncated attendee":              `ATTENDEE;CN=Bo`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260929T100000Z\r\n" + line + "\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+			if _, err := Parse([]byte(raw)); err == nil {
+				t.Error("a malformed feed is an error")
+			}
+		})
+	}
+}
+
+// UNTIL without a Z is wall-clock in DTSTART's zone (and a date-only UNTIL
+// includes that whole day); rrule-go reads it as UTC, which west of UTC
+// drops the last occurrence. Google writes the date-only form.
+func TestUntilWithoutZoneIsLocalAndInclusive(t *testing.T) {
+	edmonton := mustZone(t, "America/Edmonton")
+	newYork := mustZone(t, "America/New_York")
+	for _, tc := range []struct {
+		name, start, until string
+		loc                *time.Location
+		want               []string
+	}{
+		{"date-only all-day weekly", "DTSTART;VALUE=DATE:20260929", "20261013", edmonton,
+			[]string{"09-29", "10-06", "10-13"}},
+		{"floating timed daily", "DTSTART:20260929T180000", "20261001T180000", edmonton,
+			[]string{"09-29", "09-30", "10-01"}},
+		{"date-only timed weekly", "DTSTART;TZID=America/Edmonton:20260929T180000", "20261013", edmonton,
+			[]string{"09-29", "10-06", "10-13"}},
+		// All-day across DST (New York falls back Nov 1): still one per week,
+		// still midnight, last one kept.
+		{"all-day across DST", "DTSTART;VALUE=DATE:20261027", "20261110", newYork,
+			[]string{"10-27", "11-03", "11-10"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			freq := "WEEKLY"
+			if strings.Contains(tc.name, "daily") {
+				freq = "DAILY"
+			}
+			raw := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:t\r\nBEGIN:VEVENT\r\nUID:u\r\nDTSTAMP:20260101T000000Z\r\n" +
+				tc.start + "\r\nRRULE:FREQ=" + freq + ";UNTIL=" + tc.until + "\r\nSUMMARY:S\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+			cals, err := Parse([]byte(raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			from := time.Date(2026, 9, 1, 0, 0, 0, 0, tc.loc)
+			var got []string
+			for _, e := range Expand(cals, "f", from, from.AddDate(0, 4, 0), tc.loc) {
+				got = append(got, e.Start.In(tc.loc).Format("01-02"))
+				if e.AllDay && e.Start.In(tc.loc).Hour() != 0 {
+					t.Errorf("all-day occurrence not at midnight: %v", e.Start)
+				}
+			}
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Errorf("occurrences %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// An old high-frequency series still shows its current occurrences: the
+// runaway guard must count inside the window, not from DTSTART.
+func TestOldHighFrequencySeriesStillExpands(t *testing.T) {
+	raw := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:t\r\nBEGIN:VEVENT\r\nUID:h\r\nDTSTAMP:20200101T000000Z\r\n" +
+		"DTSTART:20200101T000000Z\r\nDTEND:20200101T001500Z\r\nRRULE:FREQ=HOURLY\r\nSUMMARY:Ping\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	cals, err := Parse([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	day := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	if got := Expand(cals, "f", day, day.AddDate(0, 0, 1), time.UTC); len(got) != 24 {
+		t.Errorf("hourly since 2020 should give 24 today, got %d", len(got))
+	}
+	// And a runaway rule inside the window is still bounded.
+	raw = strings.Replace(raw, "FREQ=HOURLY", "FREQ=SECONDLY", 1)
+	cals, _ = Parse([]byte(raw))
+	if got := Expand(cals, "f", day, day.AddDate(0, 0, 1), time.UTC); len(got) > maxOccurrences {
+		t.Errorf("runaway rule gave %d occurrences, cap is %d", len(got), maxOccurrences)
+	}
+}
