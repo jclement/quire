@@ -79,7 +79,7 @@ guessing that Frances means Frances Bagley would be wrong the day a second Franc
 arrives — but the Unwritten list (and MCP `list_unwritten`) ranks existing people and
 companies per dangling name (`internal/index/matches.go`): the name equals the title's
 first word, else the title starts with it (≥3 characters), else it is written in
-capitals as the title's initials (`FB`, `F.B.`). Only the strongest tier is kept, people
+dotted initials of the title (`F.B.` — bare `FB` is not, because `[[AI]]` and `[[PR]]` are acronyms, not Alice Ingram). Only the strongest tier is kept, people
 before companies, at most five. The fix is one click — **Add alias** appends the name
 to that document's `aliases:` (keeping the ones there) and every such link resolves;
 two Davids means two buttons, and the owner picks.

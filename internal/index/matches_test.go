@@ -35,8 +35,12 @@ func TestRankMatches(t *testing.T) {
 		{"David", []string{"people/david-ng.md:first_name", "people/david-piepgrass.md:first_name"}},
 		{"Fran", []string{"people/frances-bagley.md:prefix", "companies/frances-foods.md:prefix"}},
 		{"James B", []string{"people/james-burke.md:prefix"}},
-		{"FB", []string{"people/frances-bagley.md:initials"}},
+		// Only dotted initials: bare capitals are acronyms far more often
+		// ([[AI]], [[PR]], [[QA]]), and one click makes an alias permanent.
 		{"J.B.", []string{"people/james-burke.md:initials"}},
+		{"F. B.", []string{"people/frances-bagley.md:initials"}},
+		{"FB", nil},
+		{"DN", nil},
 		// Lowercase two letters is a word, not initials; two letters is too
 		// short a prefix; nothing plausible means nothing suggested.
 		{"jb", nil},

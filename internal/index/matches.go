@@ -23,8 +23,8 @@ const (
 	// MatchPrefix: the title starts with the name ("Fran" → "Frances
 	// Bagley", "James B" → "James Burke").
 	MatchPrefix MatchReason = "prefix"
-	// MatchInitials: the name is written as capitals and equals the title's
-	// initials ("FB", "F.B." → "Frances Bagley").
+	// MatchInitials: the name is dotted initials equal to the title's
+	// ("F.B." → "Frances Bagley"). Bare "FB" is not: see writtenInitials.
 	MatchInitials MatchReason = "initials"
 )
 
@@ -134,22 +134,27 @@ func matchReason(name, title string) (MatchReason, bool) {
 	return "", false
 }
 
-// writtenInitials reads "FB", "F.B." or "F. B." as initials. Only capitals
-// count: "Jo" or "ed" in a link is a word, and treating it as initials would
-// suggest every J— O— in the vault.
+// writtenInitials reads dotted initials — "F.B.", "F. B." — and nothing
+// else. Bare capitals were accepted once, and [[AI]], [[PR]] and [[QA]]
+// promptly suggested Alice Ingram, Paul Reyes and Quinn Adams: acronyms far
+// outnumber people written as "FB", and one click makes an alias permanent.
 func writtenInitials(name string) (string, bool) {
 	var letters []rune
+	expectDot := false
 	for _, r := range name {
 		switch {
-		case r == '.' || unicode.IsSpace(r):
+		case unicode.IsSpace(r):
 			continue
-		case unicode.IsUpper(r):
+		case r == '.' && expectDot:
+			expectDot = false
+		case unicode.IsUpper(r) && !expectDot:
 			letters = append(letters, unicode.ToLower(r))
+			expectDot = true
 		default:
 			return "", false
 		}
 	}
-	if len(letters) < 2 || len(letters) > 4 {
+	if expectDot || len(letters) < 2 || len(letters) > 4 {
 		return "", false
 	}
 	return string(letters), true

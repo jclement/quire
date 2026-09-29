@@ -241,7 +241,7 @@ paths:
       description: >
         Each entry carries up to five `likely_matches` — existing people and
         companies the name probably means (first name, title prefix, or
-        capital initials), strongest reason only.
+        dotted initials like F.B.), strongest reason only.
       responses: { "200": { description: "data: Unwritten[] — name, refs, sources, likely_matches" } }
   /api/v1/decisions:
     get:

@@ -258,7 +258,7 @@ type LikelyMatch struct {
 	Title string `json:"title"`
 	Type  string `json:"type" tstype:"DocType"`
 	// Reason is why it was suggested: first_name ("Frances"), prefix
-	// ("Fran", "James B") or initials ("FB").
+	// ("Fran", "James B") or dotted initials ("F.B.").
 	Reason string `json:"reason" tstype:"\"first_name\" | \"prefix\" | \"initials\""`
 }
 

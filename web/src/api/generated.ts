@@ -361,7 +361,7 @@ export interface LikelyMatch {
   type: DocType;
   /**
    * Reason is why it was suggested: first_name ("Frances"), prefix
-   * ("Fran", "James B") or initials ("FB").
+   * ("Fran", "James B") or dotted initials ("F.B.").
    */
   reason: "first_name" | "prefix" | "initials";
 }
