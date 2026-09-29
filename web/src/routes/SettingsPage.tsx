@@ -107,6 +107,7 @@ function AgentGuidanceSection() {
   const [draft, setDraft] = useState<string | null>(null);
 
   const save = useMutation({
+    meta: { inlineError: true },
     mutationFn: (text: string) => api.setAgentGuidance(text),
     onSuccess: (saved) => {
       queryClient.setQueryData(GUIDANCE_KEY, saved);
@@ -206,7 +207,6 @@ function TimezoneSettings() {
       setDraft(null);
       toast(`Time zone: ${info.effective}`);
     },
-    onError: (error) => toast(errorMessage(error)),
   });
   const zones = ((
     Intl as unknown as { supportedValuesOf?: (k: string) => string[] }
@@ -276,7 +276,6 @@ function EmailSettings() {
   const send = useMutation({
     mutationFn: api.sendTestEmail,
     onSuccess: () => toast("Test email sent"),
-    onError: (error) => toast(errorMessage(error)),
   });
   return (
     <section className="flex flex-col gap-2">
@@ -407,6 +406,7 @@ function PasskeySettings() {
   });
 
   const remove = useMutation({
+    meta: { inlineError: true },
     mutationFn: (id: string) => api.deletePasskey(id),
     onSuccess: () =>
       void queryClient.invalidateQueries({ queryKey: PASSKEYS_KEY }),

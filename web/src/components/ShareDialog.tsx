@@ -47,12 +47,23 @@ function ShareContent({ path }: { path: string }) {
   const [expiry, setExpiry] = useState<Expiry>("never");
 
   const create = useMutation({
+    meta: { inlineError: true },
     mutationFn: () =>
       api.createShare(path, expiry === "never" ? undefined : expiry),
     onSuccess: async (share) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.shares });
-      await navigator.clipboard.writeText(share.url).catch(() => {});
-      toast("Share link copied to clipboard");
+      // The clipboard can refuse (no focus, no permission, plain http). The
+      // link exists either way, so say where it is instead of claiming a
+      // copy that never happened.
+      const copied = await navigator.clipboard.writeText(share.url).then(
+        () => true,
+        () => false,
+      );
+      toast(
+        copied
+          ? "Share link copied to clipboard"
+          : "Share link created — copy it from the list below",
+      );
     },
   });
 

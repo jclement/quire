@@ -54,6 +54,7 @@ function CaptureContent({ close }: { close: () => void }) {
   const queryClient = useQueryClient();
 
   const save = useMutation<Document | Task, Error, CaptureInput>({
+    meta: { inlineError: true },
     // A photo goes through /capture (which files it + mints the task); plain
     // text stays on the cheaper /tasks path.
     mutationFn: (input: CaptureInput) => {

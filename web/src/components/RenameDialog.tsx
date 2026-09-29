@@ -40,6 +40,7 @@ function RenameForm({ path, close }: { path: string; close: () => void }) {
   const backlinkCount = doc.data?.backlinks.length ?? 0;
 
   const rename = useMutation({
+    meta: { inlineError: true },
     mutationFn: () => api.rename(path, newPath.trim(), true),
     onSuccess: (result) => {
       // The old path's caches are now lies; drop them rather than refetch 404s.

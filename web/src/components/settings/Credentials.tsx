@@ -63,6 +63,7 @@ export function TokenSettings() {
 
   const tokens = useQuery({ queryKey: TOKENS_KEY, queryFn: api.listTokens });
   const revoke = useMutation({
+    meta: { inlineError: true },
     mutationFn: (prefix: string) => api.revokeToken(prefix),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TOKENS_KEY });
@@ -237,6 +238,7 @@ function CreateTokenForm({
   const [expiresDays, setExpiresDays] = useState("");
 
   const create = useMutation({
+    meta: { inlineError: true },
     mutationFn: () =>
       api.createToken(name.trim(), scopes, Number(expiresDays) || undefined),
     onSuccess: onCreated,
@@ -330,6 +332,7 @@ export function ConnectedAppSettings() {
   const { toast } = useUi();
   const apps = useQuery({ queryKey: APPS_KEY, queryFn: api.listConnectedApps });
   const disconnect = useMutation({
+    meta: { inlineError: true },
     mutationFn: (clientId: string) => api.disconnectApp(clientId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: APPS_KEY });
@@ -413,6 +416,7 @@ export function ShareSettings() {
   const { toast } = useUi();
   const shares = useQuery({ queryKey: SHARES_KEY, queryFn: api.listShares });
   const revoke = useMutation({
+    meta: { inlineError: true },
     mutationFn: (token: string) => api.revokeShare(token),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: SHARES_KEY });
@@ -570,7 +574,6 @@ export function TemplateSettings() {
           : `Installed ${written.length} templates`,
       );
     },
-    onError: (error) => toast(errorMessage(error)),
   });
   return (
     <section className="border-t border-border pt-4">
@@ -636,7 +639,6 @@ export function AreaSettings() {
       setDraft(null);
       toast("Areas saved");
     },
-    onError: (error) => toast(errorMessage(error)),
   });
 
   const update = (next: AreaDef[]) => setDraft(next);

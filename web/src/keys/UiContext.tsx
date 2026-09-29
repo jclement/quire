@@ -4,10 +4,12 @@
 // live in refs so registering a list never re-renders the app; only overlay
 // visibility is React state.
 import { loadArea, storeArea } from "../lib/area.ts";
+import { setMutationErrorToast } from "../api/queryClient.ts";
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -46,7 +48,7 @@ interface UiContextValue {
   /** Non-null while the delete confirmation is open. */
   deleteDocPath: string | null;
   setDeleteDocPath: (path: string | null) => void;
-  /** Transient confirmations ("Link copied"); auto-dismissed. */
+  /** Transient confirmations ("Link copied") and failed writes; auto-dismissed. */
   toasts: Toast[];
   toast: (message: string) => void;
 
@@ -113,6 +115,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
       setToasts((current) => current.filter((entry) => entry.id !== id));
     }, TOAST_MS);
   }, []);
+
+  // Failed mutations report through the same stack (see api/queryClient.ts).
+  useEffect(() => setMutationErrorToast(toast), [toast]);
 
   const registerKey = useCallback((key: string, action: () => void) => {
     keyActionsRef.current.set(key, action);

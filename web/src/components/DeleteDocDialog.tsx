@@ -39,6 +39,7 @@ function DeleteConfirm({ path, close }: { path: string; close: () => void }) {
   const title = doc.data?.title ?? path;
 
   const remove = useMutation({
+    meta: { inlineError: true },
     mutationFn: () => api.deleteDocument(path),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: queryKeys.document(path) });

@@ -84,6 +84,7 @@ function StartDayButton({ date }: { date: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const create = useMutation({
+    meta: { inlineError: true },
     mutationFn: () => api.createDaily(date),
     onSuccess: (doc) => {
       queryClient.setQueryData(queryKeys.document(doc.path), doc);

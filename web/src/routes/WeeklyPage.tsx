@@ -239,6 +239,7 @@ function WeekNote({ week, note }: { week: string; note: Document | null }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const start = useMutation({
+    meta: { inlineError: true },
     mutationFn: () => api.createWeekly(week),
     onSuccess: (doc) => {
       void queryClient.invalidateQueries({ queryKey: ["weekly"] });

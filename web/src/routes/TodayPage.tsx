@@ -180,6 +180,7 @@ function DailyNoteSection({ payload }: { payload: TodayPayload }) {
   const queryClient = useQueryClient();
   const toggleTask = useToggleTask();
   const startDaily = useMutation({
+    meta: { inlineError: true },
     mutationFn: () => api.createDaily(payload.date),
     onSuccess: (doc) => {
       queryClient.setQueryData(queryKeys.document(doc.path), doc);

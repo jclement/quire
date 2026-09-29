@@ -39,7 +39,6 @@ import {
 } from "../lib/entityLinks.ts";
 import { noAutofill } from "../lib/noAutofill.ts";
 import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
-import { useUi } from "../keys/UiContext.tsx";
 
 const TYPEAHEAD_LIMIT = 8;
 const TYPEAHEAD_DEBOUNCE_MS = 150;
@@ -52,7 +51,6 @@ export function FrontmatterStrip({
   /** Present while the editor is open: flush before, adopt after. */
   sync?: StripSync;
 }) {
-  const { toast } = useUi();
   const defaultArea = useDefaultArea();
   const linkEntity = useLinkEntity(doc.path, sync);
   const [addingKey, setAddingKey] = useState<string | null>(null);
@@ -75,10 +73,7 @@ export function FrontmatterStrip({
   const resolved = resolvedTargets(doc.links);
   const apply = (key: string, target: string, remove = false) => {
     setAddingKey(null);
-    linkEntity.mutate(
-      { key, target, remove },
-      { onError: (error) => toast(errorMessage(error)) },
-    );
+    linkEntity.mutate({ key, target, remove });
   };
 
   return (
@@ -257,6 +252,7 @@ function AddLinkPopover({
   const info = DOC_TYPE_INFO[linkKey.type];
 
   const create = useMutation({
+    meta: { inlineError: true },
     mutationFn: (title: string) =>
       api.createDocument(linkKey.type, title, undefined, area),
     onSuccess: (created) => onPick(created.title),
@@ -353,7 +349,6 @@ function AddLinkPopover({
  */
 function AreaChip({ doc, sync }: { doc: Document; sync?: StripSync }) {
   const queryClient = useQueryClient();
-  const { toast } = useUi();
   const areas = useAreas();
   const [open, setOpen] = useState(false);
   const setArea = useMutation({
@@ -367,7 +362,6 @@ function AreaChip({ doc, sync }: { doc: Document; sync?: StripSync }) {
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
       void queryClient.invalidateQueries({ queryKey: ["areas"] });
     },
-    onError: (error) => toast(errorMessage(error)),
   });
   const list = areas.data ?? [];
   // A value the document carries that Settings doesn't know is still offered,
@@ -472,7 +466,6 @@ function TagChips({
   onAdding: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
-  const { toast } = useUi();
   const tags = frontmatterTags(doc.frontmatter.tags);
   const save = useMutation({
     mutationFn: async (next: string[]) => {
@@ -487,7 +480,6 @@ function TagChips({
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
     },
-    onError: (error) => toast(errorMessage(error)),
   });
   const add = (tag: string) => {
     onAdding(false);

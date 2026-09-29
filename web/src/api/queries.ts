@@ -138,10 +138,15 @@ export function useTimezoneSync(): void {
       return;
     }
     if (!browser) return;
+    // Best effort and retried on every load while the setting is empty, so
+    // a failure is logged rather than toasted — a server that rejects this
+    // browser's zone name would otherwise raise the same toast forever.
     void api
       .setTimezone(browser)
       .then((info) => queryClient.setQueryData(["timezone"], info))
-      .catch(() => {});
+      .catch((error: unknown) =>
+        console.warn("could not adopt the browser's time zone", browser, error),
+      );
   }, [tz.data, queryClient]);
 }
 

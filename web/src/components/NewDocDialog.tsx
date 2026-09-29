@@ -45,6 +45,7 @@ function NewDocForm({ type, close }: { type: DocType; close: () => void }) {
   const [template, setTemplate] = useState("");
 
   const create = useMutation({
+    meta: { inlineError: true },
     // A document made while looking at Work is a Work document.
     mutationFn: (input: { title: string }) =>
       api.createDocument(

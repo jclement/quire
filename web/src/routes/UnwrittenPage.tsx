@@ -78,7 +78,6 @@ function UnwrittenRow({
       toast(`Created ${doc.title}`);
       void navigate({ to: docHref(doc.path), search: { edit: true } });
     },
-    onError: (error) => toast(errorMessage(error)),
   });
 
   return (

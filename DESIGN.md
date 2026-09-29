@@ -663,6 +663,11 @@ commands, `#` tags, `@` people), `j/k` list movement, `Enter` open, `x` toggle t
 `g d` daily…), `/` search, `Cmd+[`/`Cmd+]` history, `s` snooze (typed natural dates),
 `?` cheat sheet.
 
+**No write fails silently.** The QueryClient's MutationCache toasts every failed
+mutation (`web/src/api/queryClient.ts`). A component that renders the error itself —
+a dialog's "Couldn't create — …" line — opts out with `meta: { inlineError: true }`
+rather than showing it twice; a 401 is left to the auth gate.
+
 **Editor details that matter:** complete list continuation (Enter continues, empty item
 exits, Tab indents), `[[` autocomplete <50ms with create-if-missing, `#` tag
 autocomplete, paste-image inserts placeholder immediately and resolves in place (no
