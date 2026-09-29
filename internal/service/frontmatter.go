@@ -64,50 +64,56 @@ func (s *Service) setFrontmatter(path string, values map[string]any, baseSHA str
 var singularLinkKeys = map[string]bool{"company": true, "project": true, "owner": true}
 
 // LinkEntity is the convenience behind "add this person to that company":
-// it sets or appends a wikilink without duplicating one already there.
+// it sets or appends a wikilink without duplicating one already there. The
+// list is read and rewritten inside one re-derivable edit, so two links
+// added at once both land.
 func (s *Service) LinkEntity(path, key, target string) (Document, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return Document{}, fmt.Errorf("link target is required")
 	}
-	f, err := s.Vault.Read(path)
-	if err != nil {
-		return Document{}, err
-	}
-	existing := stringsFromFrontmatter(vault.ParseFrontmatter(f.Raw), key)
-	if singularLinkKeys[key] {
-		return s.SetFrontmatter(path, map[string]any{key: wrapWikilink(target)}, "")
-	}
-	for _, item := range existing {
-		if strings.EqualFold(unwrapWikilink(item), unwrapWikilink(target)) {
-			// Already linked — succeed without rewriting the file.
-			return s.GetDocument(path)
+	return reapplying(s, path, func() (Document, error) {
+		f, err := s.Vault.Read(path)
+		if err != nil {
+			return Document{}, err
 		}
-	}
-	updated := append(existing, wrapWikilink(target))
-	list := make([]any, 0, len(updated))
-	for _, item := range updated {
-		list = append(list, item)
-	}
-	return s.SetFrontmatter(path, map[string]any{key: list}, "")
+		existing := stringsFromFrontmatter(vault.ParseFrontmatter(f.Raw), key)
+		if singularLinkKeys[key] {
+			return s.setFrontmatter(path, map[string]any{key: wrapWikilink(target)}, f.SHA256)
+		}
+		for _, item := range existing {
+			if strings.EqualFold(unwrapWikilink(item), unwrapWikilink(target)) {
+				// Already linked — succeed without rewriting the file.
+				return s.GetDocument(path)
+			}
+		}
+		updated := append(existing, wrapWikilink(target))
+		list := make([]any, 0, len(updated))
+		for _, item := range updated {
+			list = append(list, item)
+		}
+		return s.setFrontmatter(path, map[string]any{key: list}, f.SHA256)
+	})
 }
 
 // UnlinkEntity removes a wikilink from a list-valued frontmatter key.
 func (s *Service) UnlinkEntity(path, key, target string) (Document, error) {
-	f, err := s.Vault.Read(path)
-	if err != nil {
-		return Document{}, err
-	}
-	var kept []any
-	for _, item := range stringsFromFrontmatter(vault.ParseFrontmatter(f.Raw), key) {
-		if !strings.EqualFold(unwrapWikilink(item), unwrapWikilink(target)) {
-			kept = append(kept, item)
+	return reapplying(s, path, func() (Document, error) {
+		f, err := s.Vault.Read(path)
+		if err != nil {
+			return Document{}, err
 		}
-	}
-	if len(kept) == 0 {
-		return s.SetFrontmatter(path, map[string]any{key: nil}, "")
-	}
-	return s.SetFrontmatter(path, map[string]any{key: kept}, "")
+		var kept []any
+		for _, item := range stringsFromFrontmatter(vault.ParseFrontmatter(f.Raw), key) {
+			if !strings.EqualFold(unwrapWikilink(item), unwrapWikilink(target)) {
+				kept = append(kept, item)
+			}
+		}
+		if len(kept) == 0 {
+			return s.setFrontmatter(path, map[string]any{key: nil}, f.SHA256)
+		}
+		return s.setFrontmatter(path, map[string]any{key: kept}, f.SHA256)
+	})
 }
 
 // ---- encoding helpers ----
