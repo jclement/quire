@@ -492,6 +492,7 @@ function DocumentView({
           backlinks={doc.backlinks}
           related={related.data ?? []}
           openTasks={doc.open_tasks ?? []}
+          waitingOn={doc.waiting_on ?? []}
         />
       </div>
     </article>

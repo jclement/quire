@@ -29,6 +29,7 @@ import type {
   TaskView,
   TodayPayload,
   TokenInfo,
+  WaitingGroup,
   Drawing,
   SemanticStatus,
   SearchMode,
@@ -240,6 +241,19 @@ export const api = {
     request<Task>(
       `/api/v1/tasks/${encodeURIComponent(id)}`,
       jsonInit("PATCH", edit),
+    ),
+
+  /** The Waiting view: open waits grouped by who owes them, oldest first. */
+  waitingGroups: (area = "") =>
+    request<WaitingGroup[]>(
+      `/api/v1/waiting${area ? `?area=${encodeURIComponent(area)}` : ""}`,
+    ),
+
+  /** Files a task as a note, leaving a bullet linking it; returns the note. */
+  taskToNote: (id: string, title: string, area?: string) =>
+    request<Document>(
+      "/api/v1/notes/from-task",
+      jsonInit("POST", { id, title, ...(area ? { area } : {}) }),
     ),
 
   getDaily: (date: string) => request<Document>(`/api/v1/daily/${date}`),

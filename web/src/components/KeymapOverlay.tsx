@@ -3,6 +3,7 @@
 // commit — this overlay is documentation.
 import { Modal } from "./Modal.tsx";
 import { useUi } from "../keys/UiContext.tsx";
+import { TRIAGE_ACTIONS } from "../lib/triage.ts";
 
 interface KeyBinding {
   keys: string;
@@ -29,6 +30,18 @@ const GROUPS: { title: string; bindings: KeyBinding[] }[] = [
       { keys: "↵", action: "Open selection" },
       { keys: "x", action: "Toggle selected task" },
       { keys: "s", action: "Snooze selected task" },
+    ],
+  },
+  {
+    // The same table drives the inbox's keys and row buttons, so this list
+    // cannot drift from them. On the inbox `s` parks instead of snoozing.
+    title: "Inbox (selected task)",
+    bindings: [
+      ...TRIAGE_ACTIONS.map((action) => ({
+        keys: action.key,
+        action: action.label,
+      })),
+      { keys: "x", action: "Done" },
     ],
   },
   {

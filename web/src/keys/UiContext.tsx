@@ -24,6 +24,9 @@ export interface ListNavHandlers {
   toggle?: () => void;
   /** `s`: open the snooze popover for the selected task. */
   snooze?: () => void;
+  /** Extra single keys acting on the selected item (the inbox's triage
+   * keys). Checked before the built-in bindings, so a list can take `s`. */
+  keys?: Record<string, () => void>;
 }
 
 export type OverlayName = "palette" | "capture" | "keymap" | "markdownHelp";

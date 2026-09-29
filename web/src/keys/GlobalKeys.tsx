@@ -68,6 +68,12 @@ export function GlobalKeys() {
     };
 
     const handleSingleKey = (event: KeyboardEvent): boolean => {
+      // The active list's own item keys first: the inbox rebinds `s`.
+      const listKey = listNavRef.current?.keys?.[event.key];
+      if (listKey) {
+        listKey();
+        return true;
+      }
       switch (event.key) {
         case "g":
           chordPending = true;

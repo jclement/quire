@@ -4,7 +4,7 @@
 // status live in Settings, not in page furniture.
 import { AreaDot } from "./AreaDot.tsx";
 import { AreaPicker } from "./AreaPicker.tsx";
-import { useAreas, useAreasEnabled } from "../api/queries.ts";
+import { useAreas, useAreasEnabled, useTasks } from "../api/queries.ts";
 import {
   AREA_ALL,
   AREA_NONE,
@@ -112,9 +112,12 @@ function dailyNavEntry(): NavEntry {
 function NavLink({
   entry,
   onNavigate,
+  badge = 0,
 }: {
   entry: NavEntry;
   onNavigate?: () => void;
+  /** A count beside the label; hidden at zero. */
+  badge?: number;
 }) {
   return (
     <Link
@@ -125,6 +128,14 @@ function NavLink({
     >
       <entry.icon className="size-4 shrink-0 text-muted" aria-hidden="true" />
       {entry.label}
+      {badge > 0 ? (
+        <span
+          className="ml-auto rounded-full bg-hover px-1.5 font-mono text-[10px] text-muted"
+          aria-label={`${badge} in ${entry.label}`}
+        >
+          {badge}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -210,11 +221,19 @@ function AreaSwitcher() {
 }
 
 function NavSections({ onNavigate }: { onNavigate?: () => void }) {
+  // Unprocessed inbox tasks, beside the link: the gentle nag — visible from
+  // every page, never a dialog. Shares the Inbox view's cache.
+  const inboxCount = useTasks("inbox").data?.length ?? 0;
   return (
     <div className="flex h-full flex-col gap-0.5 p-2">
       <AreaSwitcher />
       {PRIMARY_NAV.map((entry) => (
-        <NavLink key={entry.to} entry={entry} onNavigate={onNavigate} />
+        <NavLink
+          key={entry.to}
+          entry={entry}
+          onNavigate={onNavigate}
+          badge={entry.to === "/inbox" ? inboxCount : 0}
+        />
       ))}
       <div className="my-2 border-t border-border" />
       {LIBRARY_NAV.map((entry) => (

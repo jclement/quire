@@ -15,6 +15,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { CALLOUT_TYPES, type CalloutType } from "../lib/callouts.ts";
 import type { TaskLine } from "../lib/taskLine.ts";
+import { todayISO } from "../lib/dates.ts";
 import {
   applyTaskLine,
   makeTask,
@@ -429,7 +430,16 @@ function TaskDetails({
           type="checkbox"
           checked={draft.waiting}
           onChange={(event) =>
-            setDraft({ ...draft, waiting: event.target.checked })
+            // Marking stamps today, so the wait has an age; clearing takes
+            // the date too. An existing date is kept — the wait did not
+            // restart because the dialog was opened.
+            setDraft({
+              ...draft,
+              waiting: event.target.checked,
+              waitingSince: event.target.checked
+                ? draft.waitingSince || todayISO()
+                : "",
+            })
           }
           className="size-3.5 accent-(--accent)"
         />

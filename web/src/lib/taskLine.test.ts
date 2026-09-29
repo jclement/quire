@@ -14,6 +14,7 @@ describe("task line grammar", () => {
       defer: "2026-09-08",
       completedOn: "2026-09-02",
       waiting: true,
+      waitingSince: "",
       priority: 1,
       recur: "every week",
     });
@@ -34,5 +35,17 @@ describe("task line grammar", () => {
     const t = parseTaskLine("- [ ] thing 📅")!;
     expect(t.due).toBe("");
     expect(serializeTaskLine(t)).toBe("- [ ] thing");
+  });
+
+  test("the waiting date survives a round trip", () => {
+    const t = parseTaskLine(
+      "- [ ] SOC evidence [[Frances Bagley]] ⏳ 2026-09-20 📅 2026-10-01",
+    )!;
+    expect(t.waiting).toBe(true);
+    expect(t.waitingSince).toBe("2026-09-20");
+    expect(t.text).toBe("SOC evidence [[Frances Bagley]]");
+    expect(serializeTaskLine(t)).toBe(
+      "- [ ] SOC evidence [[Frances Bagley]] 📅 2026-10-01 ⏳ 2026-09-20",
+    );
   });
 });

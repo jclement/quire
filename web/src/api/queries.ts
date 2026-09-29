@@ -28,6 +28,8 @@ export const queryKeys = {
   related: (path: string) => ["related", path] as const,
   semanticStatus: ["semantic-status"] as const,
   tasks: (view: TaskView, area = "") => ["tasks", view, area] as const,
+  // Under "tasks" so every task mutation's invalidation reaches it.
+  waitingGroups: (area = "") => ["tasks", "waiting-groups", area] as const,
   today: ["today"] as const,
   todayIn: (area: string) => ["today", area] as const,
   areas: ["areas"] as const,
@@ -187,11 +189,21 @@ export function useSemanticStatus(enabled: boolean) {
   });
 }
 
-export function useTasks(view: TaskView) {
+export function useTasks(view: TaskView, enabled = true) {
   const area = useEffectiveArea();
   return useQuery({
     queryKey: queryKeys.tasks(view, area),
     queryFn: () => api.listTasks(view, area),
+    enabled,
+  });
+}
+
+/** The Waiting view's groups: who owes what, oldest first. */
+export function useWaitingGroups() {
+  const area = useEffectiveArea();
+  return useQuery({
+    queryKey: queryKeys.waitingGroups(area),
+    queryFn: () => api.waitingGroups(area),
   });
 }
 
@@ -264,6 +276,22 @@ export function useEditTask() {
     mutationFn: (input: { id: string; edit: TaskEdit }) =>
       api.editTask(input.id, input.edit),
     onSettled: () => invalidateTaskCaches(queryClient),
+  });
+}
+
+/**
+ * Task → note. The source document and the new note both change, and the
+ * task leaves every list, so everything task- or document-shaped refetches.
+ */
+export function useTaskToNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; title: string; area?: string }) =>
+      api.taskToNote(input.id, input.title, input.area),
+    onSettled: () => {
+      invalidateTaskCaches(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+    },
   });
 }
 

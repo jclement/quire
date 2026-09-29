@@ -32,6 +32,7 @@ export function WeeklyPage({ week }: { week: string }) {
   if (review.isPending) return <SkeletonRows count={6} />;
   if (review.isError) return <ErrorState error={review.error} />;
   const data = review.data;
+  const freshWaiting = data.waiting.filter((task) => !task.waiting_for?.stale);
 
   const nothing =
     data.completed.length === 0 &&
@@ -88,9 +89,17 @@ export function WeeklyPage({ week }: { week: string }) {
         </Section>
       ) : null}
 
-      {data.waiting.length > 0 ? (
-        <Section title="Still waiting on" count={data.waiting.length}>
-          <TaskListFlat tasks={data.waiting} />
+      {/* Stale waits are the chase list, so they get their own section;
+          the rest follow, each listed once. */}
+      {(data.stale_waiting ?? []).length > 0 ? (
+        <Section title="Waiting too long" count={data.stale_waiting.length}>
+          <TaskListFlat tasks={data.stale_waiting} />
+        </Section>
+      ) : null}
+
+      {freshWaiting.length > 0 ? (
+        <Section title="Still waiting on" count={freshWaiting.length}>
+          <TaskListFlat tasks={freshWaiting} />
         </Section>
       ) : null}
 

@@ -1,7 +1,9 @@
 // The snooze popover on a task row (`s` key or the hover calendar button):
 // quick chips (Today / Tomorrow / This weekend / Next week / Clear) plus a raw
-// YYYY-MM-DD input, applied via PATCH /tasks/<id> {due}. Not optimistic — the
-// content-derived task id can change on edit, so we let invalidation reconcile.
+// YYYY-MM-DD input, applied via PATCH /tasks/<id> {due}. The inbox reuses it
+// as its due-date picker (`d`) and, with field="defer", its defer picker
+// (`f`). Not optimistic — the content-derived task id can change on edit, so
+// we let invalidation reconcile.
 import { useRef } from "react";
 import { useEditTask } from "../api/queries.ts";
 import type { Task } from "../api/types.ts";
@@ -17,7 +19,11 @@ import {
 interface SnoozePopoverProps {
   task: Task;
   onClose: () => void;
+  /** Which date the chips set: the due date (default) or the defer date. */
+  field?: "due" | "defer";
 }
+
+const FIELD_LABEL = { due: "Snooze", defer: "Defer" } as const;
 
 function chipOptions(): { label: string; due: string }[] {
   const today = todayISO();
@@ -31,12 +37,16 @@ function chipOptions(): { label: string; due: string }[] {
   ];
 }
 
-export function SnoozePopover({ task, onClose }: SnoozePopoverProps) {
+export function SnoozePopover({
+  task,
+  onClose,
+  field = "due",
+}: SnoozePopoverProps) {
   const editTask = useEditTask();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const apply = (due: string) => {
-    editTask.mutate({ id: task.id, edit: { due } });
+  const apply = (date: string) => {
+    editTask.mutate({ id: task.id, edit: { [field]: date } });
     onClose();
   };
 
@@ -59,7 +69,7 @@ export function SnoozePopover({ task, onClose }: SnoozePopoverProps) {
       />
       <div
         role="dialog"
-        aria-label={`Snooze: ${task.text}`}
+        aria-label={`${FIELD_LABEL[field]}: ${task.text}`}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -95,7 +105,7 @@ export function SnoozePopover({ task, onClose }: SnoozePopoverProps) {
                 applyTyped();
               }
             }}
-            aria-label="Snooze to date"
+            aria-label={`${FIELD_LABEL[field]} to date`}
             {...noAutofill("snooze-date")}
             className="field-bare h-7 w-full rounded border border-border bg-transparent px-1.5 font-mono text-[11px] text-heading outline-none placeholder:text-muted focus:border-accent"
           />

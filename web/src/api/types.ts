@@ -39,6 +39,8 @@ export type {
   TemplateInfo,
   TodayPayload,
   TokenInfo,
+  WaitingFor,
+  WaitingGroup,
 } from "./generated.ts";
 
 /**
@@ -54,9 +56,16 @@ export interface TaskEdit {
   due?: string;
   defer?: string;
   priority?: 0 | 1 | 2 | 3;
+  /** true stamps ⏳ with today's date; false removes marker and date. */
+  waiting?: boolean;
+  /** Who it waits on, by name; links them on the line and marks it waiting. */
+  waiting_on?: string;
+  /** Replaces the task's words, keeping its markers (the id changes). */
+  text?: string;
 }
 
-export type TaskView = "inbox" | "today" | "upcoming" | "waiting" | "logbook";
+export type TaskView =
+  "inbox" | "today" | "upcoming" | "waiting" | "someday" | "logbook";
 
 /** SSE payload for "doc" events on /api/v1/events. */
 export interface DocEvent {

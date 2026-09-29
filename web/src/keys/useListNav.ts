@@ -1,4 +1,5 @@
-// Roving list selection for j/k + Enter + x. A view calls useListNav with its
+// Roving list selection for j/k + Enter + x, plus any per-item keys a list
+// adds (the inbox's triage keys). A view calls useListNav with its
 // items and becomes "the active list": GlobalKeys routes movement keys here.
 // Selection is an index with a focused row element (visible focus ring, screen
 // readers follow along); the hook never steals focus until the user actually
@@ -14,6 +15,9 @@ export interface UseListNavOptions<T> {
   onSnooze?: (item: T) => void;
   /** Set false while another list on the same page should own the keys. */
   enabled?: boolean;
+  /** Extra keys acting on the selected item, e.g. { t: dueToday }. These
+   * win over the built-in `s`, so a list can rebind it. */
+  itemKeys?: Record<string, (item: T) => void>;
 }
 
 export interface ListNav {
@@ -29,6 +33,7 @@ export function useListNav<T>({
   onToggle,
   onSnooze,
   enabled = true,
+  itemKeys,
 }: UseListNavOptions<T>): ListNav {
   const { listNavRef } = useUi();
   // Selection is clamped at read time rather than synced by effect, so a
@@ -38,9 +43,16 @@ export function useListNav<T>({
   const rowsRef = useRef(new Map<number, HTMLElement>());
   // Latest values live in a ref (written post-render) so the handlers
   // registered with the key context never go stale.
-  const stateRef = useRef({ items, index, onOpen, onToggle, onSnooze });
+  const stateRef = useRef({
+    items,
+    index,
+    onOpen,
+    onToggle,
+    onSnooze,
+    itemKeys,
+  });
   useEffect(() => {
-    stateRef.current = { items, index, onOpen, onToggle, onSnooze };
+    stateRef.current = { items, index, onOpen, onToggle, onSnooze, itemKeys };
   });
 
   const move = useCallback((delta: number) => {
@@ -55,6 +67,8 @@ export function useListNav<T>({
 
   const hasToggle = onToggle !== undefined;
   const hasSnooze = onSnooze !== undefined;
+  // Which keys exist is stable per list; what they do is read from the ref.
+  const keyNames = Object.keys(itemKeys ?? {}).join("");
   useEffect(() => {
     if (!enabled) return;
     const handlers = {
@@ -86,12 +100,22 @@ export function useListNav<T>({
             if (item !== undefined) snooze?.(item);
           }
         : undefined,
+      keys: Object.fromEntries(
+        [...keyNames].map((key) => [
+          key,
+          () => {
+            const { items: current, index: at } = stateRef.current;
+            const item = current[at];
+            if (item !== undefined) stateRef.current.itemKeys?.[key]?.(item);
+          },
+        ]),
+      ),
     };
     listNavRef.current = handlers;
     return () => {
       if (listNavRef.current === handlers) listNavRef.current = null;
     };
-  }, [enabled, move, hasToggle, hasSnooze, listNavRef]);
+  }, [enabled, move, hasToggle, hasSnooze, keyNames, listNavRef]);
 
   const rowRef = useCallback(
     (rowIndex: number) => (el: HTMLElement | null) => {

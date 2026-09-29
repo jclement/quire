@@ -8,7 +8,7 @@
 // The outline follows the reader: in read mode via IntersectionObserver over
 // the rendered headings, in edit/split via the editor's top visible line
 // (where clicking scrolls the editor instead of the page).
-import { Square } from "lucide-react";
+import { Hourglass, Square } from "lucide-react";
 import { Link as RouterLink } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { DocMeta, SearchResult, Task } from "../api/types.ts";
@@ -30,6 +30,9 @@ interface DocumentRailProps {
   related?: SearchResult[];
   /** Open tasks elsewhere that name this entity; empty for non-entities. */
   openTasks?: Task[];
+  /** What this person or company owes, oldest first; people and companies
+   * only. */
+  waitingOn?: Task[];
 }
 
 /** Left padding per heading level — H1 flush, deeper levels stepped in. */
@@ -43,9 +46,13 @@ export function DocumentRail({
   backlinks,
   related = [],
   openTasks = [],
+  waitingOn = [],
 }: DocumentRailProps) {
   // Defensive: a payload from before this field existed has no key at all.
-  const tasks = openTasks ?? [];
+  const owed = waitingOn ?? [];
+  // A wait is listed once, under what they owe, not again as a mention.
+  const owedIds = new Set(owed.map((task) => task.id));
+  const tasks = (openTasks ?? []).filter((task) => !owedIds.has(task.id));
   const activeId = useActiveHeading(headings, mode, activeLine);
 
   const showOutline = headings.length >= MIN_OUTLINE_HEADINGS;
@@ -53,7 +60,8 @@ export function DocumentRail({
     !showOutline &&
     backlinks.length === 0 &&
     related.length === 0 &&
-    tasks.length === 0
+    tasks.length === 0 &&
+    owed.length === 0
   ) {
     return null;
   }
@@ -92,6 +100,43 @@ export function DocumentRail({
                 </button>
               </li>
             ))}
+          </ul>
+        </nav>
+      ) : null}
+
+      {/* What this person or company owes you, with how long each has
+          waited — the question a 1:1 opens with, so it leads the rail. */}
+      {owed.length > 0 ? (
+        <nav aria-label="Waiting on them">
+          <RailHeading>Waiting on them</RailHeading>
+          <ul className="border-l border-border">
+            {owed.map((task) => {
+              const wait = task.waiting_for;
+              return (
+                <li key={task.id}>
+                  <RouterLink
+                    to={docHref(task.doc_path)}
+                    title={`${task.text} — in ${task.doc_title}${wait?.since ? `, waiting since ${wait.since}` : ""}`}
+                    className="-ml-px flex items-start gap-1.5 border-l border-transparent py-0.5 pr-1 pl-2 text-xs leading-snug text-muted hover:border-border hover:text-body"
+                  >
+                    <Hourglass
+                      className="mt-0.5 size-3 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <span className="line-clamp-2">
+                      {task.text}
+                      {wait?.days != null ? (
+                        <span
+                          className={`ml-1 font-mono whitespace-nowrap ${wait.stale ? "text-danger" : "text-muted"}`}
+                        >
+                          {wait.days}d
+                        </span>
+                      ) : null}
+                    </span>
+                  </RouterLink>
+                </li>
+              );
+            })}
           </ul>
         </nav>
       ) : null}

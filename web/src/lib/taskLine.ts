@@ -1,6 +1,6 @@
 // The task line grammar, mirrored from internal/markdown/scan.go so the
 // toolbar can edit a task's metadata in place: `- [ ] text ⏫ 📅 2026-09-10
-// 🛫 2026-09-08 ⏳ 🔁 every week ✅ 2026-09-02`. Parse pulls the markers out
+// 🛫 2026-09-08 ⏳ 2026-09-01 🔁 every week ✅ 2026-09-02`. Parse pulls the markers out
 // of the text; serialize writes them back in one canonical order, which is
 // also how the server writes them (recurrence spawns, completion stamps).
 export interface TaskLine {
@@ -13,6 +13,8 @@ export interface TaskLine {
   defer: string;
   completedOn: string;
   waiting: boolean;
+  /** The date after ⏳ — when the wait began — or "" for a bare marker. */
+  waitingSince: string;
   /** 0 none, 1 high, 2 medium, 3 low — the scanner's numbering. */
   priority: 0 | 1 | 2 | 3;
   /** "every week", "every 3 months when done", or "". */
@@ -39,6 +41,7 @@ export function parseTaskLine(line: string): TaskLine | null {
     defer: "",
     completedOn: "",
     waiting: false,
+    waitingSince: "",
     priority: 0,
     recur: "",
   };
@@ -65,7 +68,7 @@ export function parseTaskLine(line: string): TaskLine | null {
   out.completedOn = dated("✅");
   if (text.includes("⏳")) {
     out.waiting = true;
-    text = text.replace("⏳", "");
+    out.waitingSince = dated("⏳");
   }
   for (const level of [1, 2, 3] as const) {
     const mark = PRIORITY_MARK[level];
@@ -85,7 +88,8 @@ export function serializeTaskLine(task: TaskLine): string {
   if (task.priority) parts.push(PRIORITY_MARK[task.priority]);
   if (task.due) parts.push(`📅 ${task.due}`);
   if (task.defer) parts.push(`🛫 ${task.defer}`);
-  if (task.waiting) parts.push("⏳");
+  if (task.waiting)
+    parts.push(task.waitingSince ? `⏳ ${task.waitingSince}` : "⏳");
   if (task.recur) parts.push(`🔁 ${task.recur}`);
   if (task.completedOn) parts.push(`✅ ${task.completedOn}`);
   return `${task.prefix}[${task.done ? "x" : " "}] ${parts.filter(Boolean).join(" ")}`;
