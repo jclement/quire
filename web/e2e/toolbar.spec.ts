@@ -48,7 +48,8 @@ test("heading, task, details and callout act on the cursor line", async ({ page 
   await details.getByLabel("Waiting").check();
   await details.getByLabel("Repeat").fill("every week");
   await details.getByRole("button", { name: "Apply" }).click();
-  await expect(editor).toContainText("- [ ] call sarah ⏫ 📅 2026-09-10 ⏳ 🔁 every week");
+  // Ticking Waiting stamps the day the wait began.
+  await expect(editor).toContainText(/- \[ \] call sarah ⏫ 📅 2026-09-10 ⏳ \d{4}-\d{2}-\d{2} 🔁 every week/);
 
   // Task on a task: just the details, showing what is on the line.
   await toolbar(page).getByRole("button", { name: "Task", exact: true }).click();
