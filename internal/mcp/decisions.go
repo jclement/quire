@@ -17,7 +17,7 @@ func registerDecisionTools(s *sdk.Server, t *tools, allows func(string) bool) {
 		return
 	}
 	sdk.AddTool(s, &sdk.Tool{Name: "list_decisions", Annotations: readOnly,
-		Description: "The decision log, newest first: every bullet under a \"Decisions\" heading in any note (meeting notes have one) plus every decision record (a document tagged decision), each with its date, source document and the people/companies/projects it is about. Use it for 'what did we decide about X', before re-opening a settled question, or to write a status update. entity narrows to one person, company or project (name or path); query filters by words; area narrows to an area. To record a new decision, append a bullet under the meeting's Decisions section with append_to_document (section: Decisions)."},
+		Description: "The decision log, newest first: every bullet under a \"Decisions\" heading in any note (meeting notes have one), every line tagged #decision, plus every decision record (a document with decision in its frontmatter tags), each with its date, source document and the people/companies/projects it is about. Use it for 'what did we decide about X', before re-opening a settled question, or to write a status update. entity narrows to one person, company or project (name or path); query filters by words; area narrows to an area. To record a new decision, append a bullet under the meeting's Decisions section with append_to_document (section: Decisions), or capture_note a line ending in #decision into today's note."},
 		t.listDecisions)
 }
 

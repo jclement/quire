@@ -23,8 +23,21 @@ const (
 	DecisionRecord = "record" // a whole document tagged decision
 )
 
-// decisionTag marks a document as a decision record.
+// decisionTag in frontmatter tags: marks a document as a decision record.
 const decisionTag = "decision"
+
+// isDecisionRecord: only frontmatter `tags:` makes a record. A body
+// #decision marks one line (see markdown.ScanDecisions); counting it here
+// made a daily note that happened to log a decision into a "decision"
+// titled with its date, linked to everyone the day mentioned.
+func isDecisionRecord(fm map[string]any) bool {
+	for _, tag := range stringList(fm["tags"]) {
+		if strings.EqualFold(strings.TrimPrefix(strings.TrimSpace(tag), "#"), decisionTag) {
+			return true
+		}
+	}
+	return false
+}
 
 // decisionSource is what indexing one document knows that decisions need.
 type decisionSource struct {
@@ -32,7 +45,6 @@ type decisionSource struct {
 	title    string
 	docType  vault.DocType
 	fm       map[string]any
-	tags     map[string]struct{}
 	links    []markdown.Link
 	raw      []byte
 	modified time.Time
@@ -48,7 +60,7 @@ func insertDecisions(tx *sql.Tx, src decisionSource) error {
 	date := decisionDate(src)
 	inherited := docEntities(src.fm)
 
-	if _, isRecord := src.tags[decisionTag]; isRecord {
+	if isDecisionRecord(src.fm) {
 		// A record is about everything it links to: it is one focused
 		// document, so its body links are its subject, not passing mentions.
 		var targets []string

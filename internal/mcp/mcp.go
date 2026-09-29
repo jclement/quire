@@ -71,9 +71,10 @@ Working rules:
 - Processing the inbox means every task leaves it: give it a due or defer
   date, delegate it (edit_task waiting_on), park it (#someday), complete it,
   or — when it was never an action — task_to_note.
-- Decisions are bullets under a "Decisions" heading (meeting notes have one)
-  or whole documents tagged decision; list_decisions reads them all. Check it
-  before re-opening a settled question.
+- Decisions are bullets under a "Decisions" heading (meeting notes have one),
+  any line tagged #decision (the quick way to log one in today's note), or
+  whole documents with decision in frontmatter tags; list_decisions reads
+  them all. Check it before re-opening a settled question.
 - Never invent a document path; find it with search first.`
 
 func newServer(svc *service.Service, version string, allows func(string) bool, principal string, audit Auditor) *sdk.Server {

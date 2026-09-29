@@ -281,3 +281,34 @@ func TestSearchIsDecision(t *testing.T) {
 		t.Errorf("dated hits = %+v", hits)
 	}
 }
+
+// A body #decision is an inline decision, never a record: a daily note that
+// mentions ten people must not become a "decision" titled with its date on
+// every one of their pages. Only frontmatter tags make a record.
+func TestBodyDecisionTagIsInlineNotRecord(t *testing.T) {
+	ix := newDecisionIndex(t)
+	if _, err := ix.Vault.Write("daily/2026-09-29.md", []byte("# 2026-09-29\n\nSaw [[Sarah Chen]] and [[Dan Roe]].\n\n- #decision go with [[Project Apollo]]\n"), ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ix.IndexFile("daily/2026-09-29.md"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := ix.Decisions(DecisionFilter{Entity: "daily/2026-09-29.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := summarize(rows)
+	want := []decisionSummary{{DecisionInline, "daily/2026-09-29.md", "go with [[Project Apollo]]", "2026-09-29", []string{"projects/apollo.md"}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("decisions = %+v, want %+v", got, want)
+	}
+	dan, err := ix.Decisions(DecisionFilter{Entity: "people/dan-roe.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range dan {
+		if d.DocPath == "daily/2026-09-29.md" {
+			t.Errorf("a passing mention put the daily note on Dan's rail: %+v", d)
+		}
+	}
+}

@@ -123,7 +123,7 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 		return false, err
 	}
 	if err := insertDecisions(tx, decisionSource{
-		path: rel, title: title, docType: docType, fm: fm, tags: tags,
+		path: rel, title: title, docType: docType, fm: fm,
 		links: doc.Links, raw: f.Raw, modified: f.ModTime,
 	}); err != nil {
 		return false, err

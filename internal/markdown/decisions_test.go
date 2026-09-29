@@ -57,3 +57,41 @@ func TestScanDecisionsIgnoresSingularHeading(t *testing.T) {
 		t.Errorf("singular Decision section leaked: %+v", got)
 	}
 }
+
+// "#decision" on a line logs that line as a decision wherever it is written
+// — the quickest way to record one in a daily note — without the tag in the
+// text, and only once when it also sits under a Decisions heading.
+func TestScanDecisionsInlineTag(t *testing.T) {
+	doc := "# 2026-09-29\n" + // 1
+		"\n" + // 2
+		"- #decision go with [[Postgres]]\n" + // 3
+		"Talked to [[Sarah Chen]] and [[Dan Roe]].\n" + // 4
+		"We agreed: no offsite this year #Decision\n" + // 5
+		"- [ ] #decision is a task, not a decision\n" + // 6
+		"- #decisions is another tag, and #decisionmaking too\n" + // 7
+		"## Decisions\n" + // 8
+		"- Freeze scope #decision\n" + // 9: once, not twice
+		"```\n- #decision fenced\n```\n" // 10-12
+
+	type row struct {
+		Line  int
+		Text  string
+		Links []string
+	}
+	var rows []row
+	for _, d := range ScanDecisions([]byte(doc)) {
+		var links []string
+		for _, l := range d.Links {
+			links = append(links, l.Raw)
+		}
+		rows = append(rows, row{d.Line, d.Text, links})
+	}
+	want := []row{
+		{3, "go with [[Postgres]]", []string{"Postgres"}},
+		{5, "We agreed: no offsite this year", nil},
+		{9, "Freeze scope", nil},
+	}
+	if !reflect.DeepEqual(rows, want) {
+		t.Errorf("decisions =\n%+v\nwant\n%+v", rows, want)
+	}
+}

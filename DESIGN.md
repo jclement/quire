@@ -130,10 +130,14 @@ recently-written `(path, sha256)` set. Each index update publishes an SSE event 
 
 ## Decisions
 
-A decision is either a **record** — a document tagged `decision`, one row whose text is
-its title — or **inline**: a top-level bullet under a heading named `Decisions` (plural,
-any level, case-insensitive, trailing colon allowed) in any document, running to the
-next heading of the same or higher level. Plural is the whole disambiguation: the
+A decision is either a **record** — a document with `decision` in its *frontmatter*
+`tags:`, one row whose text is its title — or **inline**: a top-level bullet under a
+heading named `Decisions` (plural, any level, case-insensitive, trailing colon allowed)
+in any document, running to the next heading of the same or higher level, or any bullet
+or line carrying the tag `#decision` (exactly — not `#decisions`), with the tag removed
+from its text. A body `#decision` deliberately does *not* make a record: it merges into
+the document's tags, and treating it as one turned a daily note into a "decision"
+titled with its date and linked to everyone that day mentioned. Plural is the whole disambiguation: the
 decision template's singular `## Decision` section *is* the record, and reading it
 again would count every record twice. Empty template bullets, checkboxes (tasks),
 indented sub-bullets (elaboration) and fenced blocks are not decisions; templates never

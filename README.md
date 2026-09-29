@@ -340,7 +340,9 @@ an item's status.
 
 `/decisions` is the decision log, newest first: every bullet under a heading named
 **Decisions** (plural, any level — the starter meeting template has one between Notes
-and Action items) plus every document tagged `decision` (the decision template). Each
+and Action items), every bullet or line tagged `#decision` anywhere — `- #decision go
+with Postgres` in today's note is the quickest way to log one — plus every document
+with `decision` in its frontmatter `tags:` (the decision template). Each
 row shows its date — the note's `date:`, a daily note's day, else when the file last
 changed — the decision, where it was made, and the people, companies and projects it
 is about (linked in the bullet, or in the note's `people:`/`project:`/`company:`).
