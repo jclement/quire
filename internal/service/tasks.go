@@ -24,8 +24,13 @@ type TaskEdit struct {
 	Due      *string `json:"due"`
 	Defer    *string `json:"defer"`
 	Priority *int    `json:"priority"` // 0 none, 1 high, 2 medium, 3 low
-	// Waiting toggles the ⏳ delegation marker.
+	// Waiting toggles the ⏳ delegation marker; marking stamps today's
+	// date, clearing removes marker and date.
 	Waiting *bool `json:"waiting"`
+	// WaitingOn names who the task is waiting on — a person or company by
+	// name or alias — linking them on the line if they are not already,
+	// and marking the task waiting.
+	WaitingOn *string `json:"waiting_on"`
 	// Recur sets the 🔁 spec ("every month", "every 3 weeks when done");
 	// an empty string stops it repeating.
 	Recur *string `json:"recur"`
@@ -44,8 +49,11 @@ type TaskSpec struct {
 	Defer    string
 	Priority int
 	Waiting  bool
-	Recur    string
-	Section  string
+	// WaitingOn names who it is waiting on (implies Waiting); see
+	// TaskEdit.WaitingOn.
+	WaitingOn string
+	Recur     string
+	Section   string
 }
 
 // TaskView re-exports the index views for transports.
@@ -57,7 +65,7 @@ func (s *Service) TasksIn(view, area string) ([]Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	return tasksFromRows(rows), nil
+	return s.tasksOut(rows), nil
 }
 
 // CreateTask appends a task line to today's daily note (creating it if
@@ -146,6 +154,9 @@ func (s *Service) taskLine(spec TaskSpec, attachment string) (string, error) {
 	if scanned := markdown.Scan("", []byte("- [ ] "+text)); len(scanned.Tasks) != 1 || strings.TrimSpace(scanned.Tasks[0].Text) == "" {
 		return "", fmt.Errorf("%w: task text needs words, not only markers", ErrValidation)
 	}
+	if strings.TrimSpace(spec.WaitingOn) != "" {
+		spec.Text, spec.Waiting = s.withWhoLink(spec.Text, spec.WaitingOn), true
+	}
 
 	line := "- [ ] " + text
 	if attachment != "" {
@@ -161,7 +172,7 @@ func (s *Service) taskLine(spec TaskSpec, attachment string) (string, error) {
 		line += " 🛫 " + deferDate
 	}
 	if spec.Waiting {
-		line += " ⏳"
+		line += " ⏳ " + s.today()
 	}
 	if spec.Recur != "" {
 		line += " 🔁 " + spec.Recur
@@ -350,7 +361,7 @@ func (s *Service) editTask(id string, edit TaskEdit) (Task, error) {
 		line = setPriority(line, *edit.Priority)
 	}
 	if edit.Waiting != nil {
-		line = setWaiting(line, *edit.Waiting)
+		line = setWaiting(line, *edit.Waiting, s.today())
 	}
 	if edit.Recur != nil {
 		if *edit.Recur != "" {
@@ -365,6 +376,13 @@ func (s *Service) editTask(id string, edit TaskEdit) (Task, error) {
 			return Task{}, fmt.Errorf("%w: task text cannot be empty", ErrValidation)
 		}
 		line = setTaskText(line, row.Text, strings.TrimSpace(*edit.Text))
+	}
+	if edit.WaitingOn != nil && strings.TrimSpace(*edit.WaitingOn) != "" {
+		current := row.Text
+		if edit.Text != nil {
+			current = strings.TrimSpace(*edit.Text)
+		}
+		line = s.waitOn(line, current, *edit.WaitingOn)
 	}
 	lines[lineIdx] = line
 
@@ -398,18 +416,6 @@ func setMarkerDate(line, marker, oldDate, newDate string) string {
 }
 
 var prioritySymbols = map[int]string{1: "⏫", 2: "🔼", 3: "🔽"}
-
-// setWaiting adds or removes the ⏳ delegation marker.
-func setWaiting(line string, waiting bool) string {
-	has := strings.Contains(line, "⏳")
-	switch {
-	case waiting && !has:
-		return line + " ⏳"
-	case !waiting && has:
-		return strings.TrimRight(strings.ReplaceAll(strings.ReplaceAll(line, " ⏳", ""), "⏳", ""), " ")
-	}
-	return line
-}
 
 // setRecur replaces, adds or removes the 🔁 spec, leaving the rest alone.
 func setRecur(line, oldSpec, newSpec string) string {

@@ -58,24 +58,63 @@ type Document struct {
 	// document — "what am I still owed about Acme". Entity documents only
 	// (person, company, project); empty for everything else.
 	OpenTasks []Task `json:"open_tasks"`
+	// WaitingOn is what this person or company owes: waiting tasks whose
+	// who is this document, oldest first, with their ages. Empty for every
+	// other type.
+	WaitingOn []Task `json:"waiting_on"`
 }
 
 // Task is the API task shape.
 type Task struct {
-	ID          string   `json:"id"`
-	DocPath     string   `json:"doc_path"`
-	DocTitle    string   `json:"doc_title"`
-	Line        int      `json:"line"`
-	Text        string   `json:"text"`
-	Done        bool     `json:"done"`
-	Due         *string  `json:"due"`
-	Defer       *string  `json:"defer"`
-	Priority    int      `json:"priority"`
-	Waiting     bool     `json:"waiting"`
-	Recur       *string  `json:"recur"`
-	Project     *string  `json:"project"`
-	Tags        []string `json:"tags"`
-	CompletedOn *string  `json:"completed_on"`
+	ID       string  `json:"id"`
+	DocPath  string  `json:"doc_path"`
+	DocTitle string  `json:"doc_title"`
+	Line     int     `json:"line"`
+	Text     string  `json:"text"`
+	Done     bool    `json:"done"`
+	Due      *string `json:"due"`
+	Defer    *string `json:"defer"`
+	Priority int     `json:"priority"`
+	Waiting  bool    `json:"waiting"`
+	// WaitingFor is who a waiting task is owed by and for how long; nil
+	// when the task is not waiting.
+	WaitingFor  *WaitingFor `json:"waiting_for"`
+	Recur       *string     `json:"recur"`
+	Project     *string     `json:"project"`
+	Tags        []string    `json:"tags"`
+	CompletedOn *string     `json:"completed_on"`
+}
+
+// WaitingFor is the delegation half of a task: `⏳ 2026-09-20` on a line
+// that links [[Frances Bagley]] is waiting on Frances since the 20th.
+type WaitingFor struct {
+	// Since is the date after ⏳; nil for a bare marker.
+	Since *string `json:"since"`
+	// Days is whole days since then, reckoned in the owner's zone; nil when
+	// Since is. Set on lists and rollups — a single task returned from an
+	// edit may omit it.
+	Days *int `json:"days"`
+	// Stale is Days past StaleWaitingDays: time to chase.
+	Stale bool `json:"stale"`
+	// On is who: the first person or company the line links, else its
+	// first link, else the person or company page it sits on. Nil when the
+	// task names nobody.
+	On *string `json:"on"`
+	// OnPath is On's document; nil when the name has no page yet.
+	OnPath *string `json:"on_path"`
+}
+
+// WaitingGroup is one who on the Waiting view with everything they owe,
+// oldest first. The unassigned group has an empty Name.
+type WaitingGroup struct {
+	Name string  `json:"name"`
+	Path *string `json:"path"`
+	// Type is the who's document type (person, company, project…); "" when
+	// dangling or unassigned.
+	Type  string `json:"type"`
+	Tasks []Task `json:"tasks"`
+	// Stale counts the tasks in the group past the threshold.
+	Stale int `json:"stale"`
 }
 
 // SearchResult is one search hit.
@@ -179,6 +218,9 @@ type WeekPayload struct {
 	Slipped []Task `json:"slipped"`
 	// Waiting is delegated work still outstanding.
 	Waiting []Task `json:"waiting"`
+	// StaleWaiting is the part of Waiting that has gone quiet for longer
+	// than StaleWaitingDays, oldest first — the chase list.
+	StaleWaiting []Task `json:"stale_waiting"`
 	// Stalled are active projects with no open task anywhere.
 	Stalled []DocMeta `json:"stalled"`
 	// Recurrence lists repeating tasks that quietly stopped repeating.

@@ -310,10 +310,10 @@ func insertTasks(tx *sql.Tx, rel string, fm map[string]any, tasks []markdown.Tas
 
 		tagsJSON, _ := json.Marshal(orEmptyList(t.Tags))
 		_, err := tx.Exec(`INSERT INTO tasks
-			(id, doc_path, line, text, raw_text, done, due, defer_date, completed_on, priority, waiting, recur, project_norm, tags_json)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(id, doc_path, line, text, raw_text, done, due, defer_date, completed_on, priority, waiting, waiting_since, recur, project_norm, tags_json)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			id, rel, t.Line, t.Text, t.RawText, t.Done, t.Due, t.Defer, t.CompletedOn,
-			t.Priority, t.Waiting, t.Recur, docProject, string(tagsJSON))
+			t.Priority, t.Waiting, t.WaitingSince, t.Recur, docProject, string(tagsJSON))
 		if err != nil {
 			return fmt.Errorf("inserting task in %s: %w", rel, err)
 		}
@@ -323,10 +323,11 @@ func insertTasks(tx *sql.Tx, rel string, fm map[string]any, tasks []markdown.Tas
 			if target == "" || linked[target] {
 				continue
 			}
-			linked[target] = true
-			if _, err := tx.Exec("INSERT INTO task_links (task_id, target_norm) VALUES (?, ?)", id, target); err != nil {
+			if _, err := tx.Exec("INSERT INTO task_links (task_id, target_norm, target_raw, ord) VALUES (?, ?, ?, ?)",
+				id, target, strings.TrimSpace(stripHeading(l.Raw)), len(linked)); err != nil {
 				return fmt.Errorf("inserting task link in %s: %w", rel, err)
 			}
+			linked[target] = true
 		}
 		// Then whatever the document itself is about, minus what the line
 		// already names — so "what am I still owed about Acme" sees the
@@ -366,6 +367,16 @@ func linkTarget(raw string) string {
 	// "[[#Heading]]" is a jump within the current page and names no other
 	// document; the empty result is skipped by the caller.
 	return normalizeName(s)
+}
+
+// stripHeading drops a "#Heading" or "^block" suffix from a link target
+// while keeping its written case — the name to show, where linkTarget is the
+// name to join on.
+func stripHeading(raw string) string {
+	if i := strings.IndexAny(raw, "#^"); i >= 0 {
+		return raw[:i]
+	}
+	return raw
 }
 
 // stripWikilink unwraps "[[Target|Alias]]" → "Target"; plain strings pass

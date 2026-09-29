@@ -325,3 +325,49 @@ func TestAgentCoversTheWholeVault(t *testing.T) {
 		t.Errorf("restore_recurrence = %+v, want next year with the lead time kept", restored)
 	}
 }
+
+// The waiting loop an agent runs: delegate to someone by name, then ask
+// what that person owes before the 1:1.
+func TestWaitingOnAndPersonContext(t *testing.T) {
+	s := connect(t)
+	call(t, s, "create_document", map[string]any{"type": "person", "title": "Frances Bagley"})
+
+	task := call(t, s, "create_task", map[string]any{"text": "Get SOC evidence", "waiting_on": "Frances Bagley"})
+	if task["text"] != "Get SOC evidence [[Frances Bagley]]" || task["waiting"] != true {
+		t.Errorf("created = %v", task)
+	}
+	waitingFor, _ := task["waiting_for"].(map[string]any)
+	if waitingFor["since"] != "2026-09-01" || waitingFor["on_path"] != "people/frances-bagley.md" {
+		t.Errorf("waiting_for = %v", task["waiting_for"])
+	}
+
+	pc := call(t, s, "person_context", map[string]any{"name": "Frances Bagley"})
+	owed, _ := pc["waiting_on"].([]any)
+	if len(owed) != 1 {
+		t.Fatalf("waiting_on = %v", pc["waiting_on"])
+	}
+	age := owed[0].(map[string]any)["waiting_for"].(map[string]any)
+	if age["days"] != float64(0) || age["stale"] != false {
+		t.Errorf("age = %v", age)
+	}
+
+	// edit_task can name the who later, and unmarking clears it all.
+	plain := call(t, s, "create_task", map[string]any{"text": "Contract back"})
+	edited := call(t, s, "edit_task", map[string]any{"id": plain["id"], "waiting_on": "Frances Bagley"})
+	if edited["text"] != "Contract back [[Frances Bagley]]" || edited["waiting"] != true {
+		t.Errorf("edited = %v", edited)
+	}
+}
+
+func TestTaskToNoteTool(t *testing.T) {
+	s := connect(t)
+	task := call(t, s, "create_task", map[string]any{"text": "Onboarding feels long, the second screen repeats the first"})
+	note := call(t, s, "task_to_note", map[string]any{"id": task["id"]})
+	if note["title"] != "Onboarding feels long, the second screen repeats the" || note["type"] != "note" {
+		t.Errorf("note = %v %v", note["title"], note["type"])
+	}
+	inbox := call(t, s, "list_tasks", map[string]any{"view": "inbox"})
+	if tasks, _ := inbox["tasks"].([]any); len(tasks) != 0 {
+		t.Errorf("the task should have left the inbox: %v", tasks)
+	}
+}

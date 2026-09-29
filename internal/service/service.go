@@ -202,6 +202,7 @@ func taskFromRow(t index.TaskRow) Task {
 		Defer:       optStr(t.Defer),
 		Priority:    t.Priority,
 		Waiting:     t.Waiting,
+		WaitingFor:  waitingFor(t),
 		Recur:       optStr(t.Recur),
 		Project:     optStr(t.ProjectPath),
 		Tags:        t.Tags,
@@ -293,17 +294,26 @@ func (s *Service) buildDocument(f vault.File) (Document, error) {
 		}
 		tasks = append(tasks, taskFromRow(row))
 	}
+	tasks = ageTasks(tasks, s.today())
 
 	// The task rollup that makes an entity page worth opening: open tasks
 	// anywhere in the vault that name it. Entities only — a note or a
 	// meeting is where tasks live, not what they are about, and the extra
 	// query should not ride on every document read.
 	// Always a list, never null: the clients treat it as one.
-	openTasks := []Task{}
+	openTasks, waitingOn := []Task{}, []Task{}
 	switch vault.DocType(meta.Type) {
 	case vault.TypePerson, vault.TypeCompany, vault.TypeProject:
 		if rows, err := s.Index.TasksMentioning(f.Path); err == nil {
-			openTasks = TasksFromRows(rows)
+			openTasks = s.tasksOut(rows)
+		}
+	}
+	// What this person or company owes — the half of the rollup a 1:1
+	// opens with.
+	switch vault.DocType(meta.Type) {
+	case vault.TypePerson, vault.TypeCompany:
+		if rows, err := s.Index.WaitingOnDoc(f.Path); err == nil {
+			waitingOn = s.tasksOut(rows)
 		}
 	}
 
@@ -315,6 +325,7 @@ func (s *Service) buildDocument(f vault.File) (Document, error) {
 		Backlinks:   metasFromRows(backRows),
 		Tasks:       tasks,
 		OpenTasks:   openTasks,
+		WaitingOn:   waitingOn,
 	}, nil
 }
 
@@ -634,7 +645,7 @@ func (s *Service) TodayIn(area string) (TodayPayload, error) {
 	if err != nil {
 		return payload, err
 	}
-	payload.Waiting = tasksFromRows(waitingRows)
+	payload.Waiting = s.tasksOut(waitingRows)
 
 	payload.Birthdays, err = s.upcomingBirthdays(7)
 	if err != nil {

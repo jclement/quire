@@ -82,7 +82,13 @@ paths:
   /api/v1/tasks:
     get:
       summary: Task views
-      parameters: [{ name: view, in: query, schema: { type: string, enum: [inbox, today, upcoming, waiting, logbook], default: today } }]
+      description: >
+        inbox is open, undated, unfiled and not #someday; someday is open
+        #someday tasks with no due date (and no defer date still ahead);
+        waiting is oldest wait first. A waiting task carries waiting_for:
+        since (the ⏳ date), days, stale (past 7 days), on and on_path (who —
+        the first person or company linked on the line).
+      parameters: [{ name: view, in: query, schema: { type: string, enum: [inbox, today, upcoming, waiting, someday, logbook], default: today } }]
       responses: { "200": { description: "data: Task[]" } }
     post:
       summary: Quick capture — appends a task to today's daily note
@@ -104,18 +110,45 @@ paths:
                 defer:
                   type: string
                   description: hidden until this date; same formats as due
+                waiting: { type: boolean, description: "mark waiting (⏳ stamped with today's date)" }
+                waiting_on:
+                  type: string
+                  description: >
+                    who it waits on, by name or alias; linked as [[Title]]
+                    on the line unless already linked. Implies waiting.
       responses:
         "201": { description: "data: Task" }
         "400": { description: "VALIDATION_ERROR — missing text, or a date that could not be resolved" }
   /api/v1/tasks/{id}:
     patch:
-      summary: Edit a task's dates/priority (surgical single-line rewrite)
+      summary: Edit a task's dates/priority/waiting (surgical single-line rewrite)
       description: >
         Body fields: due, defer (YYYY-MM-DD; empty string clears; omitted
-        leaves unchanged), priority (0 none, 1 high, 2 medium, 3 low). The
-        returned task's id may differ — ids are content-derived.
+        leaves unchanged), priority (0 none, 1 high, 2 medium, 3 low),
+        waiting (true stamps ⏳ with today's date; false removes marker and
+        date), waiting_on (a name; links it and marks waiting), recur, text.
+        The returned task's id may differ — ids are content-derived.
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses: { "200": { description: "data: Task" } }
+  /api/v1/waiting:
+    get:
+      summary: Waiting view, grouped by who
+      description: >
+        Open waiting tasks grouped by who owes them — people and companies
+        first, then other names, then unassigned (name ""). Oldest wait
+        first within each group; stale counts tasks waiting more than 7 days.
+      parameters: [{ name: area, in: query, schema: { type: string } }]
+      responses: { "200": { description: "data: WaitingGroup[]" } }
+  /api/v1/notes/from-task:
+    post:
+      summary: Turn a task into a note
+      description: >
+        Body {id, title?, area?}. Creates a note titled title (default: the
+        task's first eight words) with the task's text as its body, filed in
+        the source document's area (area when the source has none), and
+        replaces the task's line with a plain bullet linking it. Needs the
+        write scope — it creates a document.
+      responses: { "201": { description: "data: Document (the new note)" }, "404": { description: no such task } }
   /api/v1/tasks/{id}/toggle:
     post:
       summary: Toggle a task's checkbox in its source markdown (surgical, one line)

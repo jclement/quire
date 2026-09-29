@@ -62,7 +62,7 @@ func (s *Service) WeekReview(label, area string) (WeekPayload, error) {
 	payload := WeekPayload{
 		Week: week.Label, Start: week.Start, End: week.End,
 		Prev: week.Prev, Next: week.Next,
-		Completed: []Task{}, Slipped: []Task{}, Waiting: []Task{},
+		Completed: []Task{}, Slipped: []Task{}, Waiting: []Task{}, StaleWaiting: []Task{},
 		Stalled: []DocMeta{}, Meetings: []DocMeta{}, Touched: []DocMeta{},
 		Recurrence: []RecurrenceProblem{},
 	}
@@ -88,7 +88,8 @@ func (s *Service) WeekReview(label, area string) (WeekPayload, error) {
 	if err != nil {
 		return payload, err
 	}
-	payload.Waiting = tasksFromRows(waiting)
+	payload.Waiting = s.tasksOut(waiting)
+	payload.StaleWaiting = staleOnly(payload.Waiting)
 
 	stalled, err := s.Index.ProjectsWithoutNextAction(area)
 	if err != nil {

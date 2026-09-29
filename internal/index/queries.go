@@ -109,6 +109,7 @@ type TaskRow struct {
 	ID          string
 	DocPath     string
 	DocTitle    string
+	DocType     string
 	Line        int
 	Text        string
 	Done        bool
@@ -117,10 +118,27 @@ type TaskRow struct {
 	CompletedOn string
 	Priority    int
 	Waiting     bool
+	// WaitingSince is the date after ⏳ ("" when bare or not waiting).
+	WaitingSince string
+	// WaitingOn is who a waiting task is owed by: the first link on the
+	// line that names a person or company, else the first link at all.
+	// Empty when the task is not waiting or links nothing.
+	WaitingOn   WaitingOn
 	Recur       string
 	RawText     string
 	ProjectPath string
 	Tags        []string
+}
+
+// WaitingOn is the resolved "who" of a waiting task.
+type WaitingOn struct {
+	// Name is the target as written on the line, or the document's title
+	// when it resolves.
+	Name string
+	// Path and Type are the resolved document; both "" when the link is
+	// dangling.
+	Path string
+	Type string
 }
 
 // SearchHit is one FTS result.
@@ -298,8 +316,8 @@ func (ix *Index) TasksCompletedBetween(fromDay, toDay string) (map[string]int, e
 // ---- tasks ----
 
 const taskSelect = `
-	SELECT t.id, t.doc_path, COALESCE(d.title, t.doc_path), t.line, t.text, t.done,
-	       t.due, t.defer_date, t.completed_on, t.priority, t.waiting, t.recur, t.raw_text, t.tags_json,
+	SELECT t.id, t.doc_path, COALESCE(d.title, t.doc_path), COALESCE(d.type, ''), t.line, t.text, t.done,
+	       t.due, t.defer_date, t.completed_on, t.priority, t.waiting, t.waiting_since, t.recur, t.raw_text, t.tags_json,
 	       COALESCE((
 	           SELECT MIN(n.path) FROM docnames n
 	           WHERE n.name IN (SELECT tl.target_norm FROM task_links tl WHERE tl.task_id = t.id UNION SELECT t.project_norm)
@@ -314,9 +332,18 @@ const (
 	ViewInbox    TaskView = "inbox"    // open, undated, unfiled — needs processing
 	ViewToday    TaskView = "today"    // open, overdue / due today / deferred-to-now
 	ViewUpcoming TaskView = "upcoming" // open, dated in the future
-	ViewWaiting  TaskView = "waiting"  // open, delegated
+	ViewWaiting  TaskView = "waiting"  // open, delegated, oldest wait first
+	ViewSomeday  TaskView = "someday"  // open, #someday, not dated or deferred ahead
 	ViewLogbook  TaskView = "logbook"  // completed, newest first
 )
+
+// SomedayTag parks a task: it leaves the inbox and today and waits in the
+// Someday list. A tag rather than a marker, so it stays plain markdown any
+// editor can write.
+const SomedayTag = "someday"
+
+// notSomeday is the SQL predicate for "task t is not parked".
+const notSomeday = ` AND NOT EXISTS (SELECT 1 FROM json_each(t.tags_json) WHERE json_each.value = '` + SomedayTag + `')`
 
 // Tasks returns the tasks for a view; today is the local YYYY-MM-DD used for
 // all date comparisons (passed in for testability).
@@ -326,12 +353,14 @@ func (ix *Index) Tasks(view TaskView, today, area string) ([]TaskRow, error) {
 	areaWhere, areaArgs := areaClause(area)
 	switch view {
 	case ViewInbox:
-		where = "t.done = 0 AND t.due = '' AND t.defer_date = '' AND t.waiting = 0 AND t.project_norm = ''"
+		where = "t.done = 0 AND t.due = '' AND t.defer_date = '' AND t.waiting = 0 AND t.project_norm = ''" + notSomeday
 		order = "t.doc_path, t.line"
 	case ViewToday:
+		// A parked task that comes due still shows — a deadline outranks
+		// the tag — but its defer date alone does not bring it back.
 		where = `t.done = 0 AND t.waiting = 0 AND (
 			(t.due != '' AND t.due <= ?) OR
-			(t.defer_date != '' AND t.defer_date <= ? AND (t.due = '' OR t.due <= ?)))`
+			(t.defer_date != '' AND t.defer_date <= ? AND (t.due = '' OR t.due <= ?)` + notSomeday + `))`
 		args = append(args, today, today, today)
 		order = "t.due != '', t.due, t.priority = 0, t.priority"
 	case ViewUpcoming:
@@ -340,7 +369,13 @@ func (ix *Index) Tasks(view TaskView, today, area string) ([]TaskRow, error) {
 		order = "CASE WHEN t.due != '' THEN t.due ELSE t.defer_date END"
 	case ViewWaiting:
 		where = "t.done = 0 AND t.waiting = 1"
-		order = "t.due != '', t.due, t.doc_path"
+		// Oldest wait first; a bare ⏳ has no age and trails.
+		order = "t.waiting_since = '', t.waiting_since, t.doc_path, t.line"
+	case ViewSomeday:
+		where = "t.done = 0 AND t.waiting = 0 AND t.due = '' AND (t.defer_date = '' OR t.defer_date <= ?)" +
+			strings.Replace(notSomeday, "NOT EXISTS", "EXISTS", 1)
+		args = append(args, today)
+		order = "t.doc_path, t.line"
 	case ViewLogbook:
 		where = "t.done = 1"
 		order = "t.completed_on DESC, t.doc_path LIMIT 200"
@@ -352,7 +387,7 @@ func (ix *Index) Tasks(view TaskView, today, area string) ([]TaskRow, error) {
 		return nil, fmt.Errorf("task view %s: %w", view, err)
 	}
 	defer rows.Close()
-	return collectTasks(rows)
+	return ix.collectTasks(rows)
 }
 
 // TaskByID fetches a single task row.
@@ -362,7 +397,7 @@ func (ix *Index) TaskByID(id string) (TaskRow, error) {
 		return TaskRow{}, err
 	}
 	defer rows.Close()
-	tasks, err := collectTasks(rows)
+	tasks, err := ix.collectTasks(rows)
 	if err != nil {
 		return TaskRow{}, err
 	}
@@ -387,7 +422,35 @@ func (ix *Index) TasksMentioning(path string) ([]TaskRow, error) {
 		return nil, fmt.Errorf("tasks mentioning %s: %w", path, err)
 	}
 	defer rows.Close()
-	return collectTasks(rows)
+	return ix.collectTasks(rows)
+}
+
+// WaitingOnDoc returns open waiting tasks owed by the document at path —
+// "what am I waiting on Frances for". Candidates are the tasks that link it
+// or sit on it; the who-rule then keeps only those it actually names, so a
+// task waiting on [[Dan]] that merely mentions Frances stays Dan's.
+func (ix *Index) WaitingOnDoc(path string) ([]TaskRow, error) {
+	rows, err := ix.DB.Query(taskSelect+`
+		WHERE t.done = 0 AND t.waiting = 1 AND (t.doc_path = ? OR t.id IN (
+			SELECT tl.task_id FROM task_links tl
+			JOIN docnames n ON n.name = tl.target_norm
+			WHERE n.path = ? AND tl.ord >= 0
+		)) ORDER BY t.waiting_since = '', t.waiting_since, t.doc_path, t.line`, path, path)
+	if err != nil {
+		return nil, fmt.Errorf("tasks waiting on %s: %w", path, err)
+	}
+	defer rows.Close()
+	all, err := ix.collectTasks(rows)
+	if err != nil {
+		return nil, err
+	}
+	var out []TaskRow
+	for _, t := range all {
+		if t.WaitingOn.Path == path {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 // TasksCompletedIn returns tasks completed in [from, to] (inclusive,
@@ -402,7 +465,7 @@ func (ix *Index) TasksCompletedIn(from, to, area string) ([]TaskRow, error) {
 		return nil, fmt.Errorf("tasks completed in %s..%s: %w", from, to, err)
 	}
 	defer rows.Close()
-	return collectTasks(rows)
+	return ix.collectTasks(rows)
 }
 
 // OpenTasksDue returns open tasks with due <= day (the Today screen's
@@ -414,7 +477,7 @@ func (ix *Index) OpenTasksDue(day, area string) ([]TaskRow, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	return collectTasks(rows)
+	return ix.collectTasks(rows)
 }
 
 // TaskAt returns the task on one line of one document. Needed where a task
@@ -427,7 +490,7 @@ func (ix *Index) TaskAt(docPath string, line int) (TaskRow, error) {
 		return TaskRow{}, err
 	}
 	defer rows.Close()
-	tasks, err := collectTasks(rows)
+	tasks, err := ix.collectTasks(rows)
 	if err != nil {
 		return TaskRow{}, err
 	}
@@ -462,7 +525,7 @@ func (ix *Index) RecurrenceProblems() ([]RecurrenceProblem, error) {
 	if err != nil {
 		return nil, fmt.Errorf("stopped recurrences: %w", err)
 	}
-	rows, err := collectTasks(stopped)
+	rows, err := ix.collectTasks(stopped)
 	stopped.Close()
 	if err != nil {
 		return nil, err
@@ -487,7 +550,7 @@ func (ix *Index) RecurrenceProblems() ([]RecurrenceProblem, error) {
 		return nil, fmt.Errorf("unparsed recurrences: %w", err)
 	}
 	defer bad.Close()
-	badRows, err := collectTasks(bad)
+	badRows, err := ix.collectTasks(bad)
 	if err != nil {
 		return nil, err
 	}
@@ -878,13 +941,16 @@ func collectDocs(rows *sql.Rows) ([]DocRow, error) {
 	return docs, rows.Err()
 }
 
-func collectTasks(rows *sql.Rows) ([]TaskRow, error) {
+// collectTasks drains a taskSelect result and resolves who each waiting task
+// is owed by. It closes rows itself: the pool is a single connection, and
+// the waiting lookup needs it.
+func (ix *Index) collectTasks(rows *sql.Rows) ([]TaskRow, error) {
 	var tasks []TaskRow
 	for rows.Next() {
 		var t TaskRow
 		var tagsJSON string
-		if err := rows.Scan(&t.ID, &t.DocPath, &t.DocTitle, &t.Line, &t.Text, &t.Done,
-			&t.Due, &t.Defer, &t.CompletedOn, &t.Priority, &t.Waiting, &t.Recur, &t.RawText, &tagsJSON, &t.ProjectPath); err != nil {
+		if err := rows.Scan(&t.ID, &t.DocPath, &t.DocTitle, &t.DocType, &t.Line, &t.Text, &t.Done,
+			&t.Due, &t.Defer, &t.CompletedOn, &t.Priority, &t.Waiting, &t.WaitingSince, &t.Recur, &t.RawText, &tagsJSON, &t.ProjectPath); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(tagsJSON), &t.Tags); err != nil {
@@ -892,8 +958,84 @@ func collectTasks(rows *sql.Rows) ([]TaskRow, error) {
 		}
 		tasks = append(tasks, t)
 	}
-	return tasks, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if err := ix.resolveWaitingOn(tasks); err != nil {
+		return nil, err
+	}
+	return tasks, nil
 }
+
+// resolveWaitingOn fills WaitingOn for the waiting tasks among tasks, in
+// one query. The rule — first person or company linked on the line, else
+// the first link — is applied here rather than stored, because which link
+// is a person depends on documents that may be written after the task.
+func (ix *Index) resolveWaitingOn(tasks []TaskRow) error {
+	byID := map[string][]int{}
+	var ids []any
+	for i, t := range tasks {
+		if !t.Waiting {
+			continue
+		}
+		if _, seen := byID[t.ID]; !seen {
+			ids = append(ids, t.ID)
+		}
+		byID[t.ID] = append(byID[t.ID], i)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	marks := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	rows, err := ix.DB.Query(`
+		SELECT tl.task_id, tl.target_raw, COALESCE(d.path, ''), COALESCE(d.type, ''), COALESCE(d.title, '')
+		FROM task_links tl
+		LEFT JOIN documents d ON d.path = (SELECT MIN(n.path) FROM docnames n WHERE n.name = tl.target_norm)
+		WHERE tl.ord >= 0 AND tl.task_id IN (`+marks+`)
+		ORDER BY tl.task_id, tl.ord`, ids...)
+	if err != nil {
+		return fmt.Errorf("resolving who waiting tasks are owed by: %w", err)
+	}
+	defer rows.Close()
+	chosen := map[string]WaitingOn{}
+	for rows.Next() {
+		var id, raw, path, docType, title string
+		if err := rows.Scan(&id, &raw, &path, &docType, &title); err != nil {
+			return err
+		}
+		candidate := WaitingOn{Name: raw, Path: path, Type: docType}
+		if title != "" {
+			candidate.Name = title
+		}
+		current, have := chosen[id]
+		// Rows arrive in line order: the first link wins until a person or
+		// company turns up, and the first of those wins outright.
+		if !have || (!isWho(current.Type) && isWho(candidate.Type)) {
+			chosen[id] = candidate
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for id, who := range chosen {
+		for _, i := range byID[id] {
+			tasks[i].WaitingOn = who
+		}
+	}
+	// A line that names nobody, sitting on a person's or company's own
+	// page, is owed by that page: "⏳ intro to their CFO" on Frances's
+	// page needs no [[Frances]].
+	for i, t := range tasks {
+		if t.Waiting && t.WaitingOn.Name == "" && isWho(t.DocType) {
+			tasks[i].WaitingOn = WaitingOn{Name: t.DocTitle, Path: t.DocPath, Type: t.DocType}
+		}
+	}
+	return nil
+}
+
+// isWho reports whether a document type can owe you something.
+func isWho(docType string) bool { return docType == "person" || docType == "company" }
 
 // TagCount is one tag with how many documents carry it.
 type TagCount struct {

@@ -96,6 +96,12 @@ export interface Document extends DocMeta {
    * (person, company, project); empty for everything else.
    */
   open_tasks: Task[];
+  /**
+   * WaitingOn is what this person or company owes: waiting tasks whose
+   * who is this document, oldest first, with their ages. Empty for every
+   * other type.
+   */
+  waiting_on: Task[];
 }
 /**
  * Task is the API task shape.
@@ -111,10 +117,63 @@ export interface Task {
   defer: string | null;
   priority: number /* int */;
   waiting: boolean;
+  /**
+   * WaitingFor is who a waiting task is owed by and for how long; nil
+   * when the task is not waiting.
+   */
+  waiting_for: WaitingFor | null;
   recur: string | null;
   project: string | null;
   tags: string[];
   completed_on: string | null;
+}
+/**
+ * WaitingFor is the delegation half of a task: `⏳ 2026-09-20` on a line
+ * that links [[Frances Bagley]] is waiting on Frances since the 20th.
+ */
+export interface WaitingFor {
+  /**
+   * Since is the date after ⏳; nil for a bare marker.
+   */
+  since: string | null;
+  /**
+   * Days is whole days since then, reckoned in the owner's zone; nil when
+   * Since is. Set on lists and rollups — a single task returned from an
+   * edit may omit it.
+   */
+  days: number /* int */ | null;
+  /**
+   * Stale is Days past StaleWaitingDays: time to chase.
+   */
+  stale: boolean;
+  /**
+   * On is who: the first person or company the line links, else its
+   * first link, else the person or company page it sits on. Nil when the
+   * task names nobody.
+   */
+  on: string | null;
+  /**
+   * OnPath is On's document; nil when the name has no page yet.
+   */
+  on_path: string | null;
+}
+/**
+ * WaitingGroup is one who on the Waiting view with everything they owe,
+ * oldest first. The unassigned group has an empty Name.
+ */
+export interface WaitingGroup {
+  name: string;
+  path: string | null;
+  /**
+   * Type is the who's document type (person, company, project…); "" when
+   * dangling or unassigned.
+   */
+  type: string;
+  tasks: Task[];
+  /**
+   * Stale counts the tasks in the group past the threshold.
+   */
+  stale: number /* int */;
 }
 /**
  * SearchResult is one search hit.
@@ -246,6 +305,11 @@ export interface WeekPayload {
    * Waiting is delegated work still outstanding.
    */
   waiting: Task[];
+  /**
+   * StaleWaiting is the part of Waiting that has gone quiet for longer
+   * than StaleWaitingDays, oldest first — the chase list.
+   */
+  stale_waiting: Task[];
   /**
    * Stalled are active projects with no open task anywhere.
    */

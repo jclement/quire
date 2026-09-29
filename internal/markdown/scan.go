@@ -22,8 +22,8 @@ type Link struct {
 }
 
 // Task is a checkbox line plus its parsed metadata. The emoji grammar is
-// Obsidian-Tasks-compatible: 📅 due, 🛫 defer, ✅ completed-on, ⏳ waiting,
-// ⏫/🔼/🔽 priority.
+// Obsidian-Tasks-compatible: 📅 due, 🛫 defer, ✅ completed-on, ⏳ waiting
+// (optionally followed by the date the wait began), ⏫/🔼/🔽 priority.
 type Task struct {
 	ID          string // content-derived: hash(docPath + normalized text)
 	Line        int    // 1-based; a hint, not identity
@@ -35,9 +35,13 @@ type Task struct {
 	CompletedOn string
 	Priority    int // 0 none, 1 high, 2 medium, 3 low
 	Waiting     bool
-	Recur       string // recurrence spec, e.g. "every year" / "every 3 months when done"
-	Tags        []string
-	Links       []Link // wikilinks inside the task text
+	// WaitingSince is the date after ⏳ ("" for a bare marker): how long
+	// the thing has been owed. Who owes it is not grammar — it is the
+	// first person or company the line already links (see the index).
+	WaitingSince string
+	Recur        string // recurrence spec, e.g. "every year" / "every 3 months when done"
+	Tags         []string
+	Links        []Link // wikilinks inside the task text
 }
 
 // Doc is everything the scanner extracts from one document.
@@ -126,8 +130,8 @@ func Scan(docPath string, raw []byte) Doc {
 	return doc
 }
 
-// Metadata markers. ⏳ takes an optional following [[person]]; the rest take
-// an optional following date.
+// Metadata markers. Each takes an optional following date except the
+// priorities; ⏳'s date is when the wait began.
 const (
 	markDue      = "📅"
 	markDefer    = "🛫"
@@ -151,7 +155,7 @@ func parseTask(docPath string, line int, done bool, rawText string) Task {
 	text = extractDated(text, markDone, &t.CompletedOn)
 	if strings.Contains(text, markWaiting) {
 		t.Waiting = true
-		text = strings.Replace(text, markWaiting, "", 1)
+		text = extractDated(text, markWaiting, &t.WaitingSince)
 	}
 	switch {
 	case strings.Contains(text, markPrioHigh):

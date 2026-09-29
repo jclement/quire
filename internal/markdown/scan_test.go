@@ -104,3 +104,38 @@ func TestScanNoFrontmatterTitleFallthrough(t *testing.T) {
 		t.Errorf("title = %q, want empty (caller falls back to filename)", doc.Title)
 	}
 }
+
+// ⏳ may carry the date the wait began. The date is metadata like any other
+// marker's: out of the display text, and out of the id, so stamping it
+// never orphans the task.
+func TestScanWaitingSince(t *testing.T) {
+	cases := []struct {
+		name, line  string
+		waiting     bool
+		since, text string
+	}{
+		{"dated", "- [ ] Get SOC evidence from [[Frances Bagley]] ⏳ 2026-09-20", true, "2026-09-20", "Get SOC evidence from [[Frances Bagley]]"},
+		{"bare", "- [ ] Chase legal ⏳", true, "", "Chase legal"},
+		{"bare mid-line", "- [ ] Chase ⏳ legal 📅 2026-10-01", true, "", "Chase legal"},
+		{"dated before other markers", "- [ ] Quote back ⏳ 2026-09-01 📅 2026-10-01 ⏫", true, "2026-09-01", "Quote back"},
+		{"not waiting", "- [ ] Plain task 📅 2026-10-01", false, "", "Plain task"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := Scan("daily/x.md", []byte(c.line+"\n"))
+			if len(doc.Tasks) != 1 {
+				t.Fatalf("got %d tasks", len(doc.Tasks))
+			}
+			task := doc.Tasks[0]
+			if task.Waiting != c.waiting || task.WaitingSince != c.since || task.Text != c.text {
+				t.Errorf("got waiting=%v since=%q text=%q, want %v %q %q",
+					task.Waiting, task.WaitingSince, task.Text, c.waiting, c.since, c.text)
+			}
+		})
+	}
+	bare := Scan("daily/x.md", []byte("- [ ] Chase legal ⏳\n")).Tasks[0]
+	dated := Scan("daily/x.md", []byte("- [ ] Chase legal ⏳ 2026-09-20\n")).Tasks[0]
+	if bare.ID != dated.ID {
+		t.Errorf("stamping the waiting date changed the id: %s vs %s", bare.ID, dated.ID)
+	}
+}

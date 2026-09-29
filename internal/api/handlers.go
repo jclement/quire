@@ -224,15 +224,17 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		Section  string `json:"section"`
 		Priority int    `json:"priority"`
 		Waiting  bool   `json:"waiting"`
-		Recur    string `json:"recur"`
+		// WaitingOn names who it waits on; implies waiting.
+		WaitingOn string `json:"waiting_on"`
+		Recur     string `json:"recur"`
 	}
 	if !decodeBody(w, r, &body) {
 		return
 	}
 	task, err := s.Service.CreateTaskWith(service.TaskSpec{
 		Path: body.Path, Text: body.Text, Due: body.Due, Defer: body.Defer,
-		Priority: body.Priority, Waiting: body.Waiting, Recur: body.Recur,
-		Section: body.Section,
+		Priority: body.Priority, Waiting: body.Waiting, WaitingOn: body.WaitingOn,
+		Recur: body.Recur, Section: body.Section,
 	})
 	if err != nil {
 		writeServiceError(w, err)
@@ -277,6 +279,37 @@ func (s *Server) handleToggleTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeData(w, http.StatusOK, task)
+}
+
+// handleWaitingGroups is the Waiting view: open waits grouped by who owes
+// them, oldest first.
+func (s *Server) handleWaitingGroups(w http.ResponseWriter, r *http.Request) {
+	groups, err := s.Service.WaitingGroups(r.URL.Query().Get("area"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, groups)
+}
+
+// handleTaskToNote files a task as a note. It lives under /notes, not
+// /tasks, on purpose: it creates a document, so it needs the write scope,
+// and every /api/v1/tasks route is reachable with the narrower tasks scope.
+func (s *Server) handleTaskToNote(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID    string `json:"id"`
+		Title string `json:"title"`
+		Area  string `json:"area"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	doc, err := s.Service.TaskToNote(body.ID, body.Title, body.Area)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeData(w, http.StatusCreated, doc)
 }
 
 // handleRestoreRecurrence writes the missing next occurrence of a repeating

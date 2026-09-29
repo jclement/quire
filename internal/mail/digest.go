@@ -1,5 +1,5 @@
 // The morning digest: one email that runs the day — meetings, birthdays,
-// overdue, due today, waiting. Email is the inbox people check involuntarily
+// overdue, due today, waits gone stale, waiting. Email is the inbox people check involuntarily
 // (the life-admin review's words), so this is the reminder channel. The HTML
 // is table-free and inline-styled so it survives Gmail and Outlook: a single
 // card, a dated masthead, sections with counts, each task a row with its
@@ -45,7 +45,7 @@ func BuildSample(today service.TodayPayload, baseURL string) Message {
 	if msg, empty := BuildDigest(today, baseURL); !empty {
 		return withNote(msg, "This is a test send of today's digest.")
 	}
-	age := 40
+	age, staleDays := 40, 12
 	sample := service.TodayPayload{
 		Date: today.Date,
 		Meetings: []service.DocMeta{
@@ -59,7 +59,8 @@ func BuildSample(today service.TodayPayload, baseURL string) Message {
 			{Text: "Review the roadmap draft", Due: samplePtr(today.Date), DocPath: "projects/roadmap.md", DocTitle: "Roadmap"},
 		},
 		Waiting: []service.Task{
-			{Text: "Contract back from legal", DocPath: "projects/acme.md", DocTitle: "Acme"},
+			{Text: "Contract back from legal", DocPath: "projects/acme.md", DocTitle: "Acme", Waiting: true,
+				WaitingFor: &service.WaitingFor{Days: &staleDays, Stale: true, On: samplePtr("Acme")}},
 		},
 		Birthdays: []service.Birthday{{Path: "people/sam.md", Title: "Sam Rivera", DaysUntil: 3, Age: &age}},
 	}
@@ -115,6 +116,22 @@ func render(today service.TodayPayload, baseURL, _ string) Message {
 		}
 		return out
 	}
+	// Waits split in two: the stale ones are a chase list and lead; the
+	// rest are a reminder. Each row says how long and from whom.
+	waitRows := func(stale bool) []row {
+		var out []row
+		for _, t := range today.Waiting {
+			if (t.WaitingFor != nil && t.WaitingFor.Stale) != stale {
+				continue
+			}
+			meta := waitMeta(t)
+			if meta == "" {
+				meta = t.DocTitle
+			}
+			out = append(out, row{text: t.Text, meta: meta, href: docHref(t.DocPath), warn: stale})
+		}
+		return out
+	}
 	var meetings []row
 	for _, m := range today.Meetings {
 		meetings = append(meetings, row{text: m.Title, href: docHref(m.Path)})
@@ -138,7 +155,8 @@ func render(today service.TodayPayload, baseURL, _ string) Message {
 		{"Birthdays", inkAccent, birthdays},
 		{"Overdue", inkDanger, taskRows(today.Overdue, true)},
 		{"Due today", inkHeading, taskRows(today.DueToday, false)},
-		{"Waiting for", inkMuted, taskRows(today.Waiting, false)},
+		{"Waiting too long", inkDanger, waitRows(true)},
+		{"Waiting for", inkMuted, waitRows(false)},
 	}
 
 	var text, body strings.Builder
@@ -185,6 +203,23 @@ func render(today service.TodayPayload, baseURL, _ string) Message {
 		Text:    text.String(),
 		HTML:    page,
 	}
+}
+
+// waitMeta is a waiting row's right-hand side: "12d · Frances Bagley",
+// either half dropped when unknown.
+func waitMeta(t service.Task) string {
+	w := t.WaitingFor
+	if w == nil {
+		return ""
+	}
+	var parts []string
+	if w.Days != nil {
+		parts = append(parts, fmt.Sprintf("%dd", *w.Days))
+	}
+	if w.On != nil {
+		parts = append(parts, *w.On)
+	}
+	return strings.Join(parts, " · ")
 }
 
 // prettyDate: "today", "yesterday", "3 days ago", "Fri 12 Sep".

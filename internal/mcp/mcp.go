@@ -61,8 +61,10 @@ Working rules:
 - Relationships are wikilinks: [[Sarah Chen]] in prose, or frontmatter keys
   (company, people, project). Both are indexed, so either creates a backlink.
 - Tasks are markdown checkboxes with an emoji grammar: 📅 due, 🛫 defer,
-  ⏫/🔼/🔽 priority, ⏳ waiting, 🔁 recurrence, ✅ completion. Toggle them with
-  complete_task rather than rewriting the line.
+  ⏫/🔼/🔽 priority, ⏳ waiting (⏳ 2026-09-20 = waiting since then; who is the
+  first [[person]] or [[company]] linked on the line), 🔁 recurrence, ✅
+  completion, and #someday to park one. Toggle them with complete_task rather
+  than rewriting the line.
 - Start with today for "what should I work on", and person_context before a
   meeting — each answers in one call what would otherwise take several.
 - Never invent a document path; find it with search first.`
@@ -108,7 +110,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 			Description: "Today's daily note (or a given date's). The daily note is the capture spine: quick thoughts and captured tasks land here. Returns not-found rather than creating one; create_task or append_to_document will create it on write."},
 			t.getDaily)
 		sdk.AddTool(s, &sdk.Tool{Name: "list_tasks", Annotations: readOnly,
-			Description: "List tasks by view: inbox (no date, unprocessed), today (due, overdue, or available now), upcoming (deferred or due later), waiting (delegated ⏳), logbook (completed). Each task carries the id complete_task and edit_task take."},
+			Description: "List tasks by view: inbox (no date, unprocessed), today (due, overdue, or available now), upcoming (deferred or due later), waiting (delegated ⏳, oldest first, each with waiting_for: who it is owed by, since when, days, and stale once past a week), someday (parked with #someday), logbook (completed). Each task carries the id complete_task and edit_task take."},
 			t.listTasks)
 		sdk.AddTool(s, &sdk.Tool{Name: "list_areas", Annotations: readOnly,
 			Description: "The areas documents are filed under (work, personal, and any the owner has added) with counts. Areas partition everything except daily notes; pass one to search, list_documents, list_tasks or today to narrow to it, and to create_document to file under it."},
@@ -135,10 +137,10 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 			Description: "The composed 'what matters right now' payload: today's meetings, overdue and due tasks, available and waiting tasks, birthdays, recent documents, and the daily note. Start here for 'what should I work on' — it answers in one call what would take six."},
 			t.today)
 		sdk.AddTool(s, &sdk.Tool{Name: "week_review", Annotations: readOnly,
-			Description: "The weekly review for an ISO week (omit for this one): what was completed inside it, what slipped and is still open, what is still delegated, which active projects have no open task at all, the meetings held and the documents touched. This is the payload for a Friday retro or a status update — it answers 'what did I actually get done' from the index rather than from memory."},
+			Description: "The weekly review for an ISO week (omit for this one): what was completed inside it, what slipped and is still open, what is still delegated (and stale_waiting: waits past a week, the chase list), which active projects have no open task at all, the meetings held and the documents touched. This is the payload for a Friday retro or a status update — it answers 'what did I actually get done' from the index rather than from memory."},
 			t.weekReview)
 		sdk.AddTool(s, &sdk.Tool{Name: "person_context", Annotations: readOnly,
-			Description: "Everything about a person, project or company in one call: the document, its backlinks (every meeting and note that mentions it), and open tasks involving it. The right first call before a meeting or a 1:1. Accepts a name or a vault path."},
+			Description: "Everything about a person, project or company in one call: the document, its backlinks (every meeting and note that mentions it), open tasks involving it, and waiting_on — what they owe you, oldest first with how many days each has waited. The right first call before a meeting or a 1:1. Accepts a name or a vault path."},
 			t.personContext)
 	}
 
@@ -171,6 +173,9 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 		sdk.AddTool(s, &sdk.Tool{Name: "ensure_weekly", Annotations: idempotent,
 			Description: "Return a week's note (ISO week like 2026-W36; omit for this one), creating it from templates/weekly.md when it does not exist yet."},
 			t.ensureWeekly)
+		sdk.AddTool(s, &sdk.Tool{Name: "task_to_note", Annotations: destructive,
+			Description: "Turn a task that is really a note — feedback, an idea, something someone said — into a note document: the note is titled from title (default: the task's first eight words), its body is the task's text, it files under the source document's area, and the task's line becomes a plain bullet linking it. Use it when processing the inbox finds a checkbox with nothing to do; it is how that item leaves the inbox without being faked done."},
+			t.taskToNote)
 		sdk.AddTool(s, &sdk.Tool{Name: "set_frontmatter", Annotations: destructive,
 			Description: "Set frontmatter fields on a document (status on a project, role or email on a person, tags on anything) surgically, leaving the body untouched. Pass a JSON object of key → value; a null value removes the key."},
 			t.setFrontmatter)
@@ -179,7 +184,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 	// Task management — the "agent runs my todos" token stops here.
 	if allows(auth.ScopeTasks) {
 		sdk.AddTool(s, &sdk.Tool{Name: "create_task", Annotations: additive,
-			Description: "Create a task. With no path it lands in today's daily note (under its Captured section); pass a path to file it on a project, person or meeting page instead, optionally under a named section. due = deadline, defer = hide until then; both take YYYY-MM-DD or a natural form (today, tomorrow, fri, +3d) and are resolved server-side — an unparseable date is an error, never a guess. priority is 0 none / 1 high / 2 medium / 3 low, waiting marks it as delegated, and recur repeats it (\"every month\", \"every 3 weeks when done\"). The text may carry #tags and [[wikilinks]]; a task also inherits whatever its document is about, so an action item on a meeting page belongs to that meeting's people without naming them again."},
+			Description: "Create a task. With no path it lands in today's daily note (under its Captured section); pass a path to file it on a project, person or meeting page instead, optionally under a named section. due = deadline, defer = hide until then; both take YYYY-MM-DD or a natural form (today, tomorrow, fri, +3d) and are resolved server-side — an unparseable date is an error, never a guess. priority is 0 none / 1 high / 2 medium / 3 low, waiting marks it as delegated (stamped with today's date, so it ages), waiting_on names who it is owed by (a person or company by name — linked on the line if it is not already, and implies waiting), and recur repeats it (\"every month\", \"every 3 weeks when done\"). The text may carry #tags and [[wikilinks]]; a task also inherits whatever its document is about, so an action item on a meeting page belongs to that meeting's people without naming them again."},
 			t.createTask)
 		sdk.AddTool(s, &sdk.Tool{Name: "complete_task", Annotations: idempotent,
 			Description: "Mark a task complete by id (from list_tasks, today, or get_document). Edits the source checkbox surgically; a recurring task mints its next occurrence. Completing an already-complete task succeeds and changes nothing — safe to retry."},
@@ -188,7 +193,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 			Description: "Write the missing next occurrence of a repeating task that was completed outside quire — in an editor, or by hand in the file — keeping the gap between its defer and due dates. week_review lists the ones needing it. Refuses anything that is not a completed repeating task, so it cannot duplicate live work."},
 			t.restoreRecurrence)
 		sdk.AddTool(s, &sdk.Tool{Name: "edit_task", Annotations: idempotent,
-			Description: "Change a task by id, leaving every field you do not pass alone. due and defer take natural dates and an empty string clears them; priority is 0 none / 1 high / 2 medium / 3 low; waiting toggles the delegated marker; recur sets or clears the repeat (\"every month\"); text rewrites the task's words while keeping its markers — note that changing the text changes the task's id, which the response carries. This is how to snooze, delegate, or fix a typo."},
+			Description: "Change a task by id, leaving every field you do not pass alone. due and defer take natural dates and an empty string clears them; priority is 0 none / 1 high / 2 medium / 3 low; waiting toggles the delegated marker (marking stamps today's date, clearing removes it); waiting_on names who it is waiting on and links them; recur sets or clears the repeat (\"every month\"); text rewrites the task's words while keeping its markers — note that changing the text changes the task's id, which the response carries. This is how to snooze, delegate, or fix a typo."},
 			t.editTask)
 	}
 
@@ -260,7 +265,7 @@ type appendIn struct {
 }
 
 type listTasksIn struct {
-	View string `json:"view" jsonschema:"one of: inbox, today, upcoming, waiting, logbook"`
+	View string `json:"view" jsonschema:"one of: inbox, today, upcoming, waiting, someday, logbook"`
 	Area string `json:"area,omitempty" jsonschema:"area to narrow to (e.g. work, personal), or none for unclassified; comma-separate several (work,personal); omit for all"`
 }
 
@@ -269,24 +274,26 @@ type areasOut struct {
 }
 
 type createTaskIn struct {
-	Text     string `json:"text" jsonschema:"the task text; may include #tags and [[wikilinks]]"`
-	Due      string `json:"due,omitempty" jsonschema:"due date: YYYY-MM-DD or today, tomorrow, fri, +3d"`
-	Defer    string `json:"defer,omitempty" jsonschema:"defer/start date (hidden until then): YYYY-MM-DD or a natural form"`
-	Path     string `json:"path,omitempty" jsonschema:"document to file it in; omit for today's daily note"`
-	Section  string `json:"section,omitempty" jsonschema:"heading to append under within that document"`
-	Priority int    `json:"priority,omitempty" jsonschema:"0 none, 1 high, 2 medium, 3 low"`
-	Waiting  bool   `json:"waiting,omitempty" jsonschema:"mark as delegated / waiting on someone else"`
-	Recur    string `json:"recur,omitempty" jsonschema:"repeat spec: every day|week|month|year, optionally 'every 3 months' or '... when done'"`
+	Text      string `json:"text" jsonschema:"the task text; may include #tags and [[wikilinks]]"`
+	Due       string `json:"due,omitempty" jsonschema:"due date: YYYY-MM-DD or today, tomorrow, fri, +3d"`
+	Defer     string `json:"defer,omitempty" jsonschema:"defer/start date (hidden until then): YYYY-MM-DD or a natural form"`
+	Path      string `json:"path,omitempty" jsonschema:"document to file it in; omit for today's daily note"`
+	Section   string `json:"section,omitempty" jsonschema:"heading to append under within that document"`
+	Priority  int    `json:"priority,omitempty" jsonschema:"0 none, 1 high, 2 medium, 3 low"`
+	Waiting   bool   `json:"waiting,omitempty" jsonschema:"mark as delegated / waiting on someone else"`
+	WaitingOn string `json:"waiting_on,omitempty" jsonschema:"who it is waiting on: a person or company name, e.g. 'Frances Bagley'; linked on the line; implies waiting"`
+	Recur     string `json:"recur,omitempty" jsonschema:"repeat spec: every day|week|month|year, optionally 'every 3 months' or '... when done'"`
 }
 
 type editTaskIn struct {
-	ID       string  `json:"id" jsonschema:"task id from list_tasks, today, or get_document"`
-	Due      *string `json:"due,omitempty" jsonschema:"new due date (YYYY-MM-DD or natural); empty string clears; omit to leave unchanged"`
-	Defer    *string `json:"defer,omitempty" jsonschema:"new defer date; empty string clears; omit to leave unchanged"`
-	Priority *int    `json:"priority,omitempty" jsonschema:"0 none, 1 high, 2 medium, 3 low; omit to leave unchanged"`
-	Waiting  *bool   `json:"waiting,omitempty" jsonschema:"true marks it delegated, false clears; omit to leave unchanged"`
-	Recur    *string `json:"recur,omitempty" jsonschema:"repeat spec, e.g. 'every month'; empty string stops it repeating; omit to leave unchanged"`
-	Text     *string `json:"text,omitempty" jsonschema:"new task text, keeping its markers; changes the task's id"`
+	ID        string  `json:"id" jsonschema:"task id from list_tasks, today, or get_document"`
+	Due       *string `json:"due,omitempty" jsonschema:"new due date (YYYY-MM-DD or natural); empty string clears; omit to leave unchanged"`
+	Defer     *string `json:"defer,omitempty" jsonschema:"new defer date; empty string clears; omit to leave unchanged"`
+	Priority  *int    `json:"priority,omitempty" jsonschema:"0 none, 1 high, 2 medium, 3 low; omit to leave unchanged"`
+	Waiting   *bool   `json:"waiting,omitempty" jsonschema:"true marks it delegated, false clears; omit to leave unchanged"`
+	WaitingOn *string `json:"waiting_on,omitempty" jsonschema:"who it is waiting on, by name; links them on the line and marks it waiting"`
+	Recur     *string `json:"recur,omitempty" jsonschema:"repeat spec, e.g. 'every month'; empty string stops it repeating; omit to leave unchanged"`
+	Text      *string `json:"text,omitempty" jsonschema:"new task text, keeping its markers; changes the task's id"`
 }
 
 type renameIn struct {
@@ -359,6 +366,11 @@ type taskIDIn struct {
 	ID string `json:"id" jsonschema:"task id from list_tasks or get_document"`
 }
 
+type taskToNoteIn struct {
+	ID    string `json:"id" jsonschema:"task id from list_tasks or get_document"`
+	Title string `json:"title,omitempty" jsonschema:"the note's title; omit to use the task's first eight words"`
+}
+
 type personContextIn struct {
 	Name string `json:"name" jsonschema:"person/project/company name or vault path, e.g. 'Sarah Chen'"`
 }
@@ -376,6 +388,8 @@ type searchOut struct {
 type personContextOut struct {
 	Document  service.Document `json:"document"`
 	OpenTasks []service.Task   `json:"open_tasks"`
+	// WaitingOn is what this person or company owes, oldest first.
+	WaitingOn []service.Task `json:"waiting_on"`
 }
 
 // ---- handlers ----
@@ -636,7 +650,7 @@ func (t *tools) getDaily(_ context.Context, _ *sdk.CallToolRequest, in getDailyI
 func (t *tools) editTask(_ context.Context, _ *sdk.CallToolRequest, in editTaskIn) (*sdk.CallToolResult, service.Task, error) {
 	task, err := t.svc.EditTask(in.ID, service.TaskEdit{
 		Due: in.Due, Defer: in.Defer, Priority: in.Priority,
-		Waiting: in.Waiting, Recur: in.Recur, Text: in.Text,
+		Waiting: in.Waiting, WaitingOn: in.WaitingOn, Recur: in.Recur, Text: in.Text,
 	})
 	t.record("edit_task", task.DocPath, task.Text, err)
 	return nil, task, err
@@ -662,8 +676,8 @@ func (t *tools) listTasks(_ context.Context, _ *sdk.CallToolRequest, in listTask
 func (t *tools) createTask(_ context.Context, _ *sdk.CallToolRequest, in createTaskIn) (*sdk.CallToolResult, service.Task, error) {
 	task, err := t.svc.CreateTaskWith(service.TaskSpec{
 		Path: in.Path, Text: in.Text, Due: in.Due, Defer: in.Defer,
-		Priority: in.Priority, Waiting: in.Waiting, Recur: in.Recur,
-		Section: in.Section,
+		Priority: in.Priority, Waiting: in.Waiting, WaitingOn: in.WaitingOn,
+		Recur: in.Recur, Section: in.Section,
 	})
 	t.record("create_task", task.DocPath, in.Text, err)
 	return nil, task, err
@@ -696,9 +710,13 @@ func (t *tools) personContext(_ context.Context, _ *sdk.CallToolRequest, in pers
 	if err != nil {
 		return nil, personContextOut{}, err
 	}
-	rows, err := t.svc.Index.TasksMentioning(path)
-	if err != nil {
-		return nil, personContextOut{}, err
-	}
-	return nil, personContextOut{Document: doc, OpenTasks: service.TasksFromRows(rows)}, nil
+	// The document already carries both rollups, aged; they are lifted to
+	// the top level because that is where an agent looks.
+	return nil, personContextOut{Document: doc, OpenTasks: doc.OpenTasks, WaitingOn: doc.WaitingOn}, nil
+}
+
+func (t *tools) taskToNote(_ context.Context, _ *sdk.CallToolRequest, in taskToNoteIn) (*sdk.CallToolResult, service.Document, error) {
+	doc, err := t.svc.TaskToNote(in.ID, in.Title, "")
+	t.record("task_to_note", doc.Path, doc.Title, err)
+	return nil, doc, err
 }

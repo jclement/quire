@@ -12,7 +12,7 @@ import (
 )
 
 // schemaVersion is stored in PRAGMA user_version. Bump on any schema change.
-const schemaVersion = 4 // v4: documents.area_explicit / area_from (inheritance)
+const schemaVersion = 5 // v5: tasks.waiting_since, task_links.ord / target_raw
 
 const schema = `
 CREATE TABLE documents (
@@ -76,6 +76,10 @@ CREATE TABLE tasks (
 	completed_on TEXT NOT NULL DEFAULT '',
 	priority     INTEGER NOT NULL DEFAULT 0,
 	waiting      INTEGER NOT NULL DEFAULT 0,
+	-- waiting_since is the date after ⏳, '' for a bare marker. Who is owed
+	-- is not stored: it is resolved from task_links at read time, so a
+	-- person page written after the task still claims it.
+	waiting_since TEXT NOT NULL DEFAULT '',
 	recur        TEXT NOT NULL DEFAULT '',
 	project_norm TEXT NOT NULL DEFAULT '', -- joins docnames for the project
 	tags_json    TEXT NOT NULL DEFAULT '[]'
@@ -84,10 +88,15 @@ CREATE INDEX tasks_doc ON tasks(doc_path);
 CREATE INDEX tasks_done_due ON tasks(done, due);
 
 -- Wikilinks inside task text ("Chase [[Dan Roe]]"), used to roll tasks up
--- onto person/project pages via the docnames join.
+-- onto person/project pages via the docnames join. ord is the link's
+-- position in the line (0 first); links inherited from the document's
+-- frontmatter carry -1, because "who am I waiting on" means a name written
+-- on the line, not everyone in the meeting.
 CREATE TABLE task_links (
 	task_id     TEXT NOT NULL,
-	target_norm TEXT NOT NULL
+	target_norm TEXT NOT NULL,
+	target_raw  TEXT NOT NULL DEFAULT '',
+	ord         INTEGER NOT NULL DEFAULT -1
 );
 CREATE INDEX task_links_target ON task_links(target_norm);
 
@@ -117,10 +126,15 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 	if version == schemaVersion {
 		return db, false, nil
 	}
-	// v3 → v4 adds columns; everything else in the file (embeddings above
-	// all, which cost money to rebuild) stays.
+	// v3 → v4 → v5 add columns; everything else in the file (embeddings
+	// above all, which cost money to rebuild) stays.
 	if version == 3 {
 		if err := migrateV3ToV4(db); err == nil {
+			version = 4
+		}
+	}
+	if version == 4 {
+		if err := migrateV4ToV5(db); err == nil {
 			return db, false, nil
 		}
 	}
@@ -142,6 +156,25 @@ func migrateV3ToV4(db *sql.DB) error {
 	} {
 		if _, err := db.Exec(stmt); err != nil {
 			return fmt.Errorf("migrating index to v4: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateV4ToV5 adds the waiting columns, then marks every document stale
+// so the startup FullScan re-reads them: the new columns can only be filled
+// by parsing the files again, and a (mtime, size) that cannot match is the
+// scan's own signal for "read this one".
+func migrateV4ToV5(db *sql.DB) error {
+	for _, stmt := range []string{
+		"ALTER TABLE tasks ADD COLUMN waiting_since TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE task_links ADD COLUMN target_raw TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE task_links ADD COLUMN ord INTEGER NOT NULL DEFAULT -1",
+		"UPDATE documents SET size = -1, sha256 = ''",
+		"PRAGMA user_version = 5",
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrating index to v5: %w", err)
 		}
 	}
 	return nil

@@ -90,7 +90,7 @@ func TestToolsAreScoped(t *testing.T) {
 	writeTools := []string{
 		"create_document", "update_document", "append_to_document",
 		"link_entity", "unlink_entity", "rename_document", "set_frontmatter",
-		"capture_note", "ensure_daily", "ensure_weekly",
+		"capture_note", "ensure_daily", "ensure_weekly", "task_to_note",
 	}
 	taskTools := []string{"create_task", "complete_task", "edit_task", "restore_recurrence"}
 
@@ -226,7 +226,7 @@ func TestSurfaceIsCompleteAndDocumented(t *testing.T) {
 		"create_document": true, "update_document": true,
 		"append_to_document": true, "link_entity": true, "unlink_entity": true,
 		"rename_document": true, "set_frontmatter": true, "capture_note": true,
-		"ensure_daily": true, "ensure_weekly": true,
+		"ensure_daily": true, "ensure_weekly": true, "task_to_note": true,
 		"create_task": true, "complete_task": true, "edit_task": true,
 		"restore_recurrence": true,
 	}

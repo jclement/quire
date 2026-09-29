@@ -66,3 +66,32 @@ func TestSampleAlwaysHasContent(t *testing.T) {
 		t.Error("the note placeholder must be replaced")
 	}
 }
+
+// Stale waits get their own section above the rest, each with its age and
+// who owes it — the chase list is the part of "waiting" worth an email.
+func TestDigestStaleWaiting(t *testing.T) {
+	stale := service.Task{Text: "Get SOC evidence", Waiting: true, WaitingFor: &service.WaitingFor{
+		Since: strPtr("2026-08-20"), Days: intPtr(12), Stale: true, On: strPtr("Frances Bagley"),
+	}}
+	fresh := service.Task{Text: "Quote back", Waiting: true, WaitingFor: &service.WaitingFor{
+		Since: strPtr("2026-08-30"), Days: intPtr(2),
+	}}
+	msg, empty := BuildDigest(service.TodayPayload{Date: "2026-09-01", Waiting: []service.Task{fresh, stale}}, "https://q.example")
+	if empty {
+		t.Fatal("waiting alone is worth a digest")
+	}
+	staleAt := strings.Index(msg.Text, "WAITING TOO LONG")
+	freshAt := strings.Index(msg.Text, "WAITING FOR")
+	if staleAt < 0 || freshAt < 0 || staleAt > freshAt {
+		t.Fatalf("stale section should lead:\n%s", msg.Text)
+	}
+	if !strings.Contains(msg.Text, "Get SOC evidence — 12d · Frances Bagley") {
+		t.Errorf("stale row should carry age and who:\n%s", msg.Text)
+	}
+	if strings.Contains(msg.Text[freshAt:], "Get SOC evidence") {
+		t.Errorf("a stale wait is listed twice:\n%s", msg.Text)
+	}
+	if !strings.Contains(msg.Text, "Quote back — 2d") {
+		t.Errorf("fresh row should carry its age:\n%s", msg.Text)
+	}
+}
