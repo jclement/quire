@@ -3,8 +3,15 @@
 // callouts. Operating at the mdast level (rather than preprocessing
 // the source string) means code spans and fenced blocks are naturally exempt,
 // and source line numbers stay intact for task-checkbox mapping.
-import type { Blockquote, Emphasis, Paragraph, Root, Text } from "mdast";
-import { visit } from "unist-util-visit";
+import type {
+  Blockquote,
+  Emphasis,
+  Paragraph,
+  Parent,
+  Root,
+  Text,
+} from "mdast";
+import { SKIP, visit } from "unist-util-visit";
 import { parseCalloutMarker } from "./callouts.ts";
 import { splitWikilinks } from "./wikilinks.ts";
 import { splitWorkItems, WORK_ITEM_HREF_PREFIX } from "./workItems.ts";
@@ -93,13 +100,25 @@ function transformWikilinks(tree: Root): void {
   });
 }
 
+/**
+ * Visits text that is prose, not a link's label: a link's whole subtree is
+ * skipped (a wikilink made earlier, or a real one), because `**#12**` inside
+ * `[fixed …](url)` becoming a link would nest an <a> in an <a>.
+ */
+function visitProseText(
+  tree: Root,
+  visitor: (node: Text, index: number, parent: Parent) => number | void,
+): void {
+  visit(tree, (node, index, parent) => {
+    if (node.type === "link" || node.type === "linkReference") return SKIP;
+    if (node.type !== "text" || !parent || index === undefined) return;
+    return visitor(node as Text, index, parent as Parent);
+  });
+}
+
 /** Turns `#tag` in prose into a link the renderer routes to a tag search. */
 function transformHashtags(tree: Root): void {
-  visit(tree, "text", (node: Text, index, parent) => {
-    if (!parent || index === undefined) return;
-    // Inside a link already (a wikilink we just made, or a real one) the
-    // text is the link's label, not prose.
-    if (parent.type === "link") return;
+  visitProseText(tree, (node, index, parent) => {
     const value = node.value;
     if (!value.includes("#")) return;
     const pieces: Array<
@@ -131,9 +150,7 @@ function transformHashtags(tree: Root): void {
  * off needs no re-parse; with none set the renderer shows plain text.
  */
 function transformWorkItems(tree: Root): void {
-  visit(tree, "text", (node: Text, index, parent) => {
-    if (!parent || index === undefined) return;
-    if (parent.type === "link") return;
+  visitProseText(tree, (node, index, parent) => {
     if (!node.value.includes("#")) return;
     const segments = splitWorkItems(node.value);
     if (segments.length === 1 && segments[0]?.kind === "text") return;

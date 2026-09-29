@@ -40,6 +40,13 @@ describe("remarkQuire work items", () => {
     ]);
   });
 
+  test("a number or tag nested deeper inside a link is left alone", () => {
+    // An <a> inside an <a> is invalid HTML and the inner one hijacks the click.
+    expect(links("[fixed **#12** and *#ops*](https://example.com)\n")).toEqual([
+      { url: "https://example.com", label: "fixed  and " },
+    ]);
+  });
+
   test("a work item inside a highlight is still one", () => {
     expect(links("==ship #12 today==\n")).toEqual([
       { url: WORK_ITEM_HREF_PREFIX + "12", label: "#12" },
