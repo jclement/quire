@@ -69,28 +69,88 @@ func (s *Service) CreateTask(text, due, deferDate string) (Task, error) {
 // CreateTaskWith is the full form: any of the task grammar's markers, and
 // any document as the target. An empty Path means today's daily note.
 func (s *Service) CreateTaskWith(spec TaskSpec) (Task, error) {
-	spec.Text = strings.TrimSpace(spec.Text)
-	if spec.Text == "" {
-		return Task{}, fmt.Errorf("%w: task text is required", ErrValidation)
+	return s.createTask(spec, "")
+}
+
+// CreateTaskWithAttachment is the photo→task gesture: one call captures a
+// snapped permission slip as a dated task with the image attached inline.
+// Text may be empty when an attachment is present (the filename stands in).
+func (s *Service) CreateTaskWithAttachment(text, due, deferDate string, att Attachment) (Task, error) {
+	text = strings.TrimSpace(text)
+	if text == "" && att.Path != "" {
+		text = strings.TrimSuffix(path.Base(att.Path), path.Ext(att.Path))
+	}
+	return s.createTask(TaskSpec{Text: text, Due: due, Defer: deferDate}, att.Markdown)
+}
+
+// createTask is both creators' body. attachment is markdown (an image
+// embed) placed straight after the task's words, ahead of its markers.
+func (s *Service) createTask(spec TaskSpec, attachment string) (Task, error) {
+	line, err := s.taskLine(spec, attachment)
+	if err != nil {
+		return Task{}, err
+	}
+	target := spec.Path
+	if target == "" {
+		daily, err := s.EnsureDaily(s.today())
+		if err != nil {
+			return Task{}, err
+		}
+		target = daily.Path
+	}
+	section := spec.Section
+	if section == "" && target == "daily/"+s.today()+".md" {
+		section = captureHeading
+	}
+	return reapplying(s, target, func() (Task, error) {
+		doc, err := s.GetDocument(target)
+		if err != nil {
+			return Task{}, err
+		}
+		content := appendUnderHeading(doc.Markdown, strings.ToLower(section), line)
+		written, err := s.UpdateDocument(doc.Path, content, doc.SHA256)
+		if err != nil {
+			return Task{}, err
+		}
+		return s.taskOnLastLine(written, line)
+	})
+}
+
+// taskLine validates a new task and renders its markdown line. Dates are
+// resolved before anything is written: an unparseable one must fail loudly
+// rather than land in the markdown as a word no view can match.
+func (s *Service) taskLine(spec TaskSpec, attachment string) (string, error) {
+	text := strings.TrimSpace(spec.Text)
+	if text == "" {
+		return "", fmt.Errorf("%w: task text is required", ErrValidation)
 	}
 	due, err := ParseWhen(spec.Due, s.Now())
 	if err != nil {
-		return Task{}, fmt.Errorf("%w: due date: %s", ErrValidation, err)
+		return "", fmt.Errorf("%w: due date: %s", ErrValidation, err)
 	}
 	deferDate, err := ParseWhen(spec.Defer, s.Now())
 	if err != nil {
-		return Task{}, fmt.Errorf("%w: defer date: %s", ErrValidation, err)
+		return "", fmt.Errorf("%w: defer date: %s", ErrValidation, err)
 	}
 	if spec.Recur != "" {
 		if _, _, _, err := parseRecur(spec.Recur); err != nil {
-			return Task{}, fmt.Errorf("%w: %s (try \"every month\" or \"every 3 weeks when done\")", ErrValidation, err)
+			return "", fmt.Errorf("%w: %s (try \"every month\" or \"every 3 weeks when done\")", ErrValidation, err)
 		}
 	}
 	if spec.Priority < 0 || spec.Priority > 3 {
-		return Task{}, fmt.Errorf("%w: priority must be 0 (none), 1 (high), 2 (medium) or 3 (low)", ErrValidation)
+		return "", fmt.Errorf("%w: priority must be 0 (none), 1 (high), 2 (medium) or 3 (low)", ErrValidation)
+	}
+	// Text made only of markers ("⏫", "📅") scans as a task with no words:
+	// it would be written, then be invisible in every view and impossible
+	// to find again.
+	if scanned := markdown.Scan("", []byte("- [ ] "+text)); len(scanned.Tasks) != 1 || strings.TrimSpace(scanned.Tasks[0].Text) == "" {
+		return "", fmt.Errorf("%w: task text needs words, not only markers", ErrValidation)
 	}
 
-	line := "- [ ] " + spec.Text
+	line := "- [ ] " + text
+	if attachment != "" {
+		line += " " + attachment
+	}
 	if sym, ok := prioritySymbols[spec.Priority]; ok {
 		line += " " + sym
 	}
@@ -106,98 +166,24 @@ func (s *Service) CreateTaskWith(spec TaskSpec) (Task, error) {
 	if spec.Recur != "" {
 		line += " 🔁 " + spec.Recur
 	}
-
-	target := spec.Path
-	if target == "" {
-		daily, err := s.EnsureDaily(s.today())
-		if err != nil {
-			return Task{}, err
-		}
-		target = daily.Path
-	}
-	doc, err := s.GetDocument(target)
-	if err != nil {
-		return Task{}, err
-	}
-	section := spec.Section
-	if section == "" && target == "daily/"+s.today()+".md" {
-		section = captureHeading
-	}
-	content := appendUnderHeading(doc.Markdown, strings.ToLower(section), line)
-	written, err := s.UpdateDocument(doc.Path, content, doc.SHA256)
-	if err != nil {
-		return Task{}, err
-	}
-	return s.taskOnLastMatchingLine(written, spec.Text)
+	return line, nil
 }
 
-// taskOnLastMatchingLine finds the task just written: the last line whose
-// scanned text matches, resolved through the index for its real id.
-func (s *Service) taskOnLastMatchingLine(doc Document, text string) (Task, error) {
+// taskOnLastLine finds the task just written: the last line that is exactly
+// the one appended, resolved through the index for its real id.
+func (s *Service) taskOnLastLine(doc Document, line string) (Task, error) {
+	lines := strings.Split(doc.Markdown, "\n")
 	scanned := markdown.Scan(doc.Path, []byte(doc.Markdown))
 	for i := len(scanned.Tasks) - 1; i >= 0; i-- {
-		if !strings.Contains(scanned.Tasks[i].Text, strings.Fields(text)[0]) {
+		at := scanned.Tasks[i].Line
+		if at < 1 || at > len(lines) || lines[at-1] != line {
 			continue
 		}
-		if row, err := s.Index.TaskAt(doc.Path, scanned.Tasks[i].Line); err == nil {
-			return taskFromRow(row), nil
+		row, err := s.Index.TaskAt(doc.Path, at)
+		if err != nil {
+			return Task{}, fmt.Errorf("created task not found after indexing: %w", err)
 		}
-	}
-	return Task{}, fmt.Errorf("created task not found after indexing")
-}
-
-// CreateTaskWithAttachment is the photo→task gesture: one call captures a
-// snapped permission slip as a dated task with the image attached inline.
-// Text may be empty when an attachment is present (the filename stands in).
-func (s *Service) CreateTaskWithAttachment(text, due, deferDate string, att Attachment) (Task, error) {
-	text = strings.TrimSpace(text)
-	if text == "" && att.Path == "" {
-		return Task{}, fmt.Errorf("%w: task text is required", ErrValidation)
-	}
-	if text == "" {
-		text = strings.TrimSuffix(path.Base(att.Path), path.Ext(att.Path))
-	}
-	// Resolve before writing: an unparseable date must fail loudly rather
-	// than land in the markdown as a word no view can match.
-	due, err := ParseWhen(due, s.Now())
-	if err != nil {
-		return Task{}, fmt.Errorf("%w: due date: %s", ErrValidation, err)
-	}
-	deferDate, err = ParseWhen(deferDate, s.Now())
-	if err != nil {
-		return Task{}, fmt.Errorf("%w: defer date: %s", ErrValidation, err)
-	}
-
-	line := "- [ ] " + text
-	if att.Markdown != "" {
-		line += " " + att.Markdown
-	}
-	if due != "" {
-		line += " 📅 " + due
-	}
-	if deferDate != "" {
-		line += " 🛫 " + deferDate
-	}
-
-	daily, err := s.EnsureDaily(s.today())
-	if err != nil {
-		return Task{}, err
-	}
-
-	content := appendUnderHeading(daily.Markdown, captureHeading, line)
-
-	doc, err := s.UpdateDocument(daily.Path, content, daily.SHA256)
-	if err != nil {
-		return Task{}, err
-	}
-
-	// Find the task we just appended (last one matching by normalized text).
-	scanned := markdown.Scan(doc.Path, []byte(doc.Markdown))
-	for i := len(scanned.Tasks) - 1; i >= 0; i-- {
-		row, err := s.Index.TaskByID(scanned.Tasks[i].ID)
-		if err == nil && row.Line == scanned.Tasks[i].Line {
-			return taskFromRow(row), nil
-		}
+		return taskFromRow(row), nil
 	}
 	return Task{}, fmt.Errorf("created task not found after indexing")
 }
@@ -211,6 +197,29 @@ func (s *Service) ToggleTask(id string) (Task, error) {
 	if err != nil {
 		return Task{}, fmt.Errorf("task %s: %w", id, vault.ErrNotFound)
 	}
+	return reapplying(s, row.DocPath, func() (Task, error) { return s.toggleTask(id) })
+}
+
+// CompleteTask marks a task done. Completing a task that is already done
+// succeeds without writing: agents retry, and a toggle would reopen it —
+// or, "put back" with a second toggle, restamp ✅ with today and spawn an
+// extra occurrence of a repeating task.
+func (s *Service) CompleteTask(id string) (Task, error) {
+	row, err := s.Index.TaskByID(id)
+	if err != nil {
+		return Task{}, fmt.Errorf("task %s: %w", id, vault.ErrNotFound)
+	}
+	if row.Done {
+		return taskFromRow(row), nil
+	}
+	return s.ToggleTask(id)
+}
+
+func (s *Service) toggleTask(id string) (Task, error) {
+	row, err := s.Index.TaskByID(id)
+	if err != nil {
+		return Task{}, fmt.Errorf("task %s: %w", id, vault.ErrNotFound)
+	}
 
 	f, err := s.Vault.Read(row.DocPath)
 	if err != nil {
@@ -218,7 +227,10 @@ func (s *Service) ToggleTask(id string) (Task, error) {
 	}
 
 	lines := strings.Split(string(f.Raw), "\n")
-	lineIdx := findTaskLine(lines, row)
+	lineIdx, err := findTaskLine(lines, row)
+	if err != nil {
+		return Task{}, err
+	}
 	if lineIdx < 0 {
 		return Task{}, fmt.Errorf("task %s: source line not found (file changed); reindex and retry", id)
 	}
@@ -268,6 +280,14 @@ func (s *Service) EditTask(id string, edit TaskEdit) (Task, error) {
 	if err != nil {
 		return Task{}, fmt.Errorf("task %s: %w", id, vault.ErrNotFound)
 	}
+	return reapplying(s, row.DocPath, func() (Task, error) { return s.editTask(id, edit) })
+}
+
+func (s *Service) editTask(id string, edit TaskEdit) (Task, error) {
+	row, err := s.Index.TaskByID(id)
+	if err != nil {
+		return Task{}, fmt.Errorf("task %s: %w", id, vault.ErrNotFound)
+	}
 	for _, d := range []*string{edit.Due, edit.Defer} {
 		if d != nil && *d != "" {
 			if _, err := time.Parse("2006-01-02", *d); err != nil {
@@ -281,7 +301,10 @@ func (s *Service) EditTask(id string, edit TaskEdit) (Task, error) {
 		return Task{}, err
 	}
 	lines := strings.Split(string(f.Raw), "\n")
-	lineIdx := findTaskLine(lines, row)
+	lineIdx, err := findTaskLine(lines, row)
+	if err != nil {
+		return Task{}, err
+	}
 	if lineIdx < 0 {
 		return Task{}, fmt.Errorf("task %s: source line not found (file changed); reindex and retry", id)
 	}
@@ -394,20 +417,29 @@ func setPriority(line string, priority int) string {
 // findTaskLine locates the task's line: trust the line hint when it still
 // matches, otherwise scan the document for a checkbox line with the same
 // normalized text (edits above the task move it without orphaning it).
-func findTaskLine(lines []string, row index.TaskRow) int {
+// Returns -1 when no line matches, and a conflict when several do — two
+// identical "- [ ] call mum" lines are indistinguishable once the hint is
+// stale, and ticking the wrong one is worse than asking for a reload.
+func findTaskLine(lines []string, row index.TaskRow) (int, error) {
 	matches := func(line string) bool {
 		doc := markdown.Scan(row.DocPath, []byte(line))
 		return len(doc.Tasks) == 1 && doc.Tasks[0].Text == row.Text && doc.Tasks[0].Done == row.Done
 	}
 	if row.Line-1 >= 0 && row.Line-1 < len(lines) && matches(lines[row.Line-1]) {
-		return row.Line - 1
+		return row.Line - 1, nil
 	}
+	found, candidates := -1, 0
 	for i, line := range lines {
 		if matches(line) {
-			return i
+			found = i
+			candidates++
 		}
 	}
-	return -1
+	if candidates > 1 {
+		return -1, fmt.Errorf("task %q: %d identical lines in %s and it has moved since it was indexed, so which one is meant is unclear: %w",
+			row.Text, candidates, row.DocPath, vault.ErrConflict)
+	}
+	return found, nil
 }
 
 // checkboxRe matches the checkbox of a task line with any list marker the

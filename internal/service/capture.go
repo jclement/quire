@@ -26,8 +26,14 @@ func (s *Service) CaptureNote(text string) (Document, error) {
 	if err != nil {
 		return Document{}, err
 	}
-	content := appendUnderHeading(daily.Markdown, captureHeading, "- "+text)
-	return s.UpdateDocument(daily.Path, content, daily.SHA256)
+	return reapplying(s, daily.Path, func() (Document, error) {
+		current, err := s.GetDocument(daily.Path)
+		if err != nil {
+			return Document{}, err
+		}
+		content := appendUnderHeading(current.Markdown, captureHeading, "- "+text)
+		return s.UpdateDocument(current.Path, content, current.SHA256)
+	})
 }
 
 // captureHeading is the section quick capture writes into when the day's

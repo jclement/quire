@@ -126,6 +126,14 @@ func (s *Service) RestoreRecurrence(id string) (Task, error) {
 	if err != nil {
 		return Task{}, fmt.Errorf("task %s: %w", id, vault.ErrNotFound)
 	}
+	return reapplying(s, row.DocPath, func() (Task, error) { return s.restoreRecurrence(id) })
+}
+
+func (s *Service) restoreRecurrence(id string) (Task, error) {
+	row, err := s.Index.TaskByID(id)
+	if err != nil {
+		return Task{}, fmt.Errorf("task %s: %w", id, vault.ErrNotFound)
+	}
 	if !row.Done || row.Recur == "" {
 		return Task{}, fmt.Errorf("%w: task %s is not a completed repeating task", ErrValidation, id)
 	}
@@ -134,7 +142,10 @@ func (s *Service) RestoreRecurrence(id string) (Task, error) {
 		return Task{}, err
 	}
 	lines := strings.Split(string(f.Raw), "\n")
-	at := findTaskLine(lines, row)
+	at, err := findTaskLine(lines, row)
+	if err != nil {
+		return Task{}, err
+	}
 	if at < 0 {
 		return Task{}, fmt.Errorf("%w: task %s: source line not found", ErrValidation, id)
 	}

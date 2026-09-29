@@ -149,6 +149,16 @@ and share pages agree), `events` (SSE).
 **Every document write carries `base_sha256`**; mismatch → `409 CONFLICT` with current
 content. The editor autosaves on idle with the same check, so conflict windows are
 seconds wide. Conflicts surface a reload/overwrite/copy-mine dialog — no auto-merge.
+The check and the rename happen under a per-path lock, so two writers holding the same
+base can never both win.
+
+That rule is for writes whose content *is* someone's view of the file. Edits
+re-derivable from whatever the file says now — append, create/toggle/edit a task, set
+a frontmatter key without naming a base, rewrite links on rename — queue per path and,
+on a conflict with an outside write, re-read and re-apply (at most three times). An
+agent's `create_task` landing during an autosave is ordinary, and failing it would
+only make the agent retry the same thing. A task whose indexed line is stale and
+which has an identical twin in the file is a conflict, never a guess.
 
 Scopes are coarse: `read`, `write`, `tasks`, `share`. Tokens: `sk_` + 32 random bytes,
 SHA-256 stored, 8-char prefix displayed, expiry/revocation/`last_used_at`.

@@ -182,7 +182,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 			Description: "Create a task. With no path it lands in today's daily note (under its Captured section); pass a path to file it on a project, person or meeting page instead, optionally under a named section. due = deadline, defer = hide until then; both take YYYY-MM-DD or a natural form (today, tomorrow, fri, +3d) and are resolved server-side — an unparseable date is an error, never a guess. priority is 0 none / 1 high / 2 medium / 3 low, waiting marks it as delegated, and recur repeats it (\"every month\", \"every 3 weeks when done\"). The text may carry #tags and [[wikilinks]]; a task also inherits whatever its document is about, so an action item on a meeting page belongs to that meeting's people without naming them again."},
 			t.createTask)
 		sdk.AddTool(s, &sdk.Tool{Name: "complete_task", Annotations: idempotent,
-			Description: "Mark a task complete by id (from list_tasks, today, or get_document). Edits the source checkbox surgically; a recurring task mints its next occurrence. Completing an already-complete task is an error, not a reopen."},
+			Description: "Mark a task complete by id (from list_tasks, today, or get_document). Edits the source checkbox surgically; a recurring task mints its next occurrence. Completing an already-complete task succeeds and changes nothing — safe to retry."},
 			t.completeTask)
 		sdk.AddTool(s, &sdk.Tool{Name: "restore_recurrence", Annotations: additive,
 			Description: "Write the missing next occurrence of a repeating task that was completed outside quire — in an editor, or by hand in the file — keeping the gap between its defer and due dates. week_review lists the ones needing it. Refuses anything that is not a completed repeating task, so it cannot duplicate live work."},
@@ -579,12 +579,9 @@ func (t *tools) setFrontmatter(_ context.Context, _ *sdk.CallToolRequest, in set
 		return nil, service.Document{}, fmt.Errorf("values is required")
 	}
 	// Frontmatter edits are surgical and base themselves on the current
-	// file, so there is no sha to pass: the write is CAS'd internally.
-	current, err := t.svc.GetDocument(in.Path)
-	if err != nil {
-		return nil, service.Document{}, err
-	}
-	doc, err := t.svc.SetFrontmatter(in.Path, in.Values, current.SHA256)
+	// file, so there is no sha to pass: an edit that loses a race with
+	// another write is re-applied to the new content.
+	doc, err := t.svc.SetFrontmatter(in.Path, in.Values, "")
 	keys := make([]string, 0, len(in.Values))
 	for k := range in.Values {
 		keys = append(keys, k)
@@ -673,16 +670,9 @@ func (t *tools) createTask(_ context.Context, _ *sdk.CallToolRequest, in createT
 }
 
 func (t *tools) completeTask(_ context.Context, _ *sdk.CallToolRequest, in taskIDIn) (*sdk.CallToolResult, service.Task, error) {
-	task, err := t.svc.ToggleTask(in.ID)
+	task, err := t.svc.CompleteTask(in.ID)
 	if err != nil {
 		return nil, service.Task{}, err
-	}
-	if !task.Done {
-		// The task was already complete and toggle reopened it: put it back
-		// and tell the agent instead of guessing intent.
-		if _, reErr := t.svc.ToggleTask(task.ID); reErr == nil {
-			return nil, service.Task{}, fmt.Errorf("task was already complete")
-		}
 	}
 	t.record("complete_task", task.DocPath, task.Text, nil)
 	return nil, task, nil

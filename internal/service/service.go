@@ -42,6 +42,8 @@ type Service struct {
 	Vision *vision.Client
 	// Now allows tests to pin the clock.
 	Now func() time.Time
+	// edits serialises re-derivable edits per path (see edits.go).
+	edits vault.PathLocks
 }
 
 // New returns a Service whose clock reads in the configured time zone
@@ -442,6 +444,10 @@ func (s *Service) seedFrontmatter(docType vault.DocType, body, area string) []by
 // a named section when given — the safe write for agents and quick capture:
 // existing content is never rewritten, only added to.
 func (s *Service) AppendToDocument(path, addition, section string) (Document, error) {
+	return reapplying(s, path, func() (Document, error) { return s.appendToDocument(path, addition, section) })
+}
+
+func (s *Service) appendToDocument(path, addition, section string) (Document, error) {
 	f, err := s.Vault.Read(path)
 	if err != nil {
 		return Document{}, err
@@ -559,6 +565,12 @@ func (s *Service) EnsureDaily(date string) (Document, error) {
 		}
 	}
 	f, err := s.Vault.Write(path, content, "")
+	if errors.Is(err, vault.ErrConflict) {
+		// Another request created the day between the check and the
+		// write. Its note is as good as ours, and the caller only wanted
+		// one to exist.
+		return s.GetDocument(path)
+	}
 	if err != nil {
 		return Document{}, err
 	}

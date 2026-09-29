@@ -17,7 +17,18 @@ import (
 // are quoted so the YAML stays valid; lists are written inline
 // (`people: ["[[Sarah Chen]]"]`) because that is what a human writing this
 // file by hand would type.
+//
+// An empty baseSHA means "whatever the file says now": the edit is
+// re-applied if another write lands first. A caller that names a hash gets
+// the conflict instead, since it is asserting what it last saw.
 func (s *Service) SetFrontmatter(path string, values map[string]any, baseSHA string) (Document, error) {
+	if baseSHA == "" {
+		return reapplying(s, path, func() (Document, error) { return s.setFrontmatter(path, values, "") })
+	}
+	return s.setFrontmatter(path, values, baseSHA)
+}
+
+func (s *Service) setFrontmatter(path string, values map[string]any, baseSHA string) (Document, error) {
 	if len(values) == 0 {
 		return Document{}, fmt.Errorf("no frontmatter changes given")
 	}
