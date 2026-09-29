@@ -128,7 +128,8 @@ func SetFrontmatterKey(raw []byte, key, value string) []byte {
 }
 
 // keySpan finds the lines a top-level key occupies: its own line plus any
-// indented or "- " continuation lines under it, which is how a YAML block
+// indented or "- " continuation lines under it (blank lines between them
+// included), which is how a YAML block
 // list ("aliases:\n  - Fran") is written by hand and by Obsidian. Returns
 // [start, end) or (-1, -1) when the key is absent. Replacing only the key's
 // own line would orphan the items beneath it and break the whole block.
@@ -138,9 +139,18 @@ func keySpan(lines []string, key string) (int, int) {
 		if !strings.HasPrefix(line, prefix) {
 			continue
 		}
+		// Blank lines belong to the key only when more of its content
+		// follows them (a gap in a block list, a paragraph break in a `|`
+		// scalar); trailing ones before the next key stay where they are.
 		end := i + 1
-		for end < len(lines) && isContinuation(lines[end]) {
-			end++
+		for j := i + 1; j < len(lines); j++ {
+			if strings.TrimSpace(lines[j]) == "" {
+				continue
+			}
+			if !isContinuation(lines[j]) {
+				break
+			}
+			end = j + 1
 		}
 		return i, end
 	}
