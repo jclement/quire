@@ -1,7 +1,8 @@
 // The document page body, shared by /doc/* and /daily/<date>: read mode
 // (rendered markdown, frontmatter properties strip, backlinks), edit mode
 // (CodeMirror with autosave + conflict banner), and a desktop split view
-// (editor left, live preview right). Cmd+E cycles the modes; Share/Rename
+// (editor left, live preview right). Cmd+E cycles the modes, and a
+// double-click or long press on the rendered note edits it; Share/Rename
 // actions live in the header. Callers key this component by path so all
 // editing state resets on navigation.
 import { Link as RouterLink } from "@tanstack/react-router";
@@ -55,6 +56,7 @@ import { extractHeadings } from "../lib/headings.ts";
 import { requestTableEdit } from "../lib/tableEditor.ts";
 import { insertDrawingInto } from "../lib/drawings.ts";
 import { preferredEditMode, storeEditMode } from "../lib/viewMode.ts";
+import { useEditGesture } from "../lib/editGesture.ts";
 import { findTables } from "../lib/tables.ts";
 import { printPage, registerPrintHook } from "../lib/printing.ts";
 import { DocumentRail } from "./DocumentRail.tsx";
@@ -205,6 +207,9 @@ function DocumentView({
     void save.save();
     setMode("read");
   };
+  // Double-click (or, on a touch screen, long-press) the rendered note to
+  // edit it — in Edit or Split, whichever was used last.
+  const editGesture = useEditGesture(() => setMode(preferredEditMode()));
 
   // A dangling [[link]] clicked in read mode becomes a note, filed where
   // this document is. The Unwritten page offers the other types.
@@ -433,14 +438,16 @@ function DocumentView({
         <div className="flex min-w-0 flex-1 flex-col">
           {mode === "read" ? (
             <>
-              <Markdown
-                markdown={save.text}
-                links={doc.links}
-                tasks={doc.tasks}
-                onToggleTask={(task) => toggleTask.mutate(task)}
-                onCreateMissing={createMissing}
-                onEditTable={editTable}
-              />
+              <div data-testid="read-body" {...editGesture}>
+                <Markdown
+                  markdown={save.text}
+                  links={doc.links}
+                  tasks={doc.tasks}
+                  onToggleTask={(task) => toggleTask.mutate(task)}
+                  onCreateMissing={createMissing}
+                  onEditTable={editTable}
+                />
+              </div>
               <Backlinks doc={doc} />
             </>
           ) : (

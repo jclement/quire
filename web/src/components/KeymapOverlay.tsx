@@ -63,6 +63,7 @@ const GROUPS: { title: string; bindings: KeyBinding[] }[] = [
     title: "Documents",
     bindings: [
       { keys: "e", action: "Edit" },
+      { keys: "double-click", action: "Edit (long press on touch)" },
       { keys: "⌘E", action: "Cycle read / edit / split" },
       { keys: "⌘↵", action: "Save and return to reading" },
       { keys: "⌘S", action: "Save" },

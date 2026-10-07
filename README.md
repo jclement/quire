@@ -164,7 +164,10 @@ pick. Otherwise, **Create** writes the page as whichever type it should be.
 
 A new document opens straight into the editor, in whichever of Edit or Split
 you used last (remembered per device, like the theme). `e` edits, ⌘E cycles
-read → edit → split, and Escape or Read flushes the save. A note changing
+read → edit → split, and Escape or Read flushes the save. Double-clicking the
+rendered note — or long-pressing it on a touch screen — edits it too, in
+whichever of the two you used last; links, checkboxes and images keep their
+own click. A note changing
 underneath you — an agent through MCP, vim, a `git pull`, another tab —
 shows up live: read mode follows the file, and the editor takes the change
 too whenever you have not typed anything. Once you have unsaved work the
