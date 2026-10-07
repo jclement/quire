@@ -29,8 +29,9 @@ var (
 	// A top-level bullet or numbered item. Indented lines are the
 	// elaboration of the decision above them, not decisions of their own.
 	bulletRe = regexp.MustCompile(`^(?:[-*+]|\d+[.)])\s+(.*\S)\s*$`)
-	// A checkbox, even an empty template one ("- [ ] "), is a task.
-	checkboxRe = regexp.MustCompile(`^\[[ xX]\](\s|$)`)
+	// A checkbox, even an empty template one ("- [ ] ") or a cancelled one
+	// ("- [-] "), is a task.
+	checkboxRe = regexp.MustCompile(`^\[[ xX-]\](\s|$)`)
 )
 
 // ScanDecisions extracts the bullets under every "Decisions" heading. The

@@ -90,12 +90,12 @@ func TestToolsAreScoped(t *testing.T) {
 		"calendar_events", "meeting_prep",
 	}
 	writeTools := []string{
-		"create_document", "update_document", "append_to_document",
+		"create_document", "update_document", "append_to_document", "remove_lines",
 		"link_entity", "unlink_entity", "rename_document", "set_frontmatter",
 		"capture_note", "ensure_daily", "ensure_weekly", "task_to_note", "add_alias",
 		"create_meeting_from_event",
 	}
-	taskTools := []string{"create_task", "complete_task", "edit_task", "restore_recurrence"}
+	taskTools := []string{"create_task", "complete_task", "edit_task", "restore_recurrence", "cancel_task", "delete_task"}
 
 	for _, tc := range []struct {
 		name    string
@@ -227,12 +227,12 @@ func TestSurfaceIsCompleteAndDocumented(t *testing.T) {
 		"list_areas": true, "list_templates": true, "list_unwritten": true, "list_decisions": true,
 		"today": true, "week_review": true, "calendar": true, "person_context": true,
 		"create_document": true, "update_document": true,
-		"append_to_document": true, "link_entity": true, "unlink_entity": true,
+		"append_to_document": true, "remove_lines": true, "link_entity": true, "unlink_entity": true,
 		"rename_document": true, "set_frontmatter": true, "capture_note": true,
 		"ensure_daily": true, "ensure_weekly": true, "task_to_note": true, "add_alias": true,
 		"create_task": true, "complete_task": true, "edit_task": true,
-		"restore_recurrence": true,
-		"calendar_events":    true, "meeting_prep": true, "create_meeting_from_event": true,
+		"restore_recurrence": true, "cancel_task": true, "delete_task": true,
+		"calendar_events": true, "meeting_prep": true, "create_meeting_from_event": true,
 	}
 	for _, tool := range res.Tools {
 		if !want[tool.Name] {
@@ -253,11 +253,15 @@ func TestSurfaceIsCompleteAndDocumented(t *testing.T) {
 
 // TestDeleteStaysAbsent: no tool may delete a document. Losing work to an
 // agent is the one failure a notes vault cannot come back from, and REST
-// plus git are the deliberate way out.
+// plus git are the deliberate way out. delete_task and remove_lines are the
+// named exceptions: each takes out only the lines it is pointed at.
 func TestDeleteStaysAbsent(t *testing.T) {
 	for _, name := range toolNames(t, newServer(newScopeTestService(t), "test", allowAll, auth.OwnerPrincipal(), nil)) {
+		if name == "delete_task" || name == "remove_lines" {
+			continue
+		}
 		if strings.Contains(strings.ToLower(name), "delete") ||
-			strings.Contains(strings.ToLower(name), "remove_document") {
+			strings.Contains(strings.ToLower(name), "remove") {
 			t.Errorf("a destructive tool appeared on the agent surface: %q", name)
 		}
 	}

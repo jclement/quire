@@ -1,7 +1,8 @@
 // Package mcp exposes quire to AI agents over the Model Context Protocol
 // (Streamable HTTP at /mcp). Every tool is a thin wrapper over the same
 // service layer the REST API uses, so an agent can never do anything the API
-// couldn't (DESIGN.md decision 5). No delete tool exists on purpose.
+// couldn't (DESIGN.md decision 5). No tool deletes a document, on purpose:
+// the most an agent can take out is a task's line or the lines it names.
 package mcp
 
 import (
@@ -58,6 +59,7 @@ Working rules:
 - Prefer append_to_document over update_document. update_document replaces the
   whole file, so it must carry the base_sha256 from a get_document you just
   made; a stale hash is rejected rather than clobbering concurrent edits.
+  To take lines out of a note, use remove_lines rather than rewriting it.
 - Relationships are wikilinks: [[Sarah Chen]] in prose, or frontmatter keys
   (company, people, project). Both are indexed, so either creates a backlink.
 - Tasks are markdown checkboxes with an emoji grammar: 📅 due, 🛫 defer,
@@ -65,13 +67,15 @@ Working rules:
   since then; without a link right after it, who is the first [[person]] or
   [[company]] linked on the line), 🔁 recurrence, ✅
   completion, and #someday to park one. Toggle them with complete_task rather
-  than rewriting the line.
+  than rewriting the line. A task that will not be done is cancel_task (it
+  stays in the note as - [-] with a ❌ date, and leaves every view); one that
+  should never have existed — a duplicate, a mistake — is delete_task.
 - Start with today for "what should I work on" (it includes the day's
   calendar), and meeting_prep before a meeting (person_context for one
   person) — each answers in one call what would otherwise take several.
 - Processing the inbox means every task leaves it: give it a due or defer
   date, delegate it (edit_task waiting_on), park it (#someday), complete it,
-  or — when it was never an action — task_to_note.
+  cancel it (cancel_task), or — when it was never an action — task_to_note.
 - Decisions are bullets under a "Decisions" heading (meeting notes have one),
   any line tagged #decision (the quick way to log one in today's note), or
   whole documents with decision in frontmatter tags; list_decisions reads
@@ -164,6 +168,9 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 		sdk.AddTool(s, &sdk.Tool{Name: "append_to_document", Annotations: additive,
 			Description: "Append markdown to the end of a document, or to the end of a named section (heading text). The safe way to add notes, decisions or action items without touching anything else. Creates the daily note if the path is today's and it does not exist."},
 			t.appendToDocument)
+		sdk.AddTool(s, &sdk.Tool{Name: "remove_lines", Annotations: destructive,
+			Description: "Remove whole lines from a document's body, leaving every other line untouched — the way to drop a stale bullet, a wrong sentence or a finished section without rewriting the file. lines is a list; each entry is the exact text of one line as get_document shows it (indentation included, trailing whitespace ignored), or several consecutive lines joined by newlines to remove a block. Each entry must be found exactly once: a line that occurs more than once is refused, so pass it with a neighbouring line as one multi-line entry. All or nothing — if any entry is missing or ambiguous, nothing is removed. Frontmatter cannot be removed this way (set_frontmatter with a null value does that), and a task is better removed with delete_task or cancel_task."},
+			t.removeLines)
 		sdk.AddTool(s, &sdk.Tool{Name: "link_entity", Annotations: additive,
 			Description: "Relate one document to another through frontmatter — company on a person, people or project on a meeting — without rewriting the body. key is the frontmatter field (company, people, project, attendees); target is a document name or path. Idempotent."},
 			t.linkEntity)
@@ -204,6 +211,12 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 		sdk.AddTool(s, &sdk.Tool{Name: "edit_task", Annotations: idempotent,
 			Description: "Change a task by id, leaving every field you do not pass alone. due and defer take natural dates and an empty string clears them; priority is 0 none / 1 high / 2 medium / 3 low; waiting toggles the delegated marker (marking stamps today's date, clearing removes it); waiting_on names who it is waiting on — written right after ⏳, replacing any previous who, outranking other links on the line, and keeping the task's id and the wait's date; recur sets or clears the repeat (\"every month\"); text rewrites the task's words while keeping its markers — note that changing the text changes the task's id, which the response carries. This is how to snooze, delegate, or fix a typo."},
 			t.editTask)
+		sdk.AddTool(s, &sdk.Tool{Name: "cancel_task", Annotations: destructive,
+			Description: "Mark an open task as cancelled — it will not be done — by id. Its checkbox becomes [-] and the line gains ❌ and today's date, so the note keeps the record of what was dropped and when, while the task leaves the inbox and every other view (it is not counted as completed). A repeating task mints no next occurrence: cancelling ends the repeat, so to skip one occurrence move its dates with edit_task instead. Use it when the owner decides against something; use complete_task when it was done, and delete_task when it should leave no trace. The id stops existing afterwards, so a retry reports not-found; a completed task is refused."},
+			t.cancelTask)
+		sdk.AddTool(s, &sdk.Tool{Name: "delete_task", Annotations: destructive,
+			Description: "Delete a task by id, open or completed: its line is removed from the source document and nothing else changes (lines nested beneath it stay). For a duplicate, a capture made by mistake, or a task the owner wants gone without a trace — there is no undo short of the vault's own history, so prefer cancel_task when it was a real task that is simply not going to happen, and complete_task when it was done. Returns the task as it was; the id stops existing, so a retry reports not-found."},
+			t.deleteTask)
 	}
 
 	registerAliasTools(s, t, allows)
@@ -377,6 +390,19 @@ type tagsOut struct {
 
 type taskIDIn struct {
 	ID string `json:"id" jsonschema:"task id from list_tasks or get_document"`
+}
+
+type removeLinesIn struct {
+	Path  string   `json:"path" jsonschema:"vault-relative document path"`
+	Lines []string `json:"lines" jsonschema:"lines to remove; each entry is one line's exact text, or consecutive lines joined by newlines, and must occur exactly once in the document body"`
+}
+
+// cancelledTaskOut is a task that has stopped being one.
+type cancelledTaskOut struct {
+	// Task is the task as it was just before.
+	Task service.Task `json:"task"`
+	// Line is its line in the document as it now reads.
+	Line string `json:"line"`
 }
 
 type taskToNoteIn struct {
@@ -732,4 +758,22 @@ func (t *tools) taskToNote(_ context.Context, _ *sdk.CallToolRequest, in taskToN
 	doc, err := t.svc.TaskToNote(in.ID, in.Title, "")
 	t.record("task_to_note", doc.Path, doc.Title, err)
 	return nil, doc, err
+}
+
+func (t *tools) removeLines(_ context.Context, _ *sdk.CallToolRequest, in removeLinesIn) (*sdk.CallToolResult, service.Document, error) {
+	doc, err := t.svc.RemoveLines(in.Path, in.Lines)
+	t.record("remove_lines", in.Path, fmt.Sprintf("%d: %s", len(in.Lines), firstLine(strings.Join(in.Lines, "\n"))), err)
+	return nil, doc, err
+}
+
+func (t *tools) cancelTask(_ context.Context, _ *sdk.CallToolRequest, in taskIDIn) (*sdk.CallToolResult, cancelledTaskOut, error) {
+	task, line, err := t.svc.CancelTask(in.ID)
+	t.record("cancel_task", task.DocPath, task.Text, err)
+	return nil, cancelledTaskOut{Task: task, Line: line}, err
+}
+
+func (t *tools) deleteTask(_ context.Context, _ *sdk.CallToolRequest, in taskIDIn) (*sdk.CallToolResult, service.Task, error) {
+	task, err := t.svc.DeleteTask(in.ID)
+	t.record("delete_task", task.DocPath, task.Text, err)
+	return nil, task, err
 }

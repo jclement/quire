@@ -447,22 +447,24 @@ Settings and stored as an ordinary vault document (`AGENTS.md`). Edit it in the
 app or in vim; the next agent session gets it, no restart.
 
 quire is agent-operable by design: a Streamable-HTTP MCP server at `/mcp` exposes the
-same service layer as the UI. Thirty-six tools (thirty-eight with an embeddings
+same service layer as the UI. Thirty-nine tools (forty-one with an embeddings
 key), each annotated read-only / additive / destructive so clients know what
 deserves a confirmation. Anything the app can do, an agent can do:
 
 | Scope | Tools |
 |---|---|
 | read | **Find** `search` (full-text + `type:` `tag:` `area:` `is:task` `is:done` `is:decision` `due:` `after:` `before:`), `semantic_search` and `related_documents` (with an embeddings key), `list_documents`, `list_unwritten`, `list_decisions`, `list_tags`, `list_areas`, `list_templates` · **Read** `get_document`, `get_daily`, `get_weekly`, `list_daily`, `read_attachment` (see a pasted screenshot) · **Compose** `today`, `week_review`, `calendar`, `person_context`, `list_tasks` · **Calendar** `calendar_events` (your feeds' events, attendees matched), `meeting_prep` (per-attendee context for a meeting note or an event) |
-| write | **Documents** `create_document`, `append_to_document`, `update_document` (hash-guarded), `rename_document` (rewrites links) · **Metadata** `set_frontmatter`, `link_entity`, `unlink_entity`, `add_alias` · **Journal** `capture_note` (prose into today's note), `ensure_daily`, `ensure_weekly` · **Triage** `task_to_note` (a task that is really a note becomes one) · **Calendar** `create_meeting_from_event` (idempotent per occurrence) |
-| tasks | `create_task` (any document, any marker: due, defer, priority, waiting — with `waiting_on` a name — repeat), `complete_task`, `edit_task` (reschedule, delegate to someone, repeat, rename), `restore_recurrence` |
+| write | **Documents** `create_document`, `append_to_document`, `remove_lines` (drops exactly the lines named), `update_document` (hash-guarded), `rename_document` (rewrites links) · **Metadata** `set_frontmatter`, `link_entity`, `unlink_entity`, `add_alias` · **Journal** `capture_note` (prose into today's note), `ensure_daily`, `ensure_weekly` · **Triage** `task_to_note` (a task that is really a note becomes one) · **Calendar** `create_meeting_from_event` (idempotent per occurrence) |
+| tasks | `create_task` (any document, any marker: due, defer, priority, waiting — with `waiting_on` a name — repeat), `complete_task`, `edit_task` (reschedule, delegate to someone, repeat, rename), `restore_recurrence`, `cancel_task` (won't do: the line becomes `- [-] … ❌ date` and leaves every view), `delete_task` (removes the task's line) |
 
 The tool list is the agent's documentation, so each description says when to
 reach for it rather than restating its name — and a test pins the whole
 surface, refusing a tool that arrives without a description, an annotation or
 a scope.
 
-There is deliberately no delete tool. **Every mutating tool call and every REST
+There is deliberately no tool that deletes a document: the most an agent can
+take out is a task's line (`delete_task`) or the lines it names exactly
+(`remove_lines`). **Every mutating tool call and every REST
 write by a token or connected app is recorded** — Settings → Agent activity shows
 who did what, where, and whether it succeeded. Your own edits in the browser are
 not logged; the question the log answers is "what did the agents do?".

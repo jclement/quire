@@ -294,10 +294,21 @@ The surface is deliberately complete: an agent can do anything the app can,
 because a gap is a thing the owner has to do by hand at exactly the moment
 they asked an agent to handle it. Tests pin it — the tool list, the scope
 each tool sits behind, that every tool carries an annotation and a
-description long enough to teach when to use it, and that nothing named
-delete ever appears.
+description long enough to teach when to use it, and that nothing that
+deletes a document ever appears.
 
-Agent guardrails: read-only tokens are the default posture; no delete tool; every
+Taking things out is line-sized, never document-sized. `delete_task` removes a
+task's one line; `cancel_task` rewrites its checkbox to `[-]` and stamps `❌ date` —
+a `[-]` line is not a task to the scanner, so it leaves every view (and is not
+counted as completed) while the note keeps the record, and a repeating task mints
+no next occurrence; `remove_lines` drops whole lines named by their exact text,
+each of which must occur exactly once in the body (a multi-line entry pins down a
+repeated line), all or nothing, never frontmatter. Text rather than line numbers,
+because numbers go stale under a concurrent edit and text is re-derivable: all
+three go through the same reapply-on-conflict path as every other line edit.
+
+Agent guardrails: read-only tokens are the default posture; no tool deletes a
+document; every
 API/MCP write is audit-logged (principal, tool, path, when) — `audit_log` in auth.db,
 surfaced in Settings. The owner's own browser session is not audited on purpose: the
 log answers "what did the agents do", and the human's autosaves would drown it. This
