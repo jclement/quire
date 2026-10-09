@@ -256,7 +256,7 @@ paths:
   /api/v1/events:
     get:
       summary: SSE stream of index changes
-      description: "Events named `doc` with JSON `{path, action: upsert|delete}` — invalidate caches on receipt."
+      description: "Events named `doc` with JSON `{path, action: upsert|delete}` — invalidate caches on receipt. A `ping` event every 15s proves the stream is alive; a client hearing nothing for 45s should reconnect and re-read."
       responses: { "200": { description: text/event-stream } }
   /api/v1/rename:
     post:

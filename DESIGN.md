@@ -419,7 +419,11 @@ commands from editor/commands.ts against the live view.
 
 Live reload: the watcher notices an outside change, the index publishes it
 on `/api/v1/events`, and every open tab invalidates the queries that could
-be showing it. Read mode follows for free because its text is derived from
+be showing it. The stream pings every 15s, because a tunnel or a sleeping
+laptop can kill it without an error reaching either end: a tab that hears
+nothing for 45s drops the stream, opens another and re-reads everything on
+screen, and does the same check the moment it becomes visible again. Read
+mode follows for free because its text is derived from
 the query rather than copied. The editor is the hard case — it owns a
 buffer CodeMirror mutates — and it now takes the change whenever the buffer
 is untouched, which is both a freshness fix and a data-loss fix: the clean

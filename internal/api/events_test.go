@@ -6,7 +6,9 @@
 package api
 
 import (
+	"bufio"
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -182,4 +184,40 @@ func TestEventStreamDisconnectsCleanly(t *testing.T) {
 	if !strings.Contains(body, "event: doc") || !strings.Contains(body, "notes/x.md") {
 		t.Errorf("the published event did not reach the stream: %q", body)
 	}
+}
+
+// TestEventStreamHeartbeats: an idle stream must keep speaking. Without the
+// ping a tunnel can drop or stall the connection silently, and the tab has
+// no way to tell a quiet vault from a dead stream — it just stops updating.
+func TestEventStreamHeartbeats(t *testing.T) {
+	previous := heartbeatInterval
+	heartbeatInterval = 10 * time.Millisecond
+	defer func() { heartbeatInterval = previous }()
+
+	s := &Server{Events: NewBroadcaster(), Version: "test"}
+	server := httptest.NewServer(http.HandlerFunc(s.handleEvents))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", server.URL, nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if got := res.Header.Get("Cache-Control"); !strings.Contains(got, "no-transform") {
+		t.Errorf("Cache-Control = %q; a proxy may compress, and so buffer, the stream", got)
+	}
+
+	pings := 0
+	scanner := bufio.NewScanner(res.Body)
+	for scanner.Scan() {
+		if scanner.Text() == "event: ping" {
+			if pings++; pings == 2 {
+				return
+			}
+		}
+	}
+	t.Fatalf("saw %d pings on an idle stream before it ended: %v", pings, scanner.Err())
 }
