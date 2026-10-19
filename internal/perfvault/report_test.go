@@ -8,7 +8,8 @@ package perfvault_test
 //	QUIRE_PERF=1 go test ./internal/perfvault -run TestPerfReport -v
 //
 // QUIRE_PERF_SCALE=2 for DESIGN's 10k-document budget, and add
-// -cpuprofile cpu.out to see where the time goes.
+// -cpuprofile cpu.out to see where the time goes. QUIRE_PERF_ONLY=<url>
+// repeats just that request ({today}, {person} and {project} expand).
 
 import (
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -140,6 +142,17 @@ func TestPerfReport(t *testing.T) {
 	n := 15
 	if s := os.Getenv("QUIRE_PERF_N"); s != "" {
 		n, _ = strconv.Atoi(s)
+	}
+	// QUIRE_PERF_ONLY=<url> just repeats that one request n times: what to
+	// pair with -cpuprofile when one endpoint is the question.
+	if only := os.Getenv("QUIRE_PERF_ONLY"); only != "" {
+		only = strings.NewReplacer("{today}", today, "{person}", hotPerson, "{project}", hotProject).Replace(only)
+		var ds []time.Duration
+		for range n {
+			ds = append(ds, env.get(t, only))
+		}
+		fmt.Printf("%-60s p50 %s  p95 %s\n", only, ms(quantile(ds, 0.5)), ms(quantile(ds, 0.95)))
+		return
 	}
 	fmt.Printf("\nscale x%g  (%s)\n%-60s %8s %8s %8s\n", scale, dir, "endpoint", "first", "p50", "p95")
 	for _, url := range endpoints {
