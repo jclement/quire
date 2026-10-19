@@ -144,7 +144,10 @@ export function DocumentRail({
             {owed.map((task) => {
               const wait = task.waiting_for;
               return (
-                <li key={task.id}>
+                <li
+                  key={task.id}
+                  className="[contain-intrinsic-size:auto_1.25rem] [content-visibility:auto]"
+                >
                   <RouterLink
                     to={docHref(task.doc_path)}
                     title={`${task.text} — in ${task.doc_title}${wait?.since ? `, waiting since ${wait.since}` : ""}`}
@@ -180,7 +183,10 @@ export function DocumentRail({
           <RailHeading>Open tasks</RailHeading>
           <ul className="border-l border-border">
             {tasks.map((task) => (
-              <li key={task.id}>
+              <li
+                key={task.id}
+                className="[contain-intrinsic-size:auto_1.25rem] [content-visibility:auto]"
+              >
                 <RouterLink
                   to={docHref(task.doc_path)}
                   title={`${task.text} — in ${task.doc_title}${task.due ? `, due ${task.due}` : ""}`}
@@ -255,7 +261,12 @@ export function DocumentRail({
                 ? DOC_TYPE_INFO[backlink.type].icon
                 : undefined;
               return (
-                <li key={backlink.path}>
+                // A busy person is linked from thousands of documents: rows
+                // off-screen skip style and layout (content-visibility).
+                <li
+                  key={backlink.path}
+                  className="[contain-intrinsic-size:auto_1.25rem] [content-visibility:auto]"
+                >
                   <RouterLink
                     to={docHref(backlink.path)}
                     title={`${backlink.title} (${backlink.type})`}

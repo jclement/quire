@@ -307,9 +307,14 @@ function TaskRow({
       ref={rowRef}
       tabIndex={-1}
       onClick={onSelect}
+      // Off-screen rows skip style and layout (content-visibility), which
+      // is most of a long list's first paint — but containment clips, and
+      // the date popover hangs below the row, so a row with it open opts out.
       className={`group relative flex min-h-8 items-center gap-2.5 px-2 py-1 outline-none ${
-        selected ? "bg-selected" : "hover:bg-hover"
-      }`}
+        picker === null
+          ? "[contain-intrinsic-size:auto_2rem] [content-visibility:auto]"
+          : ""
+      } ${selected ? "bg-selected" : "hover:bg-hover"}`}
     >
       <input
         type="checkbox"
