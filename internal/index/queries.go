@@ -384,12 +384,11 @@ func (ix *Index) Tasks(view TaskView, today, area string) ([]TaskRow, error) {
 	default:
 		return nil, fmt.Errorf("unknown task view %q", view)
 	}
-	rows, err := ix.reader().Query(taskSelect+" WHERE "+where+areaWhere+" ORDER BY "+order, append(args, areaArgs...)...)
+	tasks, err := ix.queryTasks(taskSelect+" WHERE "+where+areaWhere+" ORDER BY "+order, append(args, areaArgs...)...)
 	if err != nil {
 		return nil, fmt.Errorf("task view %s: %w", view, err)
 	}
-	defer rows.Close()
-	return ix.collectTasks(rows)
+	return tasks, nil
 }
 
 // DeferredAvailable is the today view without its dated rows: open, not
@@ -398,13 +397,12 @@ func (ix *Index) Tasks(view TaskView, today, area string) ([]TaskRow, error) {
 // view for all of them again only to drop them doubled its biggest query.
 func (ix *Index) DeferredAvailable(today, area string) ([]TaskRow, error) {
 	areaWhere, areaArgs := areaClause(area)
-	rows, err := ix.reader().Query(taskSelect+" WHERE t.done = 0 AND t.waiting = 0 AND t.due = '' AND t.defer_date != '' AND t.defer_date <= ?"+
+	tasks, err := ix.queryTasks(taskSelect+" WHERE t.done = 0 AND t.waiting = 0 AND t.due = '' AND t.defer_date != '' AND t.defer_date <= ?"+
 		notSomeday+areaWhere+" ORDER BY t.priority = 0, t.priority", append([]any{today}, areaArgs...)...)
 	if err != nil {
 		return nil, fmt.Errorf("deferred tasks: %w", err)
 	}
-	defer rows.Close()
-	return ix.collectTasks(rows)
+	return tasks, nil
 }
 
 // TasksByID fetches the rows for ids in one read, keyed by id; ids the
@@ -418,11 +416,7 @@ func (ix *Index) TasksByID(ids []string) (map[string]TaskRow, error) {
 			args[i] = id
 		}
 		marks := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
-		rows, err := ix.reader().Query(taskSelect+" WHERE t.id IN ("+marks+")", args...)
-		if err != nil {
-			return nil, err
-		}
-		tasks, err := ix.collectTasks(rows)
+		tasks, err := ix.queryTasks(taskSelect+" WHERE t.id IN ("+marks+")", args...)
 		if err != nil {
 			return nil, err
 		}
@@ -435,12 +429,7 @@ func (ix *Index) TasksByID(ids []string) (map[string]TaskRow, error) {
 
 // TaskByID fetches a single task row.
 func (ix *Index) TaskByID(id string) (TaskRow, error) {
-	rows, err := ix.reader().Query(taskSelect+" WHERE t.id = ?", id)
-	if err != nil {
-		return TaskRow{}, err
-	}
-	defer rows.Close()
-	tasks, err := ix.collectTasks(rows)
+	tasks, err := ix.queryTasks(taskSelect+" WHERE t.id = ?", id)
 	if err != nil {
 		return TaskRow{}, err
 	}
@@ -455,7 +444,7 @@ func (ix *Index) TaskByID(id string) (TaskRow, error) {
 // TasksMentioning returns open tasks *elsewhere* that name this document —
 // its own are already on the page, and listing them twice is noise.
 func (ix *Index) TasksMentioning(path string) ([]TaskRow, error) {
-	rows, err := ix.reader().Query(taskSelect+`
+	tasks, err := ix.queryTasks(taskSelect+`
 		WHERE t.done = 0 AND t.doc_path != ? AND t.id IN (
 			SELECT tl.task_id FROM task_links tl
 			JOIN docnames n ON n.name = tl.target_norm
@@ -464,8 +453,7 @@ func (ix *Index) TasksMentioning(path string) ([]TaskRow, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tasks mentioning %s: %w", path, err)
 	}
-	defer rows.Close()
-	return ix.collectTasks(rows)
+	return tasks, nil
 }
 
 // WaitingOnDoc returns open waiting tasks owed by the document at path —
@@ -473,7 +461,7 @@ func (ix *Index) TasksMentioning(path string) ([]TaskRow, error) {
 // or sit on it; the who-rule then keeps only those it actually names, so a
 // task waiting on [[Dan]] that merely mentions Frances stays Dan's.
 func (ix *Index) WaitingOnDoc(path string) ([]TaskRow, error) {
-	rows, err := ix.reader().Query(taskSelect+`
+	all, err := ix.queryTasks(taskSelect+`
 		WHERE t.done = 0 AND t.waiting = 1 AND (t.doc_path = ? OR t.id IN (
 			SELECT tl.task_id FROM task_links tl
 			JOIN docnames n ON n.name = tl.target_norm
@@ -481,11 +469,6 @@ func (ix *Index) WaitingOnDoc(path string) ([]TaskRow, error) {
 		)) ORDER BY t.waiting_since = '', t.waiting_since, t.doc_path, t.line`, path, path)
 	if err != nil {
 		return nil, fmt.Errorf("tasks waiting on %s: %w", path, err)
-	}
-	defer rows.Close()
-	all, err := ix.collectTasks(rows)
-	if err != nil {
-		return nil, err
 	}
 	var out []TaskRow
 	for _, t := range all {
@@ -501,26 +484,20 @@ func (ix *Index) WaitingOnDoc(path string) ([]TaskRow, error) {
 func (ix *Index) TasksCompletedIn(from, to, area string) ([]TaskRow, error) {
 	areaWhere, areaArgs := areaClause(area)
 	args := append([]any{from, to}, areaArgs...)
-	rows, err := ix.reader().Query(taskSelect+
+	tasks, err := ix.queryTasks(taskSelect+
 		" WHERE t.done = 1 AND t.completed_on != '' AND t.completed_on >= ? AND t.completed_on <= ?"+
 		areaWhere+" ORDER BY t.completed_on DESC, t.doc_path", args...)
 	if err != nil {
 		return nil, fmt.Errorf("tasks completed in %s..%s: %w", from, to, err)
 	}
-	defer rows.Close()
-	return ix.collectTasks(rows)
+	return tasks, nil
 }
 
 // OpenTasksDue returns open tasks with due <= day (the Today screen's
 // overdue + due-today sections split by the caller).
 func (ix *Index) OpenTasksDue(day, area string) ([]TaskRow, error) {
 	areaWhere, areaArgs := areaClause(area)
-	rows, err := ix.reader().Query(taskSelect+" WHERE t.done = 0 AND t.due != '' AND t.due <= ?"+areaWhere+" ORDER BY t.due, t.priority = 0, t.priority", append([]any{day}, areaArgs...)...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return ix.collectTasks(rows)
+	return ix.queryTasks(taskSelect+" WHERE t.done = 0 AND t.due != '' AND t.due <= ?"+areaWhere+" ORDER BY t.due, t.priority = 0, t.priority", append([]any{day}, areaArgs...)...)
 }
 
 // TaskAt returns the task on one line of one document. Needed where a task
@@ -528,12 +505,7 @@ func (ix *Index) OpenTasksDue(day, area string) ([]TaskRow, error) {
 // text, so they share a content hash and only the ordinal suffix separates
 // them — the line is the only unambiguous handle.
 func (ix *Index) TaskAt(docPath string, line int) (TaskRow, error) {
-	rows, err := ix.reader().Query(taskSelect+" WHERE t.doc_path = ? AND t.line = ?", docPath, line)
-	if err != nil {
-		return TaskRow{}, err
-	}
-	defer rows.Close()
-	tasks, err := ix.collectTasks(rows)
+	tasks, err := ix.queryTasks(taskSelect+" WHERE t.doc_path = ? AND t.line = ?", docPath, line)
 	if err != nil {
 		return TaskRow{}, err
 	}
@@ -559,7 +531,7 @@ type RecurrenceProblem struct {
 func (ix *Index) RecurrenceProblems() ([]RecurrenceProblem, error) {
 	// Stopped: completed, repeating, and no open task with the same text
 	// remains in the same document to carry it forward.
-	stopped, err := ix.reader().Query(taskSelect + `
+	rows, err := ix.queryTasks(taskSelect + `
 		WHERE t.done = 1 AND t.recur != '' AND NOT EXISTS (
 			SELECT 1 FROM tasks o
 			WHERE o.done = 0 AND o.doc_path = t.doc_path AND o.text = t.text
@@ -567,11 +539,6 @@ func (ix *Index) RecurrenceProblems() ([]RecurrenceProblem, error) {
 		ORDER BY t.completed_on DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("stopped recurrences: %w", err)
-	}
-	rows, err := ix.collectTasks(stopped)
-	stopped.Close()
-	if err != nil {
-		return nil, err
 	}
 	var out []RecurrenceProblem
 	seen := map[string]bool{}
@@ -586,16 +553,11 @@ func (ix *Index) RecurrenceProblems() ([]RecurrenceProblem, error) {
 
 	// Unparsed: the line carries 🔁 but the grammar matched nothing, so it
 	// has never repeated and never will.
-	bad, err := ix.reader().Query(taskSelect + `
+	badRows, err := ix.queryTasks(taskSelect + `
 		WHERE t.recur = '' AND t.raw_text LIKE '%🔁%'
 		ORDER BY t.doc_path`)
 	if err != nil {
 		return nil, fmt.Errorf("unparsed recurrences: %w", err)
-	}
-	defer bad.Close()
-	badRows, err := ix.collectTasks(bad)
-	if err != nil {
-		return nil, err
 	}
 	for _, r := range badRows {
 		out = append(out, RecurrenceProblem{Task: r, Reason: "unparsed"})
@@ -990,10 +952,37 @@ func collectDocs(rows *sql.Rows) ([]DocRow, error) {
 	return docs, rows.Err()
 }
 
-// collectTasks drains a taskSelect result and resolves who each waiting task
-// is owed by. It closes rows itself: the pool is a single connection, and
-// the waiting lookup needs it.
-func (ix *Index) collectTasks(rows *sql.Rows) ([]TaskRow, error) {
+// querier is what a task read runs its lookups through: the read
+// transaction its rows came from.
+type querier interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+// queryTasks runs a taskSelect query and resolves each task's project and
+// who a waiting task is owed by, all inside one read transaction. The
+// lookups are separate statements, and on separate pooled connections a
+// reindex landing between them could pair a task's old text with links that
+// are already gone — a task shown without its project. One transaction is
+// one snapshot.
+func (ix *Index) queryTasks(query string, args ...any) ([]TaskRow, error) {
+	tx, err := ix.reader().Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return ix.collectTasks(tx, rows)
+}
+
+// collectTasks drains a taskSelect result and resolves its tasks through q,
+// which must be the transaction the rows came from. It closes rows itself,
+// since the lookups need the transaction's connection.
+func (ix *Index) collectTasks(q querier, rows *sql.Rows) ([]TaskRow, error) {
 	var tasks []TaskRow
 	var projectNorm []string
 	for rows.Next() {
@@ -1013,10 +1002,10 @@ func (ix *Index) collectTasks(rows *sql.Rows) ([]TaskRow, error) {
 		return nil, err
 	}
 	rows.Close()
-	if err := ix.resolveProjects(tasks, projectNorm); err != nil {
+	if err := resolveProjects(q, tasks, projectNorm); err != nil {
 		return nil, err
 	}
-	if err := ix.resolveWaitingOn(tasks); err != nil {
+	if err := ix.resolveWaitingOn(q, tasks); err != nil {
 		return nil, err
 	}
 	return tasks, nil
@@ -1032,7 +1021,7 @@ var projectMapThreshold = 64
 
 // resolveProjectsByJoin is resolveProjects for a few tasks: one query
 // driven from their links (and inherited projects) through docnames_name.
-func (ix *Index) resolveProjectsByJoin(tasks []TaskRow, projectNorm []string) error {
+func resolveProjectsByJoin(q querier, tasks []TaskRow, projectNorm []string) error {
 	byID := map[string][]int{}
 	var args []any
 	var pairs []string
@@ -1053,7 +1042,7 @@ func (ix *Index) resolveProjectsByJoin(tasks []TaskRow, projectNorm []string) er
 	for _, p := range pairs {
 		names += " UNION ALL " + p
 	}
-	rows, err := ix.reader().Query(`
+	rows, err := q.Query(`
 		SELECT x.id, MIN(n.path) FROM (`+names+`) x
 		JOIN docnames n ON n.name = x.name
 		JOIN documents d ON d.path = n.path AND d.type = 'project'
@@ -1079,19 +1068,19 @@ func (ix *Index) resolveProjectsByJoin(tasks []TaskRow, projectNorm []string) er
 // projectNorm[i] is tasks[i]'s project_norm column. Projects are few, so
 // their names are loaded once as a map and each task's links are looked up
 // in it, rather than joining every link through docnames and documents.
-func (ix *Index) resolveProjects(tasks []TaskRow, projectNorm []string) error {
+func resolveProjects(q querier, tasks []TaskRow, projectNorm []string) error {
 	if len(tasks) == 0 {
 		return nil
 	}
 	if len(tasks) <= projectMapThreshold {
-		return ix.resolveProjectsByJoin(tasks, projectNorm)
+		return resolveProjectsByJoin(q, tasks, projectNorm)
 	}
 	projects := map[string]string{} // name → lowest project path answering to it
 	// CROSS JOIN pins the order: start from the few project documents and
 	// look up their names. Left to itself the planner walked all of
 	// docnames by name and probed documents for each (12 ms vs 0.8 ms at
 	// 4,680 documents, paid by every task read).
-	rows, err := ix.reader().Query(`SELECT n.name, MIN(n.path) FROM documents d
+	rows, err := q.Query(`SELECT n.name, MIN(n.path) FROM documents d
 		CROSS JOIN docnames n ON n.path = d.path WHERE d.type = 'project' GROUP BY n.name`)
 	if err != nil {
 		return fmt.Errorf("loading project names: %w", err)
@@ -1129,7 +1118,7 @@ func (ix *Index) resolveProjects(tasks []TaskRow, projectNorm []string) error {
 	for start := 0; start < len(ids); start += resolveChunk {
 		chunk := ids[start:min(start+resolveChunk, len(ids))]
 		marks := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
-		rows, err := ix.reader().Query("SELECT task_id, target_norm FROM task_links WHERE task_id IN ("+marks+")", chunk...)
+		rows, err := q.Query("SELECT task_id, target_norm FROM task_links WHERE task_id IN ("+marks+")", chunk...)
 		if err != nil {
 			return fmt.Errorf("resolving task projects: %w", err)
 		}
@@ -1155,7 +1144,7 @@ func (ix *Index) resolveProjects(tasks []TaskRow, projectNorm []string) error {
 // one query. The rule — first person or company linked on the line, else
 // the first link — is applied here rather than stored, because which link
 // is a person depends on documents that may be written after the task.
-func (ix *Index) resolveWaitingOn(tasks []TaskRow) error {
+func (ix *Index) resolveWaitingOn(q querier, tasks []TaskRow) error {
 	byID := map[string][]int{}
 	var ids []any
 	for i, t := range tasks {
@@ -1171,7 +1160,7 @@ func (ix *Index) resolveWaitingOn(tasks []TaskRow) error {
 		return nil
 	}
 	marks := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-	rows, err := ix.reader().Query(`
+	rows, err := q.Query(`
 		SELECT tl.task_id, tl.target_raw, COALESCE(d.path, ''), COALESCE(d.type, ''), COALESCE(d.title, '')
 		FROM task_links tl
 		LEFT JOIN documents d ON d.path = (SELECT MIN(n.path) FROM docnames n WHERE n.name = tl.target_norm)
@@ -1210,7 +1199,7 @@ func (ix *Index) resolveWaitingOn(tasks []TaskRow) error {
 	// they are written on purpose, so there are few of them.
 	for i, t := range tasks {
 		if t.Waiting && t.WaitingOnRaw != "" {
-			tasks[i].WaitingOn = ix.resolveWho(t.WaitingOnRaw)
+			tasks[i].WaitingOn = resolveWho(q, t.WaitingOnRaw)
 		}
 	}
 	// A line that names nobody, sitting on a person's or company's own
@@ -1226,13 +1215,15 @@ func (ix *Index) resolveWaitingOn(tasks []TaskRow) error {
 
 // resolveWho names the document a raw link target reaches, or just the
 // name as written when it reaches none.
-func (ix *Index) resolveWho(raw string) WaitingOn {
+func resolveWho(q querier, raw string) WaitingOn {
 	who := WaitingOn{Name: strings.TrimSpace(stripHeading(raw))}
-	path := ix.ResolveLink(linkTarget(raw))
-	if path == "" {
+	// Through q, not the pool: a task read holds its transaction's
+	// connection, and with no read pool that is the only one there is.
+	var path string
+	if err := q.QueryRow("SELECT MIN(path) FROM docnames WHERE name = ?", normalizeName(linkTarget(raw))).Scan(&path); err != nil || path == "" {
 		return who
 	}
-	if row, err := ix.GetDocMeta(path); err == nil {
+	if row, err := scanDocRow(q.QueryRow(docSelect+" WHERE d.path = ?", path)); err == nil {
 		who = WaitingOn{Name: row.Title, Path: row.Path, Type: row.Type}
 	}
 	return who
