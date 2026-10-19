@@ -183,7 +183,7 @@ func oldIndex(t *testing.T, version int, extra ...string) string {
 	defer db.Close()
 	stmts := []string{
 		"CREATE TABLE documents (path TEXT PRIMARY KEY, size INTEGER, sha256 TEXT)",
-		"CREATE TABLE tasks (id TEXT PRIMARY KEY)",
+		"CREATE TABLE tasks (id TEXT PRIMARY KEY, doc_path TEXT, line INTEGER, done INTEGER, completed_on TEXT)",
 		"CREATE TABLE task_links (task_id TEXT, target_norm TEXT)",
 		"CREATE TABLE embeddings (path TEXT)",
 		"INSERT INTO documents VALUES ('a.md', 10, 'abc')",

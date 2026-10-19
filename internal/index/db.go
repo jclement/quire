@@ -91,6 +91,7 @@ CREATE TABLE tasks (
 );
 CREATE INDEX tasks_doc ON tasks(doc_path);
 CREATE INDEX tasks_done_due ON tasks(done, due);
+CREATE INDEX tasks_done_completed ON tasks(done, completed_on DESC, doc_path, line);
 
 -- Wikilinks inside task text ("Chase [[Dan Roe]]"), used to roll tasks up
 -- onto person/project pages via the docnames join. ord is the link's
@@ -252,6 +253,11 @@ var lateIndexes = []string{
 	// reindex deletes a file's links by task: both are a full scan of
 	// task_links without this.
 	"CREATE INDEX IF NOT EXISTS task_links_task ON task_links(task_id)",
+	// Done tasks in the logbook's own order (newest first, then by file and
+	// line), so it reads its 200 rows straight off the index and stops, and
+	// the week review and calendar read one range of days, instead of each
+	// sorting every completed task.
+	"CREATE INDEX IF NOT EXISTS tasks_done_completed ON tasks(done, completed_on DESC, doc_path, line)",
 }
 
 func ensureIndexes(db *sql.DB) error {

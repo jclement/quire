@@ -380,7 +380,7 @@ func (ix *Index) Tasks(view TaskView, today, area string) ([]TaskRow, error) {
 		order = "t.doc_path, t.line"
 	case ViewLogbook:
 		where = "t.done = 1"
-		order = "t.completed_on DESC, t.doc_path LIMIT 200"
+		order = "t.completed_on DESC, t.doc_path, t.line LIMIT 200"
 	default:
 		return nil, fmt.Errorf("unknown task view %q", view)
 	}
@@ -486,7 +486,7 @@ func (ix *Index) TasksCompletedIn(from, to, area string) ([]TaskRow, error) {
 	args := append([]any{from, to}, areaArgs...)
 	tasks, err := ix.queryTasks(taskSelect+
 		" WHERE t.done = 1 AND t.completed_on != '' AND t.completed_on >= ? AND t.completed_on <= ?"+
-		areaWhere+" ORDER BY t.completed_on DESC, t.doc_path", args...)
+		areaWhere+" ORDER BY t.completed_on DESC, t.doc_path, t.line", args...)
 	if err != nil {
 		return nil, fmt.Errorf("tasks completed in %s..%s: %w", from, to, err)
 	}
