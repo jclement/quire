@@ -102,6 +102,7 @@ CREATE TABLE task_links (
 	ord         INTEGER NOT NULL DEFAULT -1
 );
 CREATE INDEX task_links_target ON task_links(target_norm);
+CREATE INDEX task_links_task ON task_links(task_id);
 
 CREATE VIRTUAL TABLE fts USING fts5(
 	path UNINDEXED, title, body, tags,
@@ -155,7 +156,7 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 		return nil, false, fmt.Errorf("reading schema version: %w", err)
 	}
 	if version == schemaVersion {
-		return db, false, nil
+		return db, false, ensureIndexes(db)
 	}
 	// v3 → v4 → v5 → v6 are additive; everything else in the file
 	// (embeddings above all, which cost money to rebuild) stays. Each step
@@ -178,7 +179,7 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 		if err := migrateV5ToV6(db); err != nil {
 			return nil, false, err
 		}
-		return db, false, nil
+		return db, false, ensureIndexes(db)
 	}
 
 	// Wrong or zero version: drop everything and rebuild. index.db is
@@ -187,6 +188,25 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 		return nil, false, err
 	}
 	return db, true, nil
+}
+
+// lateIndexes are indexes added after the tables they cover. An index holds
+// no information of its own, so adding one needs neither a schema version
+// bump nor a reindex: an existing index.db just gains it on the next open.
+var lateIndexes = []string{
+	// Every task read resolves its project through its own links, and every
+	// reindex deletes a file's links by task: both are a full scan of
+	// task_links without this.
+	"CREATE INDEX IF NOT EXISTS task_links_task ON task_links(task_id)",
+}
+
+func ensureIndexes(db *sql.DB) error {
+	for _, stmt := range lateIndexes {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("adding index: %w", err)
+		}
+	}
+	return nil
 }
 
 func migrateV3ToV4(db *sql.DB) error {

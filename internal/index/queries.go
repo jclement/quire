@@ -322,9 +322,13 @@ const taskSelect = `
 	SELECT t.id, t.doc_path, COALESCE(d.title, t.doc_path), COALESCE(d.type, ''), t.line, t.text, t.done,
 	       t.due, t.defer_date, t.completed_on, t.priority, t.waiting, t.waiting_since, t.waiting_on_raw, t.recur, t.raw_text, t.tags_json,
 	       COALESCE((
-	           SELECT MIN(n.path) FROM docnames n
+	           -- Driven from the task's own links through docnames_name.
+	           -- Written as "n.path IN (SELECT path FROM documents WHERE
+	           -- type = 'project')" the planner walked every project's names
+	           -- and re-scanned task_links for each: seconds per task.
+	           SELECT MIN(n.path) FROM docnames n JOIN documents pd ON pd.path = n.path
 	           WHERE n.name IN (SELECT tl.target_norm FROM task_links tl WHERE tl.task_id = t.id UNION SELECT t.project_norm)
-	             AND n.path IN (SELECT path FROM documents WHERE type = 'project')
+	             AND pd.type = 'project'
 	       ), '')
 	FROM tasks t LEFT JOIN documents d ON d.path = t.doc_path`
 
