@@ -598,25 +598,28 @@ func (ix *Index) DuplicateNames() ([]DuplicateName, error) {
 // ProjectsWithoutNextAction returns active project documents that no open
 // task belongs to. GTD's most useful single question, and the one a vault
 // of markdown cannot answer by looking.
+//
+// A task belongs to a project by sitting in it, by naming it as its
+// project, or by linking to it. Those three are gathered once into the set
+// of projects with something open; asked per project instead, as a
+// correlated NOT EXISTS, the OR between them scanned every open task for
+// every project (3.5 s on a 150-project vault).
 func (ix *Index) ProjectsWithoutNextAction(area string) ([]DocRow, error) {
 	areaWhere, areaArgs := areaClause(area)
 	rows, err := ix.reader().Query(docSelect+`
 		WHERE d.type = 'project'
 		  AND COALESCE(json_extract(d.frontmatter_json, '$.status'), 'active')
 		      NOT IN ('completed', 'archived', 'someday')
-		  AND NOT EXISTS (
-		    SELECT 1 FROM tasks t
-		    WHERE t.done = 0 AND (
-		      t.doc_path = d.path
-		      OR t.project_norm != '' AND t.project_norm IN (
-		        SELECT n.name FROM docnames n WHERE n.path = d.path
-		      )
-		      OR t.id IN (
-		        SELECT tl.task_id FROM task_links tl
-		        JOIN docnames n2 ON n2.name = tl.target_norm
-		        WHERE n2.path = d.path
-		      )
-		    )
+		  AND d.path NOT IN (
+		    SELECT t.doc_path FROM tasks t WHERE t.done = 0
+		    UNION
+		    SELECT n.path FROM tasks t JOIN docnames n ON n.name = t.project_norm
+		    WHERE t.done = 0 AND t.project_norm != ''
+		    UNION
+		    SELECT n.path FROM tasks t
+		    JOIN task_links tl ON tl.task_id = t.id
+		    JOIN docnames n ON n.name = tl.target_norm
+		    WHERE t.done = 0
 		  )`+areaWhere+`
 		ORDER BY d.mtime DESC`, areaArgs...)
 	if err != nil {

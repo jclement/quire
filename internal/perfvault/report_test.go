@@ -137,6 +137,7 @@ func TestPerfReport(t *testing.T) {
 		"/api/v1/areas",
 		"/api/v1/unwritten",
 		"/api/v1/decisions",
+		"/api/v1/weekly/" + isoWeek(perfToday),
 	}
 
 	n := 15
@@ -240,4 +241,9 @@ func currentSHA(s *service.Service, path string) string {
 		return ""
 	}
 	return f.SHA256
+}
+
+func isoWeek(t time.Time) string {
+	y, w := t.ISOWeek()
+	return fmt.Sprintf("%d-W%02d", y, w)
 }

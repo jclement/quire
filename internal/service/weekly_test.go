@@ -41,9 +41,16 @@ func TestWeekReviewComposesTheWeek(t *testing.T) {
 	writeVault(t, svc, map[string]string{
 		"notes/done.md": "# Done\n\n- [x] landed this week ✅ 2026-09-01\n- [x] landed long ago ✅ 2026-01-05\n" +
 			"- [ ] slipped 📅 2026-08-20\n- [ ] waiting on someone ⏳\n",
-		"projects/quiet.md":              "---\nstatus: active\n---\n# Quiet Project\n",
-		"projects/busy.md":               "---\nstatus: active\n---\n# Busy Project\n\n- [ ] something to do\n",
-		"projects/parked.md":             "---\nstatus: someday\n---\n# Parked Project\n",
+		"projects/quiet.md":  "---\nstatus: active\n---\n# Quiet Project\n",
+		"projects/busy.md":   "---\nstatus: active\n---\n# Busy Project\n\n- [ ] something to do\n",
+		"projects/parked.md": "---\nstatus: someday\n---\n# Parked Project\n",
+		// Fed from elsewhere: a note filed under it, and a task naming it.
+		"projects/filed.md":    "---\nstatus: active\n---\n# Filed Project\n",
+		"notes/filed-work.md":  "---\nproject: \"[[Filed Project]]\"\n---\n# Filed work\n\n- [ ] filed task\n",
+		"projects/linked.md":   "---\nstatus: active\n---\n# Linked Project\n",
+		"notes/linked-work.md": "# Linked work\n\n- [ ] push [[Linked Project]] along\n",
+		// Everything it had is done, so it has no next action.
+		"projects/finished.md":           "---\nstatus: active\n---\n# Finished Project\n\n- [x] all done ✅ 2026-08-01\n",
 		"meetings/2026-09-01-standup.md": "---\ndate: 2026-09-01T09:00\n---\n# Standup\n",
 	})
 
@@ -73,11 +80,15 @@ func TestWeekReviewComposesTheWeek(t *testing.T) {
 	// The one active project nothing open points at — not the busy one, and
 	// not the one deliberately parked as someday.
 	stalled := titles(week.Stalled)
-	if !strings.Contains(stalled, "Quiet Project") {
-		t.Errorf("stalled = %q, want the project with no next action", stalled)
+	for _, want := range []string{"Quiet Project", "Finished Project"} {
+		if !strings.Contains(stalled, want) {
+			t.Errorf("stalled = %q, want %s, which has no next action", stalled, want)
+		}
 	}
-	if strings.Contains(stalled, "Busy Project") || strings.Contains(stalled, "Parked Project") {
-		t.Errorf("stalled = %q", stalled)
+	for _, not := range []string{"Busy Project", "Parked Project", "Filed Project", "Linked Project"} {
+		if strings.Contains(stalled, not) {
+			t.Errorf("stalled = %q, should not include %s", stalled, not)
+		}
 	}
 	if s := titles(week.Meetings); !strings.Contains(s, "Standup") {
 		t.Errorf("meetings = %q", s)
