@@ -9,7 +9,7 @@ import "fmt"
 // PeopleWithEmail returns person documents whose frontmatter has an
 // email: key, as a string or a list (the service reads both shapes).
 func (ix *Index) PeopleWithEmail() ([]DocRow, error) {
-	rows, err := ix.DB.Query(docSelect + `
+	rows, err := ix.reader().Query(docSelect + `
 		WHERE d.type = 'person'
 		  AND json_extract(d.frontmatter_json, '$.email') IS NOT NULL
 		ORDER BY d.path`)

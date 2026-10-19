@@ -88,7 +88,7 @@ type AreaCount struct {
 
 // Areas returns every area in use with its document count, most-used first.
 func (ix *Index) Areas() ([]AreaCount, error) {
-	rows, err := ix.DB.Query(`SELECT area, COUNT(*) FROM documents WHERE area != '' GROUP BY area ORDER BY 2 DESC, area`)
+	rows, err := ix.reader().Query(`SELECT area, COUNT(*) FROM documents WHERE area != '' GROUP BY area ORDER BY 2 DESC, area`)
 	if err != nil {
 		return nil, fmt.Errorf("listing areas: %w", err)
 	}
@@ -200,7 +200,7 @@ func (ix *Index) ListDocuments(docType, titleQuery, area string, limit int) ([]D
 	}
 	args = append(args, limit)
 
-	rows, err := ix.DB.Query(docSelect+" "+where+" ORDER BY d.mtime DESC LIMIT ?", args...)
+	rows, err := ix.reader().Query(docSelect+" "+where+" ORDER BY d.mtime DESC LIMIT ?", args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing documents: %w", err)
 	}
@@ -210,14 +210,14 @@ func (ix *Index) ListDocuments(docType, titleQuery, area string, limit int) ([]D
 
 // GetDocMeta returns one document's indexed row, or sql.ErrNoRows.
 func (ix *Index) GetDocMeta(path string) (DocRow, error) {
-	row := ix.DB.QueryRow(docSelect+" WHERE d.path = ?", path)
+	row := ix.reader().QueryRow(docSelect+" WHERE d.path = ?", path)
 	return scanDocRow(row)
 }
 
 // Backlinks lists documents that link to the document at path, by any of the
 // names it answers to.
 func (ix *Index) Backlinks(path string) ([]DocRow, error) {
-	rows, err := ix.DB.Query(docSelect+`
+	rows, err := ix.reader().Query(docSelect+`
 		WHERE d.path IN (
 			SELECT DISTINCT l.src_path FROM links l
 			JOIN docnames n ON n.name = l.target_norm
@@ -234,7 +234,7 @@ func (ix *Index) Backlinks(path string) ([]DocRow, error) {
 // dangling). Ties break lexicographically for determinism.
 func (ix *Index) ResolveLink(raw string) string {
 	var path string
-	err := ix.DB.QueryRow("SELECT MIN(path) FROM docnames WHERE name = ?", normalizeName(raw)).Scan(&path)
+	err := ix.reader().QueryRow("SELECT MIN(path) FROM docnames WHERE name = ?", normalizeName(raw)).Scan(&path)
 	if err != nil {
 		return ""
 	}
@@ -245,7 +245,7 @@ func (ix *Index) ResolveLink(raw string) string {
 // (YYYY-MM-DD), ordered by that date (so times sort naturally).
 func (ix *Index) MeetingsOn(day, area string) ([]DocRow, error) {
 	areaWhere, areaArgs := areaClause(area)
-	rows, err := ix.DB.Query(docSelect+`
+	rows, err := ix.reader().Query(docSelect+`
 		WHERE d.type = 'meeting'
 		  AND json_extract(d.frontmatter_json, '$.date') LIKE ?`+areaWhere+`
 		ORDER BY json_extract(d.frontmatter_json, '$.date')`, append([]any{day + "%"}, areaArgs...)...)
@@ -259,7 +259,7 @@ func (ix *Index) MeetingsOn(day, area string) ([]DocRow, error) {
 // PeopleWithBirthdays returns person documents that declare a birthday in
 // frontmatter (any of YYYY-MM-DD or MM-DD; the service does the date math).
 func (ix *Index) PeopleWithBirthdays() ([]DocRow, error) {
-	rows, err := ix.DB.Query(docSelect + `
+	rows, err := ix.reader().Query(docSelect + `
 		WHERE d.type = 'person'
 		  AND json_extract(d.frontmatter_json, '$.birthday') IS NOT NULL`)
 	if err != nil {
@@ -272,7 +272,7 @@ func (ix *Index) PeopleWithBirthdays() ([]DocRow, error) {
 // DocsModifiedBetween returns documents whose mtime falls in [from, to),
 // oldest first — the input to the calendar month view.
 func (ix *Index) DocsModifiedBetween(from, to time.Time) ([]DocRow, error) {
-	rows, err := ix.DB.Query(docSelect+" WHERE d.mtime >= ? AND d.mtime < ? ORDER BY d.mtime",
+	rows, err := ix.reader().Query(docSelect+" WHERE d.mtime >= ? AND d.mtime < ? ORDER BY d.mtime",
 		from.Unix(), to.Unix())
 	if err != nil {
 		return nil, fmt.Errorf("documents modified between: %w", err)
@@ -284,7 +284,7 @@ func (ix *Index) DocsModifiedBetween(from, to time.Time) ([]DocRow, error) {
 // MeetingsBetween returns meetings whose frontmatter date falls on a day in
 // [fromDay, toDay] (inclusive, YYYY-MM-DD strings).
 func (ix *Index) MeetingsBetween(fromDay, toDay string) ([]DocRow, error) {
-	rows, err := ix.DB.Query(docSelect+`
+	rows, err := ix.reader().Query(docSelect+`
 		WHERE d.type = 'meeting'
 		  AND substr(COALESCE(json_extract(d.frontmatter_json, '$.date'), ''), 1, 10) BETWEEN ? AND ?
 		ORDER BY json_extract(d.frontmatter_json, '$.date')`, fromDay, toDay)
@@ -298,7 +298,7 @@ func (ix *Index) MeetingsBetween(fromDay, toDay string) ([]DocRow, error) {
 // TasksCompletedBetween counts completed tasks per day (YYYY-MM-DD → count)
 // across the given inclusive day range.
 func (ix *Index) TasksCompletedBetween(fromDay, toDay string) (map[string]int, error) {
-	rows, err := ix.DB.Query(`SELECT completed_on, COUNT(*) FROM tasks
+	rows, err := ix.reader().Query(`SELECT completed_on, COUNT(*) FROM tasks
 		WHERE done = 1 AND completed_on BETWEEN ? AND ? GROUP BY completed_on`, fromDay, toDay)
 	if err != nil {
 		return nil, fmt.Errorf("tasks completed between: %w", err)
@@ -384,7 +384,7 @@ func (ix *Index) Tasks(view TaskView, today, area string) ([]TaskRow, error) {
 	default:
 		return nil, fmt.Errorf("unknown task view %q", view)
 	}
-	rows, err := ix.DB.Query(taskSelect+" WHERE "+where+areaWhere+" ORDER BY "+order, append(args, areaArgs...)...)
+	rows, err := ix.reader().Query(taskSelect+" WHERE "+where+areaWhere+" ORDER BY "+order, append(args, areaArgs...)...)
 	if err != nil {
 		return nil, fmt.Errorf("task view %s: %w", view, err)
 	}
@@ -394,7 +394,7 @@ func (ix *Index) Tasks(view TaskView, today, area string) ([]TaskRow, error) {
 
 // TaskByID fetches a single task row.
 func (ix *Index) TaskByID(id string) (TaskRow, error) {
-	rows, err := ix.DB.Query(taskSelect+" WHERE t.id = ?", id)
+	rows, err := ix.reader().Query(taskSelect+" WHERE t.id = ?", id)
 	if err != nil {
 		return TaskRow{}, err
 	}
@@ -414,7 +414,7 @@ func (ix *Index) TaskByID(id string) (TaskRow, error) {
 // TasksMentioning returns open tasks *elsewhere* that name this document —
 // its own are already on the page, and listing them twice is noise.
 func (ix *Index) TasksMentioning(path string) ([]TaskRow, error) {
-	rows, err := ix.DB.Query(taskSelect+`
+	rows, err := ix.reader().Query(taskSelect+`
 		WHERE t.done = 0 AND t.doc_path != ? AND t.id IN (
 			SELECT tl.task_id FROM task_links tl
 			JOIN docnames n ON n.name = tl.target_norm
@@ -432,7 +432,7 @@ func (ix *Index) TasksMentioning(path string) ([]TaskRow, error) {
 // or sit on it; the who-rule then keeps only those it actually names, so a
 // task waiting on [[Dan]] that merely mentions Frances stays Dan's.
 func (ix *Index) WaitingOnDoc(path string) ([]TaskRow, error) {
-	rows, err := ix.DB.Query(taskSelect+`
+	rows, err := ix.reader().Query(taskSelect+`
 		WHERE t.done = 0 AND t.waiting = 1 AND (t.doc_path = ? OR t.id IN (
 			SELECT tl.task_id FROM task_links tl
 			JOIN docnames n ON n.name = tl.target_norm
@@ -460,7 +460,7 @@ func (ix *Index) WaitingOnDoc(path string) ([]TaskRow, error) {
 func (ix *Index) TasksCompletedIn(from, to, area string) ([]TaskRow, error) {
 	areaWhere, areaArgs := areaClause(area)
 	args := append([]any{from, to}, areaArgs...)
-	rows, err := ix.DB.Query(taskSelect+
+	rows, err := ix.reader().Query(taskSelect+
 		" WHERE t.done = 1 AND t.completed_on != '' AND t.completed_on >= ? AND t.completed_on <= ?"+
 		areaWhere+" ORDER BY t.completed_on DESC, t.doc_path", args...)
 	if err != nil {
@@ -474,7 +474,7 @@ func (ix *Index) TasksCompletedIn(from, to, area string) ([]TaskRow, error) {
 // overdue + due-today sections split by the caller).
 func (ix *Index) OpenTasksDue(day, area string) ([]TaskRow, error) {
 	areaWhere, areaArgs := areaClause(area)
-	rows, err := ix.DB.Query(taskSelect+" WHERE t.done = 0 AND t.due != '' AND t.due <= ?"+areaWhere+" ORDER BY t.due, t.priority = 0, t.priority", append([]any{day}, areaArgs...)...)
+	rows, err := ix.reader().Query(taskSelect+" WHERE t.done = 0 AND t.due != '' AND t.due <= ?"+areaWhere+" ORDER BY t.due, t.priority = 0, t.priority", append([]any{day}, areaArgs...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +487,7 @@ func (ix *Index) OpenTasksDue(day, area string) ([]TaskRow, error) {
 // text, so they share a content hash and only the ordinal suffix separates
 // them — the line is the only unambiguous handle.
 func (ix *Index) TaskAt(docPath string, line int) (TaskRow, error) {
-	rows, err := ix.DB.Query(taskSelect+" WHERE t.doc_path = ? AND t.line = ?", docPath, line)
+	rows, err := ix.reader().Query(taskSelect+" WHERE t.doc_path = ? AND t.line = ?", docPath, line)
 	if err != nil {
 		return TaskRow{}, err
 	}
@@ -518,7 +518,7 @@ type RecurrenceProblem struct {
 func (ix *Index) RecurrenceProblems() ([]RecurrenceProblem, error) {
 	// Stopped: completed, repeating, and no open task with the same text
 	// remains in the same document to carry it forward.
-	stopped, err := ix.DB.Query(taskSelect + `
+	stopped, err := ix.reader().Query(taskSelect + `
 		WHERE t.done = 1 AND t.recur != '' AND NOT EXISTS (
 			SELECT 1 FROM tasks o
 			WHERE o.done = 0 AND o.doc_path = t.doc_path AND o.text = t.text
@@ -545,7 +545,7 @@ func (ix *Index) RecurrenceProblems() ([]RecurrenceProblem, error) {
 
 	// Unparsed: the line carries 🔁 but the grammar matched nothing, so it
 	// has never repeated and never will.
-	bad, err := ix.DB.Query(taskSelect + `
+	bad, err := ix.reader().Query(taskSelect + `
 		WHERE t.recur = '' AND t.raw_text LIKE '%🔁%'
 		ORDER BY t.doc_path`)
 	if err != nil {
@@ -573,7 +573,7 @@ type DuplicateName struct {
 // the lowest path deterministically and silently, so the others cannot be
 // linked by that name at all.
 func (ix *Index) DuplicateNames() ([]DuplicateName, error) {
-	rows, err := ix.DB.Query(`
+	rows, err := ix.reader().Query(`
 		SELECT name, group_concat(path, char(10)) FROM (
 			SELECT DISTINCT name, path FROM docnames ORDER BY path
 		) GROUP BY name HAVING COUNT(*) > 1 ORDER BY name`)
@@ -597,7 +597,7 @@ func (ix *Index) DuplicateNames() ([]DuplicateName, error) {
 // of markdown cannot answer by looking.
 func (ix *Index) ProjectsWithoutNextAction(area string) ([]DocRow, error) {
 	areaWhere, areaArgs := areaClause(area)
-	rows, err := ix.DB.Query(docSelect+`
+	rows, err := ix.reader().Query(docSelect+`
 		WHERE d.type = 'project'
 		  AND COALESCE(json_extract(d.frontmatter_json, '$.status'), 'active')
 		      NOT IN ('completed', 'archived', 'someday')
@@ -641,7 +641,7 @@ func (ix *Index) UnwrittenLinks(limit int) ([]Unwritten, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := ix.DB.Query(`
+	rows, err := ix.reader().Query(`
 		SELECT l.target_norm, COUNT(*) AS refs,
 		       (SELECT l2.target_raw FROM links l2 WHERE l2.target_norm = l.target_norm LIMIT 1)
 		FROM links l
@@ -672,7 +672,7 @@ func (ix *Index) UnwrittenLinks(limit int) ([]Unwritten, error) {
 	// The referring documents, per name. One small query each: this list is
 	// short by construction and only read when someone opens the page.
 	for i := range out {
-		srcRows, err := ix.DB.Query(docSelect+`
+		srcRows, err := ix.reader().Query(docSelect+`
 			JOIN links l ON l.src_path = d.path
 			WHERE l.target_norm = ?
 			GROUP BY d.path ORDER BY d.mtime DESC LIMIT 5`, normalizeName(out[i].Name))
@@ -777,7 +777,7 @@ func (ix *Index) Search(query string, limit int, today string) ([]SearchHit, err
 		order = "fts.rank"
 	}
 
-	rows, err := ix.DB.Query(fmt.Sprintf(
+	rows, err := ix.reader().Query(fmt.Sprintf(
 		"SELECT d.path, d.type, d.title, %s FROM documents d %s %s ORDER BY %s LIMIT %d",
 		snippet, join, where, order, limit), args...)
 	if err != nil {
@@ -851,7 +851,7 @@ func (ix *Index) searchTasks(terms []string, tag, due, area, today, after, befor
 		order = "t.completed_on DESC"
 	}
 
-	rows, err := ix.DB.Query(fmt.Sprintf(`
+	rows, err := ix.reader().Query(fmt.Sprintf(`
 		SELECT t.doc_path, t.text, COALESCE(d.title, t.doc_path)
 		FROM tasks t LEFT JOIN documents d ON d.path = t.doc_path
 		WHERE %s ORDER BY %s LIMIT %d`, where, order, limit), args...)
@@ -1018,7 +1018,7 @@ func (ix *Index) resolveProjects(tasks []TaskRow, projectNorm []string) error {
 		if len(values) > 0 {
 			names += " UNION SELECT column1, column2 FROM (VALUES " + strings.Join(values, ", ") + ")"
 		}
-		rows, err := ix.DB.Query(`
+		rows, err := ix.reader().Query(`
 			SELECT x.id, MIN(n.path)
 			FROM (`+names+`) x
 			JOIN docnames n ON n.name = x.name
@@ -1065,7 +1065,7 @@ func (ix *Index) resolveWaitingOn(tasks []TaskRow) error {
 		return nil
 	}
 	marks := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-	rows, err := ix.DB.Query(`
+	rows, err := ix.reader().Query(`
 		SELECT tl.task_id, tl.target_raw, COALESCE(d.path, ''), COALESCE(d.type, ''), COALESCE(d.title, '')
 		FROM task_links tl
 		LEFT JOIN documents d ON d.path = (SELECT MIN(n.path) FROM docnames n WHERE n.name = tl.target_norm)
@@ -1145,7 +1145,7 @@ type TagCount struct {
 // first. Tags come from both body #tags and frontmatter tags:, already
 // merged at index time.
 func (ix *Index) Tags() ([]TagCount, error) {
-	rows, err := ix.DB.Query(`SELECT tag, COUNT(DISTINCT path) AS n FROM tags GROUP BY tag ORDER BY n DESC, tag ASC`)
+	rows, err := ix.reader().Query(`SELECT tag, COUNT(DISTINCT path) AS n FROM tags GROUP BY tag ORDER BY n DESC, tag ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("listing tags: %w", err)
 	}
@@ -1168,7 +1168,7 @@ func (ix *Index) DailyNotesBefore(date string, limit int) ([]DocRow, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 30
 	}
-	rows, err := ix.DB.Query(docSelect+` WHERE d.type = 'daily' AND d.path < ? ORDER BY d.path DESC LIMIT ?`,
+	rows, err := ix.reader().Query(docSelect+` WHERE d.type = 'daily' AND d.path < ? ORDER BY d.path DESC LIMIT ?`,
 		"daily/"+date+".md", limit)
 	if err != nil {
 		return nil, fmt.Errorf("listing daily notes: %w", err)

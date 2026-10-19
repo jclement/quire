@@ -7,7 +7,9 @@ package index
 import (
 	"database/sql"
 	"fmt"
+	"runtime"
 
+	"github.com/jclement/quire/internal/vault"
 	_ "modernc.org/sqlite"
 )
 
@@ -142,10 +144,10 @@ CREATE INDEX decision_links_target ON decision_links(target_norm);
 // scratch whenever the stored version doesn't match. Returns needsReindex
 // when the caller must run a full vault scan to repopulate.
 func Open(path string) (db *sql.DB, needsReindex bool, err error) {
-	// A single connection avoids SQLITE_BUSY entirely: the indexer goroutine
-	// and request handlers share it, and personal-vault query volume doesn't
-	// need parallelism.
-	db, err = sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
+	// A single writing connection avoids SQLITE_BUSY between writers: the
+	// indexer goroutine, request handlers' writes and the embedder share it.
+	// Reads go through OpenReader's pool instead.
+	db, err = sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=mmap_size(268435456)")
 	if err != nil {
 		return nil, false, fmt.Errorf("opening index db: %w", err)
 	}
@@ -189,6 +191,58 @@ func Open(path string) (db *sql.DB, needsReindex bool, err error) {
 	}
 	return db, true, nil
 }
+
+// OpenIndex opens index.db at path (Open) together with its read pool
+// (OpenReader) as one Index over v.
+func OpenIndex(path string, v *vault.Vault) (ix *Index, needsReindex bool, err error) {
+	db, needsReindex, err := Open(path)
+	if err != nil {
+		return nil, false, err
+	}
+	read, err := OpenReader(path, ReaderConns())
+	if err != nil {
+		db.Close()
+		return nil, false, err
+	}
+	return &Index{DB: db, Read: read, Vault: v}, needsReindex, nil
+}
+
+// Close closes the read pool and the writer.
+func (ix *Index) Close() error {
+	if ix.Read != nil {
+		ix.Read.Close()
+	}
+	return ix.DB.Close()
+}
+
+// OpenReader opens a pool of read-only connections to the index.db that
+// Open created. WAL lets them all read while the one writer commits; each
+// statement reads the last committed state as it starts, so a read issued
+// after a write returns sees that write. query_only makes any write through
+// the pool an error rather than a second writer racing the first.
+//
+// mmap_size (here and on the writer): in WAL mode each commit resets every
+// other connection's page cache, and re-reading pages through pread is slow
+// under modernc; through a mapping it is a memory read (~15% off the
+// heaviest pages).
+func OpenReader(path string, conns int) (*sql.DB, error) {
+	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=query_only(1)&_pragma=mmap_size(268435456)")
+	if err != nil {
+		return nil, fmt.Errorf("opening index db for reading: %w", err)
+	}
+	db.SetMaxOpenConns(conns)
+	// Keep them all: a closed connection takes its page cache with it.
+	db.SetMaxIdleConns(conns)
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("opening index db for reading: %w", err)
+	}
+	return db, nil
+}
+
+// ReaderConns is the read pool's size: enough for a page's requests at once
+// on a small machine, bounded so a big one does not hold dozens of caches.
+func ReaderConns() int { return min(max(runtime.GOMAXPROCS(0), 4), 8) }
 
 // lateIndexes are indexes added after the tables they cover. An index holds
 // no information of its own, so adding one needs neither a schema version

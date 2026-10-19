@@ -211,7 +211,7 @@ func (ix *Index) Decisions(f DecisionFilter) ([]DecisionRow, error) {
 	}
 	args = append(args, limit)
 
-	rows, err := ix.DB.Query(`
+	rows, err := ix.reader().Query(`
 		SELECT dc.id, dc.kind, dc.doc_path, d.title, d.type, dc.line, dc.text, dc.date, d.area
 		FROM decisions dc JOIN documents d ON d.path = dc.doc_path
 		`+where+`
@@ -253,7 +253,7 @@ func (ix *Index) attachDecisionEntities(decisions []DecisionRow) error {
 		ids = append(ids, d.ID)
 	}
 	marks := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-	rows, err := ix.DB.Query(`
+	rows, err := ix.reader().Query(`
 		SELECT r.decision_id, d.path, d.title, d.type FROM (
 			SELECT dl.decision_id, MIN(n.path) AS path
 			FROM decision_links dl JOIN docnames n ON n.name = dl.target_norm

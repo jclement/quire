@@ -55,7 +55,7 @@ type LikelyMatch struct {
 // point at: people and companies. Notes and meetings are not called by
 // nicknames.
 func (ix *Index) MatchCandidates() ([]MatchCandidate, error) {
-	rows, err := ix.DB.Query(`SELECT path, type, title FROM documents
+	rows, err := ix.reader().Query(`SELECT path, type, title FROM documents
 		WHERE type IN ('person', 'company') ORDER BY title COLLATE NOCASE, path`)
 	if err != nil {
 		return nil, fmt.Errorf("listing match candidates: %w", err)

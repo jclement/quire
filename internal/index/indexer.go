@@ -26,13 +26,29 @@ type Event struct {
 
 // Index owns index.db and knows how to (re)build it from a Vault.
 type Index struct {
-	DB    *sql.DB
+	// DB is the one connection everything that writes goes through: the
+	// indexer, area propagation, embeddings, and any read that must sit
+	// inside a write transaction.
+	DB *sql.DB
+	// Read, when set, is a pool of read-only connections (OpenReader) that
+	// the query methods use, so requests read in parallel — with each
+	// other, and with a write in progress (WAL) — instead of queueing on
+	// DB. Nil means read through DB.
+	Read  *sql.DB
 	Vault *vault.Vault
 	// Notify, when set, receives an Event after each applied change.
 	Notify func(Event)
 	// batching suppresses per-file area propagation during FullScan, which
 	// runs it once at the end instead.
 	batching bool
+}
+
+// reader is the pool the query methods read through.
+func (ix *Index) reader() *sql.DB {
+	if ix.Read != nil {
+		return ix.Read
+	}
+	return ix.DB
 }
 
 func (ix *Index) notify(ev Event) {

@@ -19,12 +19,12 @@ func newTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, _, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	ix, _, err := index.OpenIndex(filepath.Join(t.TempDir(), "index.db"), v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
-	s := New(v, &index.Index{DB: db, Vault: v})
+	t.Cleanup(func() { ix.Close() })
+	s := New(v, ix)
 	s.Now = func() time.Time { return fixedNow }
 	return s
 }

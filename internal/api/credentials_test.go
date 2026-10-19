@@ -21,18 +21,18 @@ func newCredentialServer(t *testing.T) *httptest.Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, _, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	ix, _, err := index.OpenIndex(filepath.Join(t.TempDir(), "index.db"), v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { ix.Close() })
 	store, err := auth.Open(filepath.Join(t.TempDir(), "auth.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { store.DB.Close() })
 
-	svc := service.New(v, &index.Index{DB: db, Vault: v})
+	svc := service.New(v, ix)
 	svc.Now = func() time.Time { return time.Date(2026, 9, 1, 10, 0, 0, 0, time.Local) }
 	s := &Server{Service: svc, Events: NewBroadcaster(), Auth: store, Version: "test"}
 	mux := http.NewServeMux()

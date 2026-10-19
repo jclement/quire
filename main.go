@@ -107,11 +107,10 @@ func setup() (config.Config, *service.Service, error) {
 	if err != nil {
 		return config.Config{}, nil, err
 	}
-	db, _, err := index.Open(filepath.Join(cfg.StateDir(), "index.db"))
+	ix, _, err := index.OpenIndex(filepath.Join(cfg.StateDir(), "index.db"), v)
 	if err != nil {
 		return config.Config{}, nil, err
 	}
-	ix := &index.Index{DB: db, Vault: v}
 	svc := service.New(v, ix)
 	svc.Settings = settings.Open(filepath.Join(cfg.StateDir(), "settings.json"))
 	return cfg, svc, nil

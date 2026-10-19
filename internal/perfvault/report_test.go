@@ -45,11 +45,10 @@ func openPerfEnv(t *testing.T, dir string) perfEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, _, err := index.Open(filepath.Join(dir, "index.db"))
+	ix, _, err := index.OpenIndex(filepath.Join(dir, "index.db"), v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ix := &index.Index{DB: db, Vault: v}
 	start := time.Now()
 	if err := ix.FullScan(); err != nil {
 		t.Fatal(err)
@@ -60,7 +59,7 @@ func openPerfEnv(t *testing.T, dir string) perfEnv {
 	s := &api.Server{Service: svc, Events: api.NewBroadcaster(), Version: "perf"}
 	mux := http.NewServeMux()
 	s.Routes(mux)
-	return perfEnv{svc: svc, handler: mux, close: func() { db.Close() }}
+	return perfEnv{svc: svc, handler: mux, close: func() { ix.Close() }}
 }
 
 func (e perfEnv) get(t *testing.T, url string) time.Duration {

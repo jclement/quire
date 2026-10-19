@@ -31,12 +31,12 @@ func connectWithService(t *testing.T) (*sdk.ClientSession, *service.Service) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, _, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	ix, _, err := index.OpenIndex(filepath.Join(t.TempDir(), "index.db"), v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
-	svc := service.New(v, &index.Index{DB: db, Vault: v})
+	t.Cleanup(func() { ix.Close() })
+	svc := service.New(v, ix)
 	svc.Now = func() time.Time { return time.Date(2026, 9, 1, 10, 0, 0, 0, time.Local) }
 
 	server := newServer(svc, "test", allowAll, auth.OwnerPrincipal(), nil)
@@ -155,12 +155,12 @@ func TestOwnerGuidanceReachesInstructions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, _, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	ix, _, err := index.OpenIndex(filepath.Join(t.TempDir(), "index.db"), v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
-	svc := service.New(v, &index.Index{DB: db, Vault: v})
+	t.Cleanup(func() { ix.Close() })
+	svc := service.New(v, ix)
 
 	connect := func() *sdk.InitializeResult {
 		t.Helper()
