@@ -537,6 +537,24 @@ the loopback `none` mode); an agent gets a 403 saying so, and the attempt is log
 `quire backup [file]` writes a tar.gz of the vault + auth.db (snapshotted safely) +
 config; restore by extracting into an empty data dir and running `quire reindex`.
 
+### Measuring performance
+
+`internal/perfvault` generates a deterministic synthetic vault (4,680 documents
+and 20k tasks at scale 1; scale 2 is DESIGN's 10k-document budget) and a report
+that times every main endpoint, each page's requests fired together, and a write,
+idle and while a writer re-indexes in the background:
+
+```sh
+QUIRE_PERF=1 go test ./internal/perfvault -run TestPerfReport -v              # scale 1
+QUIRE_PERF=1 QUIRE_PERF_SCALE=2 go test ./internal/perfvault -run TestPerfReport -v
+QUIRE_PERF=1 QUIRE_PERF_ONLY='/api/v1/documents/{person}' QUIRE_PERF_N=100 \
+  go test ./internal/perfvault -run TestPerfReport -cpuprofile cpu.out       # one endpoint, profiled
+```
+
+The vault and its index are cached under `$TMPDIR/quire-perf-x<scale>`
+(`QUIRE_PERF_DIR` overrides); delete it to time a cold full scan. Without
+`QUIRE_PERF` the test skips, so `mise run test` never pays for it.
+
 ### Email
 
 Settings shows what is configured and has **Send test email**: it sends
