@@ -7,15 +7,16 @@ import { useEffect } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { DocEvent } from "./types.ts";
 import { openDocEventStream } from "./docEvents.ts";
+import { batchDocEvents } from "./eventBatch.ts";
 import { queryKeys } from "./queries.ts";
 
-function invalidateForDocEvent(
+function invalidateForDocEvents(
   queryClient: QueryClient,
-  event: DocEvent,
+  paths: string[],
 ): void {
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.document(event.path),
-  });
+  for (const path of paths) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.document(path) });
+  }
   // Lists, search results, task views, Today, and the month calendar can all
   // reference any doc; invalidation is cheap (refetch only happens for mounted
   // queries).
@@ -41,12 +42,22 @@ function invalidateForDocEvent(
 export function useDocEvents(): void {
   const queryClient = useQueryClient();
 
-  useEffect(
-    () =>
-      openDocEventStream({
-        onEvent: (event) => invalidateForDocEvent(queryClient, event),
-        onResync: () => void queryClient.invalidateQueries(),
-      }),
-    [queryClient],
-  );
+  useEffect(() => {
+    // A burst of events (an agent's edits, a git pull) is one round of
+    // refetches, not one per event — see eventBatch.ts.
+    const batch = batchDocEvents((paths) =>
+      invalidateForDocEvents(queryClient, paths),
+    );
+    const stop = openDocEventStream({
+      onEvent: (event: DocEvent) => batch.push(event.path),
+      onResync: () => {
+        batch.cancel();
+        void queryClient.invalidateQueries();
+      },
+    });
+    return () => {
+      stop();
+      batch.cancel();
+    };
+  }, [queryClient]);
 }
