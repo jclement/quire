@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/jclement/quire/internal/markdown"
@@ -77,11 +78,14 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 	}
 	defer tx.Rollback()
 
+	names := docNames(rel, title, fm)
+	inputs := areaInputs(docType, area, string(fmJSON), names)
+
 	// Inside the transaction, so a concurrent index of the same path cannot
 	// slip between the check and the inserts.
-	var known bool
-	if err := tx.QueryRow("SELECT EXISTS (SELECT 1 FROM documents WHERE path = ?)", rel).Scan(&known); err != nil {
-		return false, fmt.Errorf("checking %s: %w", rel, err)
+	prev, known, err := previousAreaRow(tx, rel)
+	if err != nil {
+		return false, err
 	}
 	if known {
 		if err := deleteDocRows(tx, rel); err != nil {
@@ -89,14 +93,25 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 		}
 	}
 
-	_, err = tx.Exec(`INSERT INTO documents (path, type, title, mtime, size, sha256, frontmatter_json, area, area_explicit)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		rel, string(docType), title, f.ModTime.Unix(), len(f.Raw), f.SHA256, string(fmJSON), area, area)
+	// When nothing area propagation reads has changed — the usual case: a
+	// task ticked, a line appended — every effective area is what it was,
+	// this document's included, so carry its row's over and skip the
+	// whole-vault recompute (tens of milliseconds at a few thousand
+	// documents, holding the connection every reader is waiting for).
+	effective, from := area, ""
+	propagate := !known || prev.inputs != inputs
+	if !propagate {
+		effective, from = prev.area, prev.from
+	}
+
+	_, err = tx.Exec(`INSERT INTO documents (path, type, title, mtime, size, sha256, frontmatter_json, area, area_explicit, area_from)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		rel, string(docType), title, f.ModTime.Unix(), len(f.Raw), f.SHA256, string(fmJSON), effective, area, from)
 	if err != nil {
 		return false, fmt.Errorf("inserting document %s: %w", rel, err)
 	}
 
-	if err := insertDocNames(tx, rel, title, fm); err != nil {
+	if err := insertDocNames(tx, rel, names); err != nil {
 		return false, err
 	}
 	for _, l := range doc.Links {
@@ -144,7 +159,7 @@ func (ix *Index) IndexFile(rel string) (bool, error) {
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("committing index of %s: %w", rel, err)
 	}
-	if !ix.batching {
+	if !ix.batching && propagate {
 		if err := ix.PropagateAreas(); err != nil {
 			return false, err
 		}
@@ -265,7 +280,17 @@ func deleteDocRows(tx *sql.Tx, rel string) error {
 // insertDocNames records every name this document answers to for wikilink
 // resolution: path, path-sans-extension, filename stem, lowered title, slug
 // of title, and any frontmatter aliases.
-func insertDocNames(tx *sql.Tx, rel, title string, fm map[string]any) error {
+func insertDocNames(tx *sql.Tx, rel string, names []string) error {
+	for _, n := range names {
+		if _, err := tx.Exec("INSERT INTO docnames (path, name) VALUES (?, ?)", rel, n); err != nil {
+			return fmt.Errorf("inserting docname for %s: %w", rel, err)
+		}
+	}
+	return nil
+}
+
+// docNames is every name the document answers to, sorted.
+func docNames(rel, title string, fm map[string]any) []string {
 	stem := strings.TrimSuffix(path.Base(rel), ".md")
 	names := map[string]struct{}{
 		normalizeName(rel): {},
@@ -278,12 +303,61 @@ func insertDocNames(tx *sql.Tx, rel, title string, fm map[string]any) error {
 		names[normalizeName(a)] = struct{}{}
 	}
 	delete(names, "")
+	out := make([]string, 0, len(names))
 	for n := range names {
-		if _, err := tx.Exec("INSERT INTO docnames (path, name) VALUES (?, ?)", rel, n); err != nil {
-			return fmt.Errorf("inserting docname for %s: %w", rel, err)
-		}
+		out = append(out, n)
 	}
-	return nil
+	sort.Strings(out)
+	return out
+}
+
+// areaInputs is everything of one document that PropagateAreas reads: its
+// type, explicit area, the names it answers to (what other documents'
+// links resolve to), and its inherit keys' values. Two equal fingerprints
+// mean the same propagation. fmJSON rather than the parsed YAML, so the
+// stored row and a fresh parse compare alike.
+func areaInputs(docType vault.DocType, explicit, fmJSON string, names []string) string {
+	var fm map[string]any
+	_ = json.Unmarshal([]byte(fmJSON), &fm)
+	parts := []string{string(docType), explicit, strings.Join(names, "\x00")}
+	for _, key := range inheritKeys[docType] {
+		parts = append(parts, strings.Join(stringList(fm[key]), "\x00"))
+	}
+	return strings.Join(parts, "\x01")
+}
+
+type areaRow struct{ inputs, area, from string }
+
+// previousAreaRow is rel's current area inputs and effective area; known is
+// false when the index has no row for it.
+func previousAreaRow(tx *sql.Tx, rel string) (row areaRow, known bool, err error) {
+	var typ, explicit, fmJSON string
+	err = tx.QueryRow("SELECT type, area_explicit, frontmatter_json, area, area_from FROM documents WHERE path = ?", rel).
+		Scan(&typ, &explicit, &fmJSON, &row.area, &row.from)
+	if err == sql.ErrNoRows {
+		return areaRow{}, false, nil
+	}
+	if err != nil {
+		return areaRow{}, false, fmt.Errorf("checking %s: %w", rel, err)
+	}
+	var names []string
+	rows, err := tx.Query("SELECT name FROM docnames WHERE path = ? ORDER BY name", rel)
+	if err != nil {
+		return areaRow{}, false, fmt.Errorf("checking %s: %w", rel, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return areaRow{}, false, err
+		}
+		names = append(names, n)
+	}
+	if err := rows.Err(); err != nil {
+		return areaRow{}, false, err
+	}
+	row.inputs = areaInputs(vault.DocType(typ), explicit, fmJSON, names)
+	return row, true, nil
 }
 
 // entityKeys are the frontmatter keys whose links a task inherits from the

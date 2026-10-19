@@ -366,6 +366,39 @@ func TestAreaInheritance(t *testing.T) {
 		}
 	}
 
+	// Body edits change nothing propagation reads, so IndexFile carries the
+	// inherited areas over instead of recomputing them: they must come out
+	// exactly as a full recompute would.
+	write("notes/plan.md", "---\ntitle: Plan\npeople: [\"[[Sarah Chen]]\"]\n---\n# Plan\n\n- [ ] new task\n")
+	write("people/sarah.md", "---\ntitle: Sarah Chen\ncompany: \"[[Acme]]\"\n---\n# Sarah Chen\n\nMet at the offsite.\n")
+	for _, rel := range []string{"notes/plan.md", "people/sarah.md"} {
+		if _, err := ix.IndexFile(rel); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if area, from := get("notes/plan.md"); area != "work" || from != "people/sarah.md" {
+		t.Errorf("body edit lost the note's inherited area: %q from %q", area, from)
+	}
+	if area, from := get("people/sarah.md"); area != "work" || from != "companies/acme.md" {
+		t.Errorf("body edit lost the person's inherited area: %q from %q", area, from)
+	}
+	// A rename changes the names links resolve through, so it does
+	// propagate: "[[Sarah Chen]]" stops resolving and the note loses its area.
+	write("people/sarah.md", "---\ntitle: Sarah Lee\ncompany: \"[[Acme]]\"\n---\n# Sarah Lee\n")
+	if _, err := ix.IndexFile("people/sarah.md"); err != nil {
+		t.Fatal(err)
+	}
+	if area, _ := get("notes/plan.md"); area != "" {
+		t.Errorf("note should lose its area when its person is renamed away: %q", area)
+	}
+	write("people/sarah.md", "---\ntitle: Sarah Chen\ncompany: \"[[Acme]]\"\n---\n# Sarah Chen\n")
+	if _, err := ix.IndexFile("people/sarah.md"); err != nil {
+		t.Fatal(err)
+	}
+	if area, _ := get("notes/plan.md"); area != "work" {
+		t.Errorf("note should regain its area: %q", area)
+	}
+
 	// Re-filing the company re-files everyone downstream.
 	write("companies/acme.md", "---\ntitle: Acme\narea: personal\n---\n# Acme\n")
 	if _, err := ix.IndexFile("companies/acme.md"); err != nil {
