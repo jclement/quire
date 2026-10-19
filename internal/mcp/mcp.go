@@ -60,6 +60,8 @@ Working rules:
   whole file, so it must carry the base_sha256 from a get_document you just
   made; a stale hash is rejected rather than clobbering concurrent edits.
   To take lines out of a note, use remove_lines rather than rewriting it.
+- A project's status is planned, active, hold, complete or cancelled; set it
+  with set_frontmatter (status), which also stamps the closing date.
 - Relationships are wikilinks: [[Sarah Chen]] in prose, or frontmatter keys
   (company, people, project). Both are indexed, so either creates a backlink.
 - Tasks are markdown checkboxes with an emoji grammar: 📅 due, 🛫 defer,
@@ -193,7 +195,7 @@ func newServer(svc *service.Service, version string, allows func(string) bool, p
 			Description: "Turn a task that is really a note — feedback, an idea, something someone said — into a note document: the note is titled from title (default: the task's first eight words), its body is the task's text, it files under the source document's area, and the task's line becomes a plain bullet linking it. Use it when processing the inbox finds a checkbox with nothing to do; it is how that item leaves the inbox without being faked done."},
 			t.taskToNote)
 		sdk.AddTool(s, &sdk.Tool{Name: "set_frontmatter", Annotations: destructive,
-			Description: "Set frontmatter fields on a document (status on a project, role or email on a person, tags on anything) surgically, leaving the body untouched. Pass a JSON object of key → value; a null value removes the key."},
+			Description: "Set frontmatter fields on a document (status on a project, role or email on a person, tags on anything) surgically, leaving the body untouched. Pass a JSON object of key → value; a null value removes the key. A project's status is one of planned, active, hold, complete, cancelled (synonyms like done or waiting are written as the canonical word); closing one stamps completed: or cancelled: with today's date, reopening removes it, and rank orders it within its column on the Projects board."},
 			t.setFrontmatter)
 	}
 

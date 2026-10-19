@@ -285,6 +285,25 @@ that names it — "what am I still owed about Acme"), **Linked from**
 (backlinks), and **Similar** when semantic search is on. Agents get the same
 rollup in one call through the `person_context` tool.
 
+### Projects
+
+A project is **planned**, **active**, **on hold**, **complete** or
+**cancelled** — the `status:` chip on its page sets it. Closing one writes
+`completed:` or `cancelled:` with the date, the way a task gets ✅ or ❌, and
+reopening it takes that away. Older words (`someday`, `waiting`, `completed`,
+`archived`, `done`…) are read as the nearest status; the file is only rewritten
+the next time you set one.
+
+Projects can be a list or a **board** (the toggle is remembered per device):
+a column per status, a card per project with its company, due date (red when
+past) and tags. Drag a card across columns to change its status, or up and
+down to order the column — the order is a `rank:` in the project's
+frontmatter, so it travels with the file. Complete and Cancelled show what
+closed in the last 15 days, with the rest behind an "N older" row; any column
+folds to a thin strip that still takes drops (Cancelled starts folded). On a
+phone, rest a finger on a card to pick it up; with a keyboard, Space picks up
+and drops and the arrows move.
+
 ### Tasks: waiting, someday, triage
 
 `⏳ 2026-09-20` means waiting since the 20th; a bare `⏳` still works, with no

@@ -394,7 +394,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <NavSections />
         </aside>
         <main className="min-w-0 flex-1 overflow-y-auto print:overflow-y-visible">
-          <div className="mx-auto flex min-h-full max-w-4xl flex-col px-4 pt-4 pb-20 md:px-6 md:pb-4 print:block print:min-h-0 print:max-w-none print:p-0">
+          <div className="mx-auto flex min-h-full max-w-4xl flex-col has-[[data-wide]]:max-w-7xl px-4 pt-4 pb-20 md:px-6 md:pb-4 print:block print:min-h-0 print:max-w-none print:p-0">
             <div className="flex-1">{children}</div>
           </div>
         </main>

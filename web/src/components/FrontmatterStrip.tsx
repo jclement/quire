@@ -29,7 +29,8 @@ import {
   type StripSync,
   useDefaultArea,
 } from "../api/queries.ts";
-import type { Document } from "../api/types.ts";
+import type { Document, ProjectStatus } from "../api/types.ts";
+import { PROJECT_STATUSES, STATUS_INFO } from "../lib/projects.ts";
 import { docHref, DOC_TYPE_INFO } from "../lib/docs.ts";
 import {
   linkKeysFor,
@@ -37,6 +38,7 @@ import {
   resolvedTargets,
   type LinkKey,
 } from "../lib/entityLinks.ts";
+import { formatShortDate, todayISO } from "../lib/dates.ts";
 import { noAutofill } from "../lib/noAutofill.ts";
 import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
 
@@ -60,9 +62,16 @@ export function FrontmatterStrip({
   // Everything else stays read-only: title is the heading, and a key this
   // type doesn't declare (a tag list, a due date) isn't a relationship.
   // Tags have their own chips; the area has its badge.
+  // A project's status has its own chip, which also shows the date it
+  // closed; its board rank is the board's business.
+  const projectKeys = doc.project ? PROJECT_KEYS : NO_KEYS;
   const entries = Object.entries(doc.frontmatter).filter(
     ([key]) =>
-      key !== "title" && key !== "tags" && key !== "area" && !editable.has(key),
+      key !== "title" &&
+      key !== "tags" &&
+      key !== "area" &&
+      !editable.has(key) &&
+      !projectKeys.has(key),
   );
   const areasEnabled = useAreasEnabled();
   const showArea = areasEnabled && doc.type !== "daily";
@@ -78,6 +87,7 @@ export function FrontmatterStrip({
 
   return (
     <div className="mb-3 flex flex-wrap items-start gap-1.5 border-b border-border pb-3">
+      {doc.project ? <StatusChip doc={doc} sync={sync} /> : null}
       {showArea ? <AreaChip doc={doc} sync={sync} /> : null}
       <TagChips
         doc={doc}
@@ -110,11 +120,15 @@ export function FrontmatterStrip({
   );
 }
 
+const PROJECT_KEYS = new Set(["status", "completed", "cancelled", "rank"]);
+const NO_KEYS = new Set<string>();
+
 /** The shell every property shares — one dense bordered pill. On paper the
  * pill dissolves: the values are worth printing, the chrome around them is
- * not. */
+ * not. min-h is the height of a chip with a button in it, so a read-only
+ * value (status, due) lines up with tags and links beside it. */
 const CHIP_CLASSES =
-  "inline-flex items-center gap-1 rounded border border-border bg-raised px-1.5 py-0.5 font-mono text-[10px] print:rounded-none print:border-0 print:bg-transparent print:px-0";
+  "inline-flex min-h-[22px] items-center gap-1 rounded border border-border bg-raised px-1.5 py-0.5 font-mono text-[10px] print:rounded-none print:border-0 print:bg-transparent print:px-0";
 
 function formatFrontmatterValue(value: unknown): string {
   if (Array.isArray(value)) return value.map(String).join(", ");
@@ -428,6 +442,100 @@ function AreaChip({ doc, sync }: { doc: Document; sync?: StripSync }) {
           }}
           onClose={() => setOpen(false)}
         />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A project's status, as a badge in its colour with the date it closed;
+ * clicking opens the five statuses. Setting one goes through the same
+ * frontmatter write as everything else here, which is where the server
+ * stamps or clears completed:/cancelled:.
+ */
+function StatusChip({ doc, sync }: { doc: Document; sync?: StripSync }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const status = doc.project?.status ?? "active";
+  const info = STATUS_INFO[status];
+  const setStatus = useMutation({
+    mutationFn: async (next: ProjectStatus) => {
+      await sync?.before();
+      return api.setFrontmatter(doc.path, { status: next });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.document(doc.path), updated);
+      sync?.after(updated);
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+    },
+  });
+  const closed = doc.project?.closed;
+  return (
+    <div className="relative flex">
+      <button
+        type="button"
+        aria-label="Project status"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        title="Change this project's status"
+        disabled={setStatus.isPending}
+        onClick={() => setOpen(!open)}
+        className={`${CHIP_CLASSES} h-[22px] cursor-pointer hover:bg-hover disabled:opacity-60`}
+        style={{ borderColor: areaColorVar(info.color) }}
+      >
+        <span className="text-muted">status:</span>
+        <AreaDot color={info.color} />
+        <span className="text-heading">{info.label.toLowerCase()}</span>
+        {closed ? (
+          <span className="text-muted">
+            · {formatShortDate(closed, todayISO())}
+          </span>
+        ) : null}
+      </button>
+      {open ? (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            aria-hidden="true"
+            onClick={() => setOpen(false)}
+          />
+          <ul
+            role="listbox"
+            aria-label="Choose status"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.stopPropagation();
+                setOpen(false);
+              }
+            }}
+            className="absolute top-full left-0 z-20 mt-1 w-40 rounded border border-border bg-raised py-1 font-sans shadow-lg"
+          >
+            {PROJECT_STATUSES.map((option) => (
+              <li key={option.status}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={option.status === status}
+                  autoFocus={option.status === status}
+                  onClick={() => {
+                    setOpen(false);
+                    if (option.status !== status) {
+                      setStatus.mutate(option.status);
+                    }
+                  }}
+                  className={`flex h-8 w-full items-center gap-2 px-2.5 text-left text-xs hover:bg-hover hover:text-heading ${
+                    option.status === status
+                      ? "bg-selected text-heading"
+                      : "text-body"
+                  }`}
+                >
+                  <AreaDot color={option.color} />
+                  {option.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       ) : null}
     </div>
   );

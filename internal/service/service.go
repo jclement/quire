@@ -112,6 +112,7 @@ func metaFromRow(d index.DocRow) DocMeta {
 		Tags:     d.Tags,
 		Area:     d.Area,
 		AreaFrom: d.AreaFrom,
+		Project:  projectMetaFromJSON(d.Type, d.Frontmatter),
 	}
 }
 
@@ -274,6 +275,7 @@ func (s *Service) buildDocument(f vault.File) (Document, error) {
 		meta.Title = scanned.Title
 		meta.Tags = scanned.Tags
 	}
+	meta.Project = projectMeta(meta.Type, fm)
 
 	links := make([]Link, 0, len(scanned.Links))
 	for _, l := range scanned.Links {

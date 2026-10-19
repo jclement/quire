@@ -7,6 +7,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/jclement/quire/internal/vault"
@@ -40,8 +41,26 @@ func (s *Service) setFrontmatter(path string, values map[string]any, baseSHA str
 		return Document{}, fmt.Errorf("%s: %w", path, vault.ErrConflict)
 	}
 
+	if vault.InferType(path) == vault.TypeProject {
+		current := vault.ParseFrontmatter(f.Raw)
+		if current == nil {
+			current = map[string]any{}
+		}
+		if values, err = s.projectStatusChanges(current, values); err != nil {
+			return Document{}, err
+		}
+	}
+
+	// Keys in a fixed order, so keys new to the file land in the same order
+	// every time.
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 	content := f.Raw
-	for key, value := range values {
+	for _, key := range keys {
+		value := values[key]
 		if err := validFrontmatterKey(key); err != nil {
 			return Document{}, err
 		}

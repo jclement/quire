@@ -1,9 +1,11 @@
 // Per-type document lists (/browse/<type>): a sortable table of title, tags,
 // and modified time, with j/k navigation and a New button opening the shared
-// create dialog.
+// create dialog. Projects add a status column, and can be shown as a board
+// instead (ProjectBoard, loaded on first use); which one is remembered per
+// device.
 import { Link as RouterLink, useNavigate } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, Columns3, List, Plus } from "lucide-react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useAreas, useAreasEnabled, useDocumentList } from "../api/queries.ts";
 import { AreaDot } from "../components/AreaDot.tsx";
 import type { DocMeta, DocType } from "../api/types.ts";
@@ -13,6 +15,32 @@ import { useUi } from "../keys/UiContext.tsx";
 import { useListNav } from "../keys/useListNav.ts";
 import { ErrorState, EmptyState } from "../components/EmptyState.tsx";
 import { SkeletonRows } from "../components/Skeleton.tsx";
+import { STATUS_INFO, statusOf } from "../lib/projects.ts";
+
+const ProjectBoard = lazy(() =>
+  import("../components/ProjectBoard.tsx").then((module) => ({
+    default: module.ProjectBoard,
+  })),
+);
+
+type ProjectsView = "list" | "board";
+const VIEW_KEY = "quire-projects-view";
+
+function loadView(): ProjectsView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "board" ? "board" : "list";
+  } catch {
+    return "list";
+  }
+}
+
+function storeView(view: ProjectsView): void {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // Storage unavailable: the choice just does not persist.
+  }
+}
 
 type SortKey = "title" | "mtime";
 
@@ -20,6 +48,12 @@ export function BrowsePage({ type }: { type: DocType }) {
   const info = DOC_TYPE_INFO[type];
   const { setNewDocType } = useUi();
   const docs = useDocumentList({ type });
+  const [view, setView] = useState<ProjectsView>(loadView);
+  const board = type === "project" && view === "board";
+  const chooseView = (next: ProjectsView) => {
+    setView(next);
+    storeView(next);
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -31,10 +65,13 @@ export function BrowsePage({ type }: { type: DocType }) {
             {docs.data.length}
           </span>
         ) : null}
+        {type === "project" ? (
+          <ViewSwitch view={view} onChange={chooseView} />
+        ) : null}
         <button
           type="button"
           onClick={() => setNewDocType(type)}
-          className="ml-auto flex h-7 items-center gap-1 rounded border border-border px-2 text-xs text-body hover:bg-hover hover:text-heading"
+          className={`${type === "project" ? "" : "ml-auto "}flex h-7 items-center gap-1 rounded border border-border px-2 text-xs text-body hover:bg-hover hover:text-heading`}
         >
           <Plus className="size-3.5" aria-hidden="true" />
           New {info.label}
@@ -50,14 +87,62 @@ export function BrowsePage({ type }: { type: DocType }) {
           title={`No ${info.plural.toLowerCase()} yet`}
           hint={`Create one with the New ${info.label} button or the palette.`}
         />
+      ) : board ? (
+        <Suspense fallback={<SkeletonRows />}>
+          <ProjectBoard docs={docs.data} />
+        </Suspense>
       ) : (
-        <DocTable docs={docs.data} />
+        <DocTable docs={docs.data} showStatus={type === "project"} />
       )}
     </div>
   );
 }
 
-function DocTable({ docs }: { docs: DocMeta[] }) {
+/** List | Board, for projects. */
+function ViewSwitch({
+  view,
+  onChange,
+}: {
+  view: ProjectsView;
+  onChange: (view: ProjectsView) => void;
+}) {
+  const options = [
+    { value: "list" as const, label: "List", icon: List },
+    { value: "board" as const, label: "Board", icon: Columns3 },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Projects view"
+      className="ml-auto flex h-7 items-center rounded border border-border"
+    >
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={view === option.value}
+          onClick={() => onChange(option.value)}
+          className={`flex h-full items-center gap-1 px-2 text-xs first:rounded-l last:rounded-r ${
+            view === option.value
+              ? "bg-selected text-heading"
+              : "text-muted hover:bg-hover hover:text-body"
+          }`}
+        >
+          <option.icon className="size-3.5" aria-hidden="true" />
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DocTable({
+  docs,
+  showStatus = false,
+}: {
+  docs: DocMeta[];
+  showStatus?: boolean;
+}) {
   const navigate = useNavigate();
   const areas = useAreas();
   const areasEnabled = useAreasEnabled();
@@ -103,6 +188,11 @@ function DocTable({ docs }: { docs: DocMeta[] }) {
             ascending={ascending}
             onClick={() => toggleSort("title")}
           />
+          {showStatus ? (
+            <th className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+              Status
+            </th>
+          ) : null}
           <th className="hidden px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted sm:table-cell">
             Tags
           </th>
@@ -148,6 +238,11 @@ function DocTable({ docs }: { docs: DocMeta[] }) {
                 <span className="truncate">{doc.title}</span>
               </RouterLink>
             </td>
+            {showStatus ? (
+              <td className="whitespace-nowrap px-2">
+                <StatusPill doc={doc} />
+              </td>
+            ) : null}
             <td className="hidden truncate px-2 text-xs text-muted sm:table-cell">
               {doc.tags.map((tag) => (
                 <RouterLink
@@ -168,6 +263,16 @@ function DocTable({ docs }: { docs: DocMeta[] }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+function StatusPill({ doc }: { doc: DocMeta }) {
+  const info = STATUS_INFO[statusOf(doc)];
+  return (
+    <span className="inline-flex h-[22px] items-center gap-1 rounded border border-border bg-raised px-1.5 font-mono text-[10px] text-body">
+      <AreaDot color={info.color} />
+      {info.label.toLowerCase()}
+    </span>
   );
 }
 

@@ -23,6 +23,13 @@ export type DocType =
   | "weekly"
   | "template";
 
+/**
+ * A project's status, in board order (internal/service/projects.go).
+ * Whatever a file says is read as one of these.
+ */
+export type ProjectStatus =
+  "planned" | "active" | "hold" | "complete" | "cancelled";
+
 //////////
 // source: apitypes.go
 /*
@@ -54,6 +61,40 @@ export interface DocMeta {
    * AreaFrom is the document the area was inherited from, "" when explicit.
    */
   area_from: string;
+  /**
+   * Project is a project's status and board fields; absent for any other
+   * type (null).
+   */
+  project: ProjectMeta | null;
+}
+/**
+ * ProjectMeta is what a project's list entry carries for the board.
+ */
+export interface ProjectMeta {
+  /**
+   * Status is always one of ProjectStatuses: a project with none, or with
+   * a word quire does not know, is active — what a new project is seeded
+   * with.
+   */
+  status: ProjectStatus;
+  /**
+   * Rank orders the project within its board column, lowest first;
+   * null until someone drags it.
+   */
+  rank: number /* float64 */ | null;
+  /**
+   * Closed is the completed: or cancelled: date (YYYY-MM-DD) matching the
+   * status, "" when open or never stamped.
+   */
+  closed: string;
+  /**
+   * Due is the due: date, "" when none.
+   */
+  due: string;
+  /**
+   * Company is the company: link's name, without the brackets.
+   */
+  company: string;
 }
 /**
  * AreaCount is one area (work, personal, …) with its document count. Defined

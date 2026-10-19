@@ -20,6 +20,27 @@ type DocMeta struct {
 	Area string `json:"area"`
 	// AreaFrom is the document the area was inherited from, "" when explicit.
 	AreaFrom string `json:"area_from"`
+	// Project is a project's status and board fields; absent for any other
+	// type (null).
+	Project *ProjectMeta `json:"project"`
+}
+
+// ProjectMeta is what a project's list entry carries for the board.
+type ProjectMeta struct {
+	// Status is always one of ProjectStatuses: a project with none, or with
+	// a word quire does not know, is active — what a new project is seeded
+	// with.
+	Status string `json:"status" tstype:"ProjectStatus"`
+	// Rank orders the project within its board column, lowest first;
+	// null until someone drags it.
+	Rank *float64 `json:"rank"`
+	// Closed is the completed: or cancelled: date (YYYY-MM-DD) matching the
+	// status, "" when open or never stamped.
+	Closed string `json:"closed"`
+	// Due is the due: date, "" when none.
+	Due string `json:"due"`
+	// Company is the company: link's name, without the brackets.
+	Company string `json:"company"`
 }
 
 // AreaCount is one area (work, personal, …) with its document count. Defined

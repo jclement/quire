@@ -25,6 +25,8 @@ export type {
   WeekPayload,
   AuditEntry,
   DocType,
+  ProjectMeta,
+  ProjectStatus,
   Birthday,
   CalendarDay,
   CalendarDoc,

@@ -43,3 +43,14 @@ packages:
         | "daily"
         | "weekly"
         | "template";
+
+      /**
+       * A project's status, in board order (internal/service/projects.go).
+       * Whatever a file says is read as one of these.
+       */
+      export type ProjectStatus =
+        | "planned"
+        | "active"
+        | "hold"
+        | "complete"
+        | "cancelled";

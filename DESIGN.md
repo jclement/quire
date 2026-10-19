@@ -89,7 +89,11 @@ two Davids means two buttons, and the owner picks.
 
 - person: `aliases, company, email, phone, title, birthday, role, tags`
 - company: `domain, website, tags`
-- project: `status (active|waiting|someday|completed|archived), due, company, people, tags`
+- project: `status (planned|active|hold|complete|cancelled), completed / cancelled (the
+  date it closed, stamped when the status is set), rank (its place in a board column),
+  due, company, people, tags`. Older words (someday, waiting, completed, archived, done,
+  …) are read as the nearest status and only rewritten when a status is next set
+  (`internal/service/projects.go`).
 - meeting: `date, people, project, company, tags`
 - daily: none (identity is `daily/YYYY-MM-DD.md`)
 - note: `title (defaults to H1/filename), tags`
