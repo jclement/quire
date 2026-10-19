@@ -392,6 +392,47 @@ func (ix *Index) Tasks(view TaskView, today, area string) ([]TaskRow, error) {
 	return ix.collectTasks(rows)
 }
 
+// DeferredAvailable is the today view without its dated rows: open, not
+// waiting, no due date, deferred to today or earlier, not parked. Today
+// shows the dated ones from OpenTasksDue already, and asking the today
+// view for all of them again only to drop them doubled its biggest query.
+func (ix *Index) DeferredAvailable(today, area string) ([]TaskRow, error) {
+	areaWhere, areaArgs := areaClause(area)
+	rows, err := ix.reader().Query(taskSelect+" WHERE t.done = 0 AND t.waiting = 0 AND t.due = '' AND t.defer_date != '' AND t.defer_date <= ?"+
+		notSomeday+areaWhere+" ORDER BY t.priority = 0, t.priority", append([]any{today}, areaArgs...)...)
+	if err != nil {
+		return nil, fmt.Errorf("deferred tasks: %w", err)
+	}
+	defer rows.Close()
+	return ix.collectTasks(rows)
+}
+
+// TasksByID fetches the rows for ids in one read, keyed by id; ids the
+// index does not have are simply absent.
+func (ix *Index) TasksByID(ids []string) (map[string]TaskRow, error) {
+	out := make(map[string]TaskRow, len(ids))
+	for start := 0; start < len(ids); start += resolveChunk {
+		chunk := ids[start:min(start+resolveChunk, len(ids))]
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			args[i] = id
+		}
+		marks := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
+		rows, err := ix.reader().Query(taskSelect+" WHERE t.id IN ("+marks+")", args...)
+		if err != nil {
+			return nil, err
+		}
+		tasks, err := ix.collectTasks(rows)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range tasks {
+			out[t.ID] = t
+		}
+	}
+	return out, nil
+}
+
 // TaskByID fetches a single task row.
 func (ix *Index) TaskByID(id string) (TaskRow, error) {
 	rows, err := ix.reader().Query(taskSelect+" WHERE t.id = ?", id)
@@ -984,57 +1025,122 @@ func (ix *Index) collectTasks(rows *sql.Rows) ([]TaskRow, error) {
 // resolveChunk bounds the ids bound into one IN list.
 const resolveChunk = 500
 
+// projectMapThreshold is where loading every project name (a fixed ~1 ms)
+// starts to beat joining each task's links through docnames: a document's
+// handful of tasks join, Today's thousand use the map.
+var projectMapThreshold = 64
+
+// resolveProjectsByJoin is resolveProjects for a few tasks: one query
+// driven from their links (and inherited projects) through docnames_name.
+func (ix *Index) resolveProjectsByJoin(tasks []TaskRow, projectNorm []string) error {
+	byID := map[string][]int{}
+	var args []any
+	var pairs []string
+	for i, t := range tasks {
+		if _, seen := byID[t.ID]; !seen {
+			args = append(args, t.ID)
+		}
+		byID[t.ID] = append(byID[t.ID], i)
+	}
+	marks := strings.TrimSuffix(strings.Repeat("?,", len(args)), ",")
+	for i, t := range tasks {
+		if projectNorm[i] != "" && byID[t.ID][0] == i {
+			pairs = append(pairs, "SELECT ?, ?")
+			args = append(args, t.ID, projectNorm[i])
+		}
+	}
+	names := "SELECT task_id AS id, target_norm AS name FROM task_links WHERE task_id IN (" + marks + ")"
+	for _, p := range pairs {
+		names += " UNION ALL " + p
+	}
+	rows, err := ix.reader().Query(`
+		SELECT x.id, MIN(n.path) FROM (`+names+`) x
+		JOIN docnames n ON n.name = x.name
+		JOIN documents d ON d.path = n.path AND d.type = 'project'
+		GROUP BY x.id`, args...)
+	if err != nil {
+		return fmt.Errorf("resolving task projects: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, p string
+		if err := rows.Scan(&id, &p); err != nil {
+			return err
+		}
+		for _, i := range byID[id] {
+			tasks[i].ProjectPath = p
+		}
+	}
+	return rows.Err()
+}
+
 // resolveProjects fills ProjectPath: the lowest-pathed project document that
 // any of the task's links, or its inherited project, resolves to.
-// projectNorm[i] is tasks[i]'s project_norm column.
+// projectNorm[i] is tasks[i]'s project_norm column. Projects are few, so
+// their names are loaded once as a map and each task's links are looked up
+// in it, rather than joining every link through docnames and documents.
 func (ix *Index) resolveProjects(tasks []TaskRow, projectNorm []string) error {
+	if len(tasks) == 0 {
+		return nil
+	}
+	if len(tasks) <= projectMapThreshold {
+		return ix.resolveProjectsByJoin(tasks, projectNorm)
+	}
+	projects := map[string]string{} // name → lowest project path answering to it
+	// CROSS JOIN pins the order: start from the few project documents and
+	// look up their names. Left to itself the planner walked all of
+	// docnames by name and probed documents for each (12 ms vs 0.8 ms at
+	// 4,680 documents, paid by every task read).
+	rows, err := ix.reader().Query(`SELECT n.name, MIN(n.path) FROM documents d
+		CROSS JOIN docnames n ON n.path = d.path WHERE d.type = 'project' GROUP BY n.name`)
+	if err != nil {
+		return fmt.Errorf("loading project names: %w", err)
+	}
+	for rows.Next() {
+		var name, p string
+		if err := rows.Scan(&name, &p); err != nil {
+			rows.Close()
+			return err
+		}
+		projects[name] = p
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(projects) == 0 {
+		return nil
+	}
+
+	consider := func(i int, name string) {
+		if p, ok := projects[name]; ok && (tasks[i].ProjectPath == "" || p < tasks[i].ProjectPath) {
+			tasks[i].ProjectPath = p
+		}
+	}
 	byID := map[string][]int{}
-	var ids []string
+	var ids []any
 	for i, t := range tasks {
 		if _, seen := byID[t.ID]; !seen {
 			ids = append(ids, t.ID)
 		}
 		byID[t.ID] = append(byID[t.ID], i)
+		consider(i, projectNorm[i])
 	}
 	for start := 0; start < len(ids); start += resolveChunk {
 		chunk := ids[start:min(start+resolveChunk, len(ids))]
-		// Each task's names: its links plus its project_norm, passed in
-		// as (id, name) pairs rather than read back from tasks.
-		var values []string
-		var args []any
-		for _, id := range chunk {
-			args = append(args, id)
-		}
 		marks := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
-		for _, id := range chunk {
-			for _, i := range byID[id][:1] {
-				if projectNorm[i] != "" {
-					values = append(values, "(?, ?)")
-					args = append(args, id, projectNorm[i])
-				}
-			}
-		}
-		names := "SELECT tl.task_id AS id, tl.target_norm AS name FROM task_links tl WHERE tl.task_id IN (" + marks + ")"
-		if len(values) > 0 {
-			names += " UNION SELECT column1, column2 FROM (VALUES " + strings.Join(values, ", ") + ")"
-		}
-		rows, err := ix.reader().Query(`
-			SELECT x.id, MIN(n.path)
-			FROM (`+names+`) x
-			JOIN docnames n ON n.name = x.name
-			JOIN documents pd ON pd.path = n.path AND pd.type = 'project'
-			GROUP BY x.id`, args...)
+		rows, err := ix.reader().Query("SELECT task_id, target_norm FROM task_links WHERE task_id IN ("+marks+")", chunk...)
 		if err != nil {
 			return fmt.Errorf("resolving task projects: %w", err)
 		}
 		for rows.Next() {
-			var id, project string
-			if err := rows.Scan(&id, &project); err != nil {
+			var id, name string
+			if err := rows.Scan(&id, &name); err != nil {
 				rows.Close()
 				return err
 			}
 			for _, i := range byID[id] {
-				tasks[i].ProjectPath = project
+				consider(i, name)
 			}
 		}
 		rows.Close()

@@ -286,10 +286,18 @@ func (s *Service) buildDocument(f vault.File) (Document, error) {
 		return Document{}, err
 	}
 
+	ids := make([]string, 0, len(scanned.Tasks))
+	for _, t := range scanned.Tasks {
+		ids = append(ids, t.ID)
+	}
+	indexed, err := s.Index.TasksByID(ids)
+	if err != nil {
+		return Document{}, err
+	}
 	tasks := make([]Task, 0, len(scanned.Tasks))
 	for _, t := range scanned.Tasks {
-		row, err := s.Index.TaskByID(t.ID)
-		if err != nil {
+		row, ok := indexed[t.ID]
+		if !ok {
 			// Not yet indexed (fresh write); shape it directly.
 			tasks = append(tasks, Task{
 				ID: t.ID, DocPath: f.Path, Line: t.Line, Text: t.Text, Done: t.Done,
@@ -639,17 +647,15 @@ func (s *Service) TodayIn(area string) (TodayPayload, error) {
 		}
 	}
 
-	todayRows, err := s.Index.Tasks(index.ViewToday, day, area)
+	// Available is only the today view's deferred-to-now remainder, so
+	// sections don't repeat the dated rows above.
+	availableRows, err := s.Index.DeferredAvailable(day, area)
 	if err != nil {
 		return payload, err
 	}
 	payload.Available = []Task{}
-	for _, t := range todayRows {
-		// The today view includes due tasks; Available is only the
-		// deferred-to-now remainder so sections don't repeat rows.
-		if t.Due == "" {
-			payload.Available = append(payload.Available, taskFromRow(t))
-		}
+	for _, t := range availableRows {
+		payload.Available = append(payload.Available, taskFromRow(t))
 	}
 
 	waitingRows, err := s.Index.Tasks(index.ViewWaiting, day, area)
