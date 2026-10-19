@@ -318,18 +318,13 @@ func (ix *Index) TasksCompletedBetween(fromDay, toDay string) (map[string]int, e
 
 // ---- tasks ----
 
+// taskSelect is every task read. The project column is filled afterwards by
+// collectTasks (resolveProjects), in one query per result rather than a
+// correlated subquery per row: the logbook's ORDER BY ... LIMIT 200 used to
+// resolve all 17k completed tasks' projects to keep 200 of them.
 const taskSelect = `
 	SELECT t.id, t.doc_path, COALESCE(d.title, t.doc_path), COALESCE(d.type, ''), t.line, t.text, t.done,
-	       t.due, t.defer_date, t.completed_on, t.priority, t.waiting, t.waiting_since, t.waiting_on_raw, t.recur, t.raw_text, t.tags_json,
-	       COALESCE((
-	           -- Driven from the task's own links through docnames_name.
-	           -- Written as "n.path IN (SELECT path FROM documents WHERE
-	           -- type = 'project')" the planner walked every project's names
-	           -- and re-scanned task_links for each: seconds per task.
-	           SELECT MIN(n.path) FROM docnames n JOIN documents pd ON pd.path = n.path
-	           WHERE n.name IN (SELECT tl.target_norm FROM task_links tl WHERE tl.task_id = t.id UNION SELECT t.project_norm)
-	             AND pd.type = 'project'
-	       ), '')
+	       t.due, t.defer_date, t.completed_on, t.priority, t.waiting, t.waiting_since, t.waiting_on_raw, t.recur, t.raw_text, t.tags_json, t.project_norm
 	FROM tasks t LEFT JOIN documents d ON d.path = t.doc_path`
 
 // TaskView is a named task list. Semantics per DESIGN.md "Tasks".
@@ -959,11 +954,13 @@ func collectDocs(rows *sql.Rows) ([]DocRow, error) {
 // the waiting lookup needs it.
 func (ix *Index) collectTasks(rows *sql.Rows) ([]TaskRow, error) {
 	var tasks []TaskRow
+	var projectNorm []string
 	for rows.Next() {
+		projectNorm = append(projectNorm, "")
 		var t TaskRow
 		var tagsJSON string
 		if err := rows.Scan(&t.ID, &t.DocPath, &t.DocTitle, &t.DocType, &t.Line, &t.Text, &t.Done,
-			&t.Due, &t.Defer, &t.CompletedOn, &t.Priority, &t.Waiting, &t.WaitingSince, &t.WaitingOnRaw, &t.Recur, &t.RawText, &tagsJSON, &t.ProjectPath); err != nil {
+			&t.Due, &t.Defer, &t.CompletedOn, &t.Priority, &t.Waiting, &t.WaitingSince, &t.WaitingOnRaw, &t.Recur, &t.RawText, &tagsJSON, &projectNorm[len(tasks)]); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(tagsJSON), &t.Tags); err != nil {
@@ -975,10 +972,77 @@ func (ix *Index) collectTasks(rows *sql.Rows) ([]TaskRow, error) {
 		return nil, err
 	}
 	rows.Close()
+	if err := ix.resolveProjects(tasks, projectNorm); err != nil {
+		return nil, err
+	}
 	if err := ix.resolveWaitingOn(tasks); err != nil {
 		return nil, err
 	}
 	return tasks, nil
+}
+
+// resolveChunk bounds the ids bound into one IN list.
+const resolveChunk = 500
+
+// resolveProjects fills ProjectPath: the lowest-pathed project document that
+// any of the task's links, or its inherited project, resolves to.
+// projectNorm[i] is tasks[i]'s project_norm column.
+func (ix *Index) resolveProjects(tasks []TaskRow, projectNorm []string) error {
+	byID := map[string][]int{}
+	var ids []string
+	for i, t := range tasks {
+		if _, seen := byID[t.ID]; !seen {
+			ids = append(ids, t.ID)
+		}
+		byID[t.ID] = append(byID[t.ID], i)
+	}
+	for start := 0; start < len(ids); start += resolveChunk {
+		chunk := ids[start:min(start+resolveChunk, len(ids))]
+		// Each task's names: its links plus its project_norm, passed in
+		// as (id, name) pairs rather than read back from tasks.
+		var values []string
+		var args []any
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		marks := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
+		for _, id := range chunk {
+			for _, i := range byID[id][:1] {
+				if projectNorm[i] != "" {
+					values = append(values, "(?, ?)")
+					args = append(args, id, projectNorm[i])
+				}
+			}
+		}
+		names := "SELECT tl.task_id AS id, tl.target_norm AS name FROM task_links tl WHERE tl.task_id IN (" + marks + ")"
+		if len(values) > 0 {
+			names += " UNION SELECT column1, column2 FROM (VALUES " + strings.Join(values, ", ") + ")"
+		}
+		rows, err := ix.DB.Query(`
+			SELECT x.id, MIN(n.path)
+			FROM (`+names+`) x
+			JOIN docnames n ON n.name = x.name
+			JOIN documents pd ON pd.path = n.path AND pd.type = 'project'
+			GROUP BY x.id`, args...)
+		if err != nil {
+			return fmt.Errorf("resolving task projects: %w", err)
+		}
+		for rows.Next() {
+			var id, project string
+			if err := rows.Scan(&id, &project); err != nil {
+				rows.Close()
+				return err
+			}
+			for _, i := range byID[id] {
+				tasks[i].ProjectPath = project
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // resolveWaitingOn fills WaitingOn for the waiting tasks among tasks, in
