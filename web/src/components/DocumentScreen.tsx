@@ -51,7 +51,6 @@ import type { MarkdownEditorHandle } from "../editor/MarkdownEditor.tsx";
 import type { EditorContext } from "../editor/commands.ts";
 import type { StripSync } from "../api/queries.ts";
 import { frontmatterLines, splitFrontmatter } from "../lib/frontmatter.ts";
-import { EditorToolbar } from "./EditorToolbar.tsx";
 import { extractHeadings } from "../lib/headings.ts";
 import { requestTableEdit } from "../lib/tableEditor.ts";
 import { insertDrawingInto } from "../lib/drawings.ts";
@@ -71,6 +70,14 @@ const PREVIEW_DEBOUNCE_MS = 300;
 
 // CodeMirror is ~⅓ of the bundle and only needed once someone edits; keep it
 // off the critical path (DESIGN.md's bundle budget).
+// The toolbar is edit-mode only and drags CodeMirror in through
+// editor/commands.ts and editor/tables.ts; imported eagerly, it put
+// CodeMirror on every page's critical path despite the lazy editor.
+const EditorToolbar = lazy(() =>
+  import("./EditorToolbar.tsx").then((module) => ({
+    default: module.EditorToolbar,
+  })),
+);
 const MarkdownEditor = lazy(() =>
   import("../editor/MarkdownEditor.tsx").then((module) => ({
     default: module.MarkdownEditor,
@@ -401,15 +408,17 @@ function DocumentView({
         ) : (
           <>
             <FrontmatterStrip doc={doc} sync={stripSync} />
-            <EditorToolbar
-              context={editorContext}
-              run={(command) => editorRef.current?.run(command)}
-              onInsertDrawing={() =>
-                insertDrawingInto(path).catch(() =>
-                  toast("Couldn't create a drawing — reload and try again"),
-                )
-              }
-            />
+            <Suspense fallback={null}>
+              <EditorToolbar
+                context={editorContext}
+                run={(command) => editorRef.current?.run(command)}
+                onInsertDrawing={() =>
+                  insertDrawingInto(path).catch(() =>
+                    toast("Couldn't create a drawing — reload and try again"),
+                  )
+                }
+              />
+            </Suspense>
           </>
         )}
       </div>
