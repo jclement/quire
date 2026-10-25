@@ -44,6 +44,14 @@
     </script>
   </head>
   <body>
+    <!-- iOS 26 blurs the page under the status bar unless a fixed element
+         spans the top edge (WebKit samples 4px below its middle: at least 90%
+         of the width, more than 10px deep), and then paints the bar in that
+         element's background instead. quire's header is a flex child, not
+         fixed, so this band stands in for it. It is in the HTML so it is there
+         from the first frame; background-clip: text means it paints nothing.
+         Same fix as coder/coder#31027. -->
+    <div class="ios-status-bar-band" aria-hidden="true"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

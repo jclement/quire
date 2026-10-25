@@ -140,6 +140,30 @@ body,
   height: 100%;
 }
 
+/* What iOS shows behind the status bar when it finds nothing to sample: the
+   header's colour, so the bar and the header read as one strip. */
+html {
+  background: var(--raised);
+}
+
+/* See the comment on this element in index.html. */
+.ios-status-bar-band {
+  display: none;
+}
+@media (display-mode: standalone) {
+  .ios-status-bar-band {
+    display: block;
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 2147483647;
+    height: 12px;
+    background: var(--raised);
+    background-clip: text;
+    -webkit-background-clip: text;
+    pointer-events: none;
+  }
+}
+
 body {
   @apply bg-surface font-sans text-sm text-body antialiased;
   overflow-x: hidden;
