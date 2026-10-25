@@ -282,7 +282,7 @@ function Header({ onMenu }: { onMenu: () => void }) {
     select: (state) => state.location.pathname,
   });
   return (
-    <header className="flex h-10 shrink-0 items-center gap-3 border-b border-border bg-raised px-3 print:hidden">
+    <header className="flex h-[calc(2.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-border bg-raised px-3 pt-[env(safe-area-inset-top)] print:hidden">
       <button
         type="button"
         onClick={onMenu}

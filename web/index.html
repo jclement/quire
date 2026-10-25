@@ -13,16 +13,22 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="quire" />
+    <!-- iOS: keep a solid status bar above the page rather than drawing the
+         page under it, where iOS 26 lays a grey blur over whatever is there.
+         The bar takes theme-color, which matches the header (--raised). -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="color-scheme" content="light dark" />
     <meta
       name="theme-color"
       media="(prefers-color-scheme: light)"
-      content="#fbfbfa"
+      content="#ffffff"
     />
     <meta
       name="theme-color"
       media="(prefers-color-scheme: dark)"
-      content="#17181c"
+      content="#1e1f24"
     />
     <!-- Set the theme class before first paint so a dark-mode user never sees a
          white flash. Mirrors the logic in src/lib/theme.ts; keep them in sync. -->
